@@ -12,6 +12,7 @@ ENV/
 # Data & Models (Do not commit datasets or model weights)
 backend/ml/data/raw/*
 !backend/ml/data/raw/.gitkeep
+!backend/ml/data/raw/online_retail_II.csv
 backend/ml/data/processed/*
 !backend/ml/data/processed/.gitkeep
 backend/ml/models/*
