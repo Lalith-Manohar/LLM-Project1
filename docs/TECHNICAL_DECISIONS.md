@@ -191,3 +191,24 @@ This document formally records all major technical and architectural decisions f
   - Rolling target encoding (rejected: highly complex to maintain across sparse time series without lookahead risk).
   - Raw OrdinalEncoder (rejected: creates false numeric hierarchy among SKUs).
 - **Impact on Other Modules:** Serialized pipelines in `backend/ml/models/` accept raw DataFrame inputs with string `StockCode` and output calibrated predictions directly. Preprocessing is 100% self-contained in the pipeline.
+
+---
+
+### TD-014: FastAPI Multi-Horizon Prediction Service & Lifespan Architecture
+- **Date:** 2026-11-17
+- **Topic:** ML model serving, lifespan memory management, and multi-horizon inference API.
+- **Context:** Phase 1 Task 6 requires integrating the four trained multi-horizon model artifacts (`demand_model_{7,15,30,90}d.joblib`) into FastAPI. Key challenges: loading serialized models repeatedly on every HTTP request introduces massive disk I/O and latency spikes; Pydantic request models had legacy schema drift (`horizon_days: int` vs `horizons: List[int]`); and feature requirements must match the exact 10-column contract fitted during training.
+- **Decision:**
+  1. Implement a centralized singleton `PredictionService` initialized once at application startup using FastAPI's modern async `lifespan` event handler. Models and `models_metadata.json` remain resident in memory for instantaneous sub-millisecond inference.
+  2. Implement flexible schema validation in `ForecastRequest` supporting both modern multi-horizon queries (`horizons: [7, 15, 30, 90]`) and legacy backward-compatible queries (`horizon_days: int`), with support for either nested `features: HistoricalFeatures` or flat historical attributes.
+  3. Format incoming feature payloads into a strictly typed pandas DataFrame with exact column ordering matching the trained pipelines: `['StockCode', 'DayOfWeek', 'Month', 'DayOfMonth', 'Lag1', 'Lag7', 'Lag14', 'Lag28', 'RollingMean7', 'RollingMean28']`.
+  4. Enforce non-negativity post-processing $\max(0, \hat{y})$ and non-finite sanitization on all raw model outputs.
+  5. Check if requested `StockCode` is among known training categories; if not, log an informational warning while cleanly relying on `OneHotEncoder(handle_unknown="infrequent_if_exist")` to serve robust predictions for unseen/infrequent SKUs.
+- **Reasoning:**
+  - Prevents request-time disk I/O and ensures thread-safe, read-only inference.
+  - Resolves `ISSUE-001` cleanly while providing zero breaking changes to existing client contracts.
+  - Guarantees strict compliance with the Phase 1 zero-leakage pipeline contracts.
+- **Alternatives Considered:**
+  - On-demand lazy model loading (rejected: introduces latency jitter on first request and potential race conditions).
+  - Training inside the API request cycle (rejected: strictly prohibited by `AGENTS.md`).
+- **Impact on Other Modules:** Module 7 (Predictive Planner) and Module 8 (Purchase Planning Simulator) can query `/api/v1/forecast/` for multi-horizon demand forecasts. Operational inventory risk calculations can reliably consume the API output.

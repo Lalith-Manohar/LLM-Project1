@@ -35,8 +35,8 @@ flowchart LR
 - [x] **Model Serialization:** Persisted fitted scikit-learn pipelines (`demand_model_7d.joblib`, `demand_model_15d.joblib`, `demand_model_30d.joblib`, `demand_model_90d.joblib`) and `models_metadata.json` to `backend/ml/models/`. Verified reload numerical equivalence and unseen SKU robustness. Tested via `test_model_training.py` and `test_model_evaluation.py`.
 - [x] **Temporal Leakage Audit & Verification (Task 5.1):** Conducted rigorous audit of `TargetEncoder` and chronological holdouts. Discovered and eliminated cross-fitting target leakage by migrating to `OneHotEncoder(max_categories=50)` with Ridge regression and Random Forest. Retrained all 4 horizons, reserialized artifacts, and verified 39 tests.
 - [x] **Final Model Training Verification & Artifact Integrity Audit (Task 5.2):** Certified complete elimination of TargetEncoder, verified OneHotEncoder zero-target-leakage behavior, verified purge/embargo mathematical boundaries across all 4 horizons ($D_7, D_{15}, D_{30}, D_{90}$), added adversarial future-spike test, verified all 4 serialized `.joblib` models and metadata manifest, and passed full 44-test suite.
-- [ ] **FastAPI Inference Wiring:** Connect `prediction_service.py` to loaded `.joblib` estimators.
-- [ ] **Endpoint Verification:** Verify multi-horizon forecast responses via Swagger UI.
+- [x] **FastAPI Inference Wiring (Task 6):** Connected `prediction_service.py` to loaded `.joblib` estimators via lifespan startup loading, non-negativity post-processing, and unseen SKU resilience.
+- [x] **Endpoint Verification (Task 6):** Verified multi-horizon forecast endpoints (`POST /api/v1/forecast/`, `POST /api/v1/forecast/predict`, `GET /horizons`, `GET /model-metrics`, `GET /model-info`) via 15 automated integration tests and live TCP HTTP requests. **Phase 1 Milestone Fully Achieved!**
 
 ---
 

@@ -1,6 +1,7 @@
 """Core configuration module for NEXORA backend."""
 
 import os
+from pathlib import Path
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -17,8 +18,8 @@ class Settings(BaseSettings):
     DB_PASSWORD: str = ""
     DB_NAME: str = "nexora_db"
 
-    # ML Artifacts path relative to backend directory
-    MODELS_DIR: str = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "ml", "models")
+    # ML Artifacts path relative to backend root directory (backend/ml/models)
+    MODELS_DIR: str = str(Path(__file__).resolve().parent.parent.parent / "ml" / "models")
 
     model_config = SettingsConfigDict(
         case_sensitive=True,

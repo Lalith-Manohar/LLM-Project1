@@ -28,41 +28,158 @@ NEXORA utilizes **FastAPI** for its asynchronous REST application programming in
 
 ---
 
-### 2.2 Forecasting Endpoints (Current State)
+### 2.2 Forecasting Endpoints (Phase 1, Task 6 Implemented)
 
-#### Get Supported Horizons
+#### 1. Get Supported Horizons
 - **Endpoint:** `GET /api/v1/forecast/horizons`
 - **Status:** **Implemented**
+- **Description:** Returns the list and operational definitions of forecast horizon windows supported by NEXORA.
 - **Response `200 OK`:**
 ```json
 {
   "supported_horizons_days": [7, 15, 30, 90],
-  "description": "Short-term to quarterly retail demand horizons."
+  "description": "Multi-horizon retail demand planning windows (7 to 90 days).",
+  "horizon_definitions": {
+    "7": "Weekly fast-moving replenishment & shelf restock",
+    "15": "Bi-weekly supplier batch ordering",
+    "30": "Monthly inventory planning & space allocation",
+    "90": "Quarterly supplier volume quotas & supply chain planning"
+  }
 }
 ```
 
-#### Request Demand Forecast
-- **Endpoint:** `POST /api/v1/forecast/`
-- **Status:** **Implemented (Placeholder Service)**
-- **Description:** Submits a demand forecast request for an SKU and horizon. Currently connected to `prediction_service.py`, returning a status indicating model training is pending without returning fabricated values.
-- **Request Body:**
+#### 2. Get Model Benchmark Metrics
+- **Endpoint:** `GET /api/v1/forecast/model-metrics`
+- **Status:** **Implemented**
+- **Description:** Returns out-of-time chronological backtesting error metrics (MAE, RMSE, WAPE) across candidate models.
+- **Response `200 OK`:**
+```json
+{
+  "project": "NEXORA – AI-Powered Retail Management & Intelligence System",
+  "milestone": "Phase 1 (Task 5 Model Training & Serialization)",
+  "dataset_reference": "ml_feature_dataset.csv",
+  "training_timestamp": "2026-11-17 01:06:35",
+  "encoding_strategy": "OneHotEncoder(max_categories=50, handle_unknown='infrequent_if_exist', sparse_output=False)",
+  "backtesting_strategy": "Single chronological out-of-time holdout per horizon with strict purge/embargo gap",
+  "models": {
+    "D_7": {
+      "horizon_days": 7,
+      "selected_model": "Linear Regression",
+      "model_file": "demand_model_7d.joblib",
+      "best_metrics": { "mae": 37.4318, "rmse": 92.5686, "wape": 55.654 }
+    },
+    "D_15": {
+      "horizon_days": 15,
+      "selected_model": "Random Forest",
+      "model_file": "demand_model_15d.joblib",
+      "best_metrics": { "mae": 72.9252, "rmse": 217.4885, "wape": 50.0048 }
+    },
+    "D_30": {
+      "horizon_days": 30,
+      "selected_model": "Random Forest",
+      "model_file": "demand_model_30d.joblib",
+      "best_metrics": { "mae": 125.03, "rmse": 406.25, "wape": 48.7296 }
+    },
+    "D_90": {
+      "horizon_days": 90,
+      "selected_model": "Random Forest",
+      "model_file": "demand_model_90d.joblib",
+      "best_metrics": { "mae": 343.36, "rmse": 890.18, "wape": 53.2187 }
+    }
+  }
+}
+```
+
+#### 3. Get Model Runtime Info
+- **Endpoint:** `GET /api/v1/forecast/model-info`
+- **Status:** **Implemented**
+- **Description:** Returns active model architecture, scikit-learn version, feature column order, and infrequent SKU handling.
+- **Response `200 OK`:**
+```json
+{
+  "project": "NEXORA – AI-Powered Retail Management & Intelligence System",
+  "version": "1.0.0",
+  "status": "ready",
+  "python_version": "3.11.9",
+  "scikit_learn_version": "1.9.1",
+  "supported_horizons": [7, 15, 30, 90],
+  "active_models": {
+    "D_7": "Ridge",
+    "D_15": "RandomForestRegressor",
+    "D_30": "RandomForestRegressor",
+    "D_90": "RandomForestRegressor"
+  },
+  "feature_columns": ["StockCode", "DayOfWeek", "Month", "DayOfMonth", "Lag1", "Lag7", "Lag14", "Lag28", "RollingMean7", "RollingMean28"],
+  "unseen_sku_handling": "OneHotEncoder infrequent category mapping (scikit-learn native)"
+}
+```
+
+#### 4. Multi-Horizon Demand Prediction
+- **Endpoints:**
+  - `POST /api/v1/forecast/`
+  - `POST /api/v1/forecast/predict` *(Blueprint alias)*
+- **Status:** **Implemented & Verified**
+- **Description:** Generates multi-horizon or single-horizon demand forecasts using in-memory pre-trained `.joblib` estimators. Guaranteed non-negative and finite predictions.
+- **Request Body (Nested Features Example):**
 ```json
 {
   "stock_code": "85123A",
-  "horizon_days": 30
+  "horizons": [7, 15, 30, 90],
+  "features": {
+    "day_of_week": 2,
+    "month": 11,
+    "day_of_month": 15,
+    "lag_1": 12.0,
+    "lag_7": 15.0,
+    "lag_14": 10.0,
+    "lag_28": 14.0,
+    "rolling_mean_7": 13.5,
+    "rolling_mean_28": 12.8
+  }
 }
 ```
-- **Response `200 OK` (Current state before ML training):**
+- **Alternative Request Body (Flat Single-Horizon Example):**
 ```json
 {
   "stock_code": "85123A",
   "horizon_days": 30,
-  "total_predicted_demand": null,
-  "daily_forecasts": [],
-  "status": "model_not_trained",
-  "message": "Model training pending. Place model artifact in backend/ml/models to enable inference."
+  "lag_1": 12.0,
+  "lag_7": 15.0,
+  "lag_14": 10.0,
+  "lag_28": 14.0,
+  "rolling_mean_7": 13.5,
+  "rolling_mean_28": 12.8
 }
 ```
+- **Response `200 OK`:**
+```json
+{
+  "stock_code": "85123A",
+  "horizons": [7, 15, 30, 90],
+  "predictions": {
+    "7": 83.4307,
+    "15": 184.358,
+    "30": 576.6974,
+    "90": 1588.9073
+  },
+  "horizon_details": [
+    { "horizon_days": 7, "predicted_demand": 83.4307, "model_name": "Linear Regression", "wape": 55.65 },
+    { "horizon_days": 15, "predicted_demand": 184.358, "model_name": "Random Forest", "wape": 50.00 },
+    { "horizon_days": 30, "predicted_demand": 576.6974, "model_name": "Random Forest", "wape": 48.73 },
+    { "horizon_days": 90, "predicted_demand": 1588.9073, "model_name": "Random Forest", "wape": 53.22 }
+  ],
+  "units": "units",
+  "model_version": "Phase 1 (Task 5 Model Training & Serialization)",
+  "timestamp": "2026-11-17T01:19:15.123456+00:00",
+  "warnings": [],
+  "status": "success",
+  "total_predicted_demand": 83.4307,
+  "horizon_days": null
+}
+```
+- **Error Responses:**
+  - `422 Unprocessable Entity`: Validation failure (unsupported horizon like 999, negative demand, missing required lags, non-finite values, or blank StockCode).
+  - `503 Service Unavailable`: Models not ready or missing artifacts.
 
 ---
 

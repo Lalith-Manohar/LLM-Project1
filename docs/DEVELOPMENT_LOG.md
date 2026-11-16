@@ -4,6 +4,82 @@ This document maintains a strict chronological development record for NEXORA. Ev
 
 ---
 
+### [2026-11-17] — Backend Test Suite Performance Diagnosis, Loopback Hang Fix & Full Verification
+
+- **Phase & Task:** Test Infrastructure & Verification — Backend Test Suite Performance Diagnosis, Loopback Hang Fix & Full Verification.
+- **Task Description:** Conducted a comprehensive diagnostic investigation into why the full backend test suite (`pytest backend/tests/ -v`) hung for 23 minutes. Traced thread call stacks, verified process states, identified the root cause in Windows socket loopback handling within Starlette's `TestClient` / `anyio` portal, installed `pytest-timeout`, created a global `pytest.ini` with 30-second per-test timeout, added `tearDownClass` to `TestForecastAPI`, verified each test file independently, and executed the complete 59-test suite to 100% pass rate in 8.77 seconds. Produced `docs/TEST_SUITE_VERIFICATION_REPORT.md`.
+- **Root Cause & Technical Insights:**
+  1. *Root Cause:* Starlette's `TestClient` initializes `anyio.from_thread.start_blocking_portal()`. On Windows, Python's `ProactorEventLoop._make_self_pipe()` calls `socket.socketpair()`. In a restricted sandbox without elevated network permissions, `csock.connect(('127.0.0.1', port))` returns `WSAEWOULDBLOCK (10035)`, which Python's `socketpair` catches as `BlockingIOError` and treats as non-fatal. Then `lsock.accept()` executes as a blocking call without a timeout. Because the TCP handshake was blocked by the sandbox security boundary, `accept()` hung indefinitely in kernel space.
+  2. *Hang-Prevention Protection:* Installed `pytest-timeout==2.4.0`, added `pytest-timeout>=2.3.0,<3.0.0` to `backend/requirements.txt`, and configured `timeout = 30` in root `pytest.ini`. No test can ever run for 23 minutes again.
+  3. *Client Resource Cleanup:* Added `tearDownClass` in `backend/tests/test_forecast_api.py` calling `TestClient.close()` to ensure orderly thread-pool shutdown.
+- **Files Created:**
+  - `pytest.ini` (Root pytest configuration enforcing 30s per-test timeout and warning filters)
+  - `docs/TEST_SUITE_VERIFICATION_REPORT.md` (Full diagnostic and execution verification report)
+- **Files Modified:**
+  - `backend/requirements.txt` (Declared `pytest-timeout>=2.3.0,<3.0.0`)
+  - `backend/tests/test_forecast_api.py` (Added `tearDownClass` for clean client lifecycle)
+  - `docs/DEVELOPMENT_LOG.md` (Added this entry)
+- **Testing & Verification Evidence:**
+  - `test_feature_engineering.py`: 7 passed in 2.17s
+  - `test_ml_features.py`: 10 passed in 2.12s
+  - `test_model_training.py`: 10 passed in 6.79s
+  - `test_model_evaluation.py`: 9 passed in 2.05s
+  - `test_forecast_api.py`: 15 passed in 8.02s
+  - `test_main.py`: 3 passed in 0.85s
+  - `test_preprocessing.py`: 5 passed in 1.15s
+  - **Complete Test Suite:** `pytest backend/tests/ -v --timeout=30` $\rightarrow$ **59 passed in 8.77s, 0 failed, 0 skipped**.
+- **Next Recommended Task:** Proceed to Phase 2: MySQL Database & Operational CRUD (`backend/app/db/`, Alembic migrations, and catalog/inventory tables).
+
+---
+
+### [2026-11-17] — Phase 1, Task 6: FastAPI Multi-Horizon ML Inference Integration
+
+- **Phase & Task:** Phase 1 (ML Demand Forecasting & FastAPI Serving) — Task 6: FastAPI Multi-Horizon ML Inference Integration.
+- **Task Description:** Successfully integrated the four trained, leakage-free demand forecasting models (`demand_model_7d.joblib`, `15d`, `30d`, `90d`) and `models_metadata.json` into the FastAPI backend service under `/api/v1/forecast/`. Implemented startup lifespan model loading to ensure models reside permanently in memory with zero per-request disk I/O. Refactored Pydantic schemas to resolve `ISSUE-001`, supporting multi-horizon queries (`horizons: [7, 15, 30, 90]`) alongside backwards-compatible queries (`horizon_days: int`) and both nested/flat feature inputs. Wired model registry with strict 10-column DataFrame mapping, non-negativity post-processing $\max(0, \hat{y})$, and resilient unseen SKU handling with informative warnings. Implemented model metrics and pipeline info endpoints. Authored 15 automated unit & integration tests, achieved 59/59 passing tests across the entire backend, and empirically verified all endpoints via live TCP HTTP requests against a running Uvicorn server.
+- **Key Technical Implementations:**
+  1. *Model Registry & Lifespan Architecture (`prediction_service.py`, `main.py`):* Implemented a thread-safe singleton `PredictionService` that loads all 4 `.joblib` estimators and `models_metadata.json` once during FastAPI async lifespan startup. Health checks and prediction readiness are decoupled.
+  2. *Schema Modernization & ISSUE-001 Resolution (`forecast.py`):* Updated `ForecastRequest` to accept `horizons: List[int]` with strict validation against supported horizons (`[7, 15, 30, 90]`), while retaining `horizon_days: Optional[int]` for backward compatibility. Added support for both nested `features: HistoricalFeatures` and flat field access.
+  3. *Exact Feature Contract & Inference Preprocessing:* Formatted incoming payloads into a pandas DataFrame matching the exact contract required by the fitted pipelines: `['StockCode', 'DayOfWeek', 'Month', 'DayOfMonth', 'Lag1', 'Lag7', 'Lag14', 'Lag28', 'RollingMean7', 'RollingMean28']`.
+  4. *Non-Negativity Enforcement:* All raw regression outputs pass through $\hat{y} = \max(0, \hat{y})$ with non-finite sanitization.
+  5. *Unseen SKU Resilience:* Known SKUs are checked against the fitted `OneHotEncoder` vocabulary. Unseen or infrequent SKUs smoothly activate the infrequent category indicator with an informative API warning, returning non-negative predictions without crashing.
+  6. *Endpoints Implemented:*
+     - `POST /api/v1/forecast/` — Main multi-horizon inference endpoint.
+     - `POST /api/v1/forecast/predict` — Operational alias endpoint matching Technical Blueprint v1.0.
+     - `GET /api/v1/forecast/horizons` — Supported planning horizons (`[7, 15, 30, 90]`).
+     - `GET /api/v1/forecast/model-metrics` — Documented out-of-time backtest evaluation benchmarks (MAE, RMSE, WAPE).
+     - `GET /api/v1/forecast/model-info` — Loaded model architectures, feature lists, and categorical encoding details.
+- **Files Created:**
+  - `backend/tests/test_forecast_api.py` (15 comprehensive unit and integration tests)
+- **Files Modified:**
+  - `backend/app/core/config.py` (Fixed `MODELS_DIR` path calculation to resolve `backend/ml/models`)
+  - `backend/app/schemas/forecast.py` (Added multi-horizon schemas, historical features validation, ConfigDict)
+  - `backend/app/services/prediction_service.py` (Full model registry, DataFrame conversion, non-negativity, unseen SKU handling)
+  - `backend/app/api/routes/forecast.py` (Wired all endpoints with proper status codes and error handling)
+  - `backend/app/main.py` (Registered async lifespan event handler)
+  - `docs/API_DOCUMENTATION.md` (Updated Section 2.2 with complete endpoint schemas, examples, and status codes)
+  - `docs/KNOWN_ISSUES.md` (Marked `ISSUE-001` and `ISSUE-002` as `RESOLVED`)
+  - `docs/TECHNICAL_DECISIONS.md` (Added `TD-014: FastAPI Multi-Horizon Prediction Service & Lifespan Architecture`)
+  - `docs/FEATURES_STATUS.md` (Updated `FEAT-M07-02` to `IMPLEMENTED`)
+  - `docs/DEVELOPMENT_ROADMAP.md` (Marked Task 6 completed and Phase 1 Milestone achieved)
+- **Testing & Empirical Verification Evidence:**
+  - *Automated Test Suite:* Ran `pytest backend/tests/ -v` $\rightarrow$ **59 passed in 8.74s, 0 failed**.
+  - *Live TCP HTTP Verification (port 8001):* Tested running Uvicorn server:
+    - `GET /api/v1/forecast/horizons` $\rightarrow$ 200 OK (`[7, 15, 30, 90]`)
+    - `GET /api/v1/forecast/model-metrics` $\rightarrow$ 200 OK (returned metrics for all 4 horizons)
+    - `GET /api/v1/forecast/model-info` $\rightarrow$ 200 OK (`ready: true`, Ridge for 7d, Random Forest for 15/30/90d)
+    - `POST /api/v1/forecast/` (Single D7) $\rightarrow$ 200 OK (`{'7': 83.4307}`)
+    - `POST /api/v1/forecast/` (All 4 Horizons) $\rightarrow$ 200 OK (`{'7': 83.4307, '15': 184.358, '30': 576.6974, '90': 1588.9073}`)
+    - `POST /api/v1/forecast/predict` (Alias) $\rightarrow$ 200 OK (`{'30': 576.6974}`)
+    - `POST /api/v1/forecast/` (Unseen SKU `UNKNOWN_SKU_XYZ`) $\rightarrow$ 200 OK (returned valid predictions + warning)
+    - `POST /api/v1/forecast/` (Invalid horizon `45`) $\rightarrow$ 422 Unprocessable Entity
+    - `POST /api/v1/forecast/` (Negative demand `-5.0`) $\rightarrow$ 422 Unprocessable Entity
+- **Limitations & Boundary Adherence:**
+  - Scope strictly maintained: No database connections, no frontend code, no authentication tokens, no automated retraining inside requests.
+  - Historical demand features are currently passed in the request body (client-provided) until Module 6 (MySQL Inventory & Sales Transactions) is implemented in Phase 2.
+- **Next Recommended Task:** Proceed to Phase 2: MySQL Relational Database & Operational CRUD (`backend/app/db/`, Alembic migrations, and catalog/inventory tables).
+
+---
+
 ### [2026-11-17] — Phase 1, Task 5.2: Final Model Training Verification & Artifact Integrity Audit
 
 - **Phase & Task:** Phase 1 (ML Demand Forecasting & API Serving) — Task 5.2: Final Model Training Verification & Artifact Integrity Audit.

@@ -21,7 +21,7 @@ Allowed Statuses:
 | **M4: Product Lifecycle Intelligence** | 3 | 0 | 0 | 3 | 0 |
 | **M5: Price & Revenue Intelligence** | 3 | 0 | 0 | 3 | 0 |
 | **M6: Inventory Control** | 6 | 0 | 0 | 6 | 0 |
-| **M7: Predictive Planner (Core ML)** | 7 | 5 | 1 | 1 | 0 |
+| **M7: Predictive Planner (Core ML)** | 7 | 6 | 0 | 1 | 0 |
 | **M8: Purchase Planning Simulator** | 4 | 0 | 0 | 4 | 0 |
 | **M9: Product Health & Return Intelligence** | 4 | 0 | 0 | 4 | 0 |
 | **M10: Anomaly Detection & Alerts** | 3 | 0 | 0 | 3 | 0 |
@@ -101,7 +101,7 @@ Allowed Statuses:
 | Feature ID | Feature Name | Status | Relevant Files | Relevant Endpoints | DB Tables | Testing Status | Notes / Limitations |
 | :--- | :--- | :---: | :--- | :--- | :--- | :---: | :--- |
 | `FEAT-M07-01` | Supported Horizon Listing | `IMPLEMENTED` | `backend/app/api/routes/forecast.py` | `GET /api/v1/forecast/horizons` | None | **Passed** | Returns `[7, 15, 30, 90]` |
-| `FEAT-M07-02` | Multi-Horizon Forecast Inference API | `PARTIALLY IMPLEMENTED` | `backend/app/api/routes/forecast.py`, `prediction_service.py` | `POST /api/v1/forecast/` | None | **Passed** | Placeholder returns `model_not_trained`; awaiting trained `.joblib` model |
+| `FEAT-M07-02` | Multi-Horizon Forecast Inference API | `IMPLEMENTED` | `backend/app/api/routes/forecast.py`, `prediction_service.py` | `POST /api/v1/forecast/`, `POST /api/v1/forecast/predict`, `GET /api/v1/forecast/model-metrics`, `GET /api/v1/forecast/model-info` | None | **Passed** | Fully integrated with 4 trained .joblib models via lifespan caching; multi-horizon predictions (7, 15, 30, 90d), unseen SKU resilience, non-negativity; 15 unit/integration tests passed |
 | `FEAT-M07-03` | Dataset Ingestion Pipeline | `IMPLEMENTED` | `backend/ml/src/data_loader.py` | None | None | **Passed** | Reads raw CSV (latin1 encoding), generates statistical profile & eda_report.md |
 | `FEAT-M07-04` | Leakage-Free Preprocessing & Features | `IMPLEMENTED` | `preprocessing.py`, `feature_engineering.py` | None | None | **Passed** | Preprocessing, stream isolation, continuous daily zero-imputation, and leakage-free feature/target generation complete & verified |
 | `FEAT-M07-05` | Horizon Regressors Training (7/15/30/90d)| `IMPLEMENTED` | `backend/ml/src/train.py`, `models/` | None | None | **Passed** | Trained Seasonal Naive, Linear Regression, and Random Forest; serialized 4 pipelines to .joblib |

@@ -2,17 +2,33 @@
 FastAPI Application Entry Point
 """
 
+from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.core.config import settings
 from app.api.routes import api_router
+from app.services.prediction_service import prediction_service
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Application lifespan manager: loads ML models into memory once at startup."""
+    print("[NEXORA Startup] Initializing application lifespan...")
+    try:
+        prediction_service.load_models()
+    except Exception as e:
+        print(f"[NEXORA Startup Warning] Model loading deferred or encountered an error: {e}")
+    yield
+    print("[NEXORA Shutdown] Application shutting down cleanly.")
+
 
 app = FastAPI(
     title=settings.PROJECT_NAME,
     version=settings.VERSION,
     description="Backend API services for demand forecasting, inventory management, and retail intelligence.",
     docs_url="/docs",
-    redoc_url="/redoc"
+    redoc_url="/redoc",
+    lifespan=lifespan
 )
 
 # CORS Middleware setup for future React frontend
