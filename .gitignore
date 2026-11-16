@@ -1,0 +1,40 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+.venv/
+ENV/
+
+# Data & Models (Do not commit datasets or model weights)
+backend/ml/data/raw/*
+!backend/ml/data/raw/.gitkeep
+backend/ml/data/processed/*
+!backend/ml/data/processed/.gitkeep
+backend/ml/models/*
+!backend/ml/models/.gitkeep
+
+# Jupyter Notebook checkpoints
+.ipynb_checkpoints/
+
+# Environment variables
+.env
+backend/.env
+
+# Node / Frontend
+frontend/node_modules/
+frontend/build/
+frontend/dist/
+
+# IDE / Editor
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS specific
+.DS_Store
+Thumbs.db
