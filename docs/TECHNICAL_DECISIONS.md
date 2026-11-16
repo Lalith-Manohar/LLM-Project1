@@ -126,3 +126,68 @@ This document formally records all major technical and architectural decisions f
   - Global calendar grid imputation across all SKUs from 2010-12-01 to 2011-12-09 (rejected: would inflate the dataset with over 1.4 million synthetic zero rows for products introduced late in 2011, contaminating demand velocity statistics).
   - Dropping days with zero sales (rejected: breaks time-series continuity, invalidating lag shifts $t-k$ and rolling windows).
 - **Impact on Other Modules:** `daily_product_demand.csv` contains continuous date ranges per product; Phase 1 Task 4 will compute lags and rolling windows safely on this structured matrix.
+
+---
+
+### TD-010: Incomplete Multi-Horizon Target Handling via NaN Preservation
+- **Date:** 2026-11-17
+- **Topic:** Forward-looking target generation, incomplete horizon handling, and label leakage prevention.
+- **Context:** In Phase 1 Task 4, multi-horizon cumulative targets ($D_7, D_{15}, D_{30}, D_{90}$) were constructed. Each product's series ends at its last observed sale date (`max_date`). For rows within $H$ days of `max_date`, complete future demand is unobserved.
+- **Decision:** Strictly mark forward targets as missing (`NaN`) whenever the complete future window of $H$ days is unavailable. Never fill incomplete future windows with zero, partial sums, or forward-filled values.
+- **Reasoning:**
+  1. An unobserved future period is not evidence of zero consumer demand. Assuming zero sales for future dates beyond the observation window would artificially bias demand predictions downward, causing severe under-forecasting in operational models.
+  2. Partial sums over fewer than $H$ days would create target scale distortion (e.g., comparing a 3-day sum to a full 7-day target), degrading regression loss functions.
+  3. Preserving `NaN` allows model training in Task 5 to cleanly select valid instances (`df[target].notnull()`) independently for each horizon ($D_7$: 945,345 eligible rows; $D_{90}$: 661,228 eligible rows) without label contamination.
+- **Alternatives Considered:**
+  - Zero-padding future unobserved days (rejected: creates false zero-sales signals for high-velocity items).
+  - Truncating all SKUs to a single arbitrary cut-off date (rejected: needlessly discards hundreds of thousands of valid training rows for shorter horizons like $D_7$ and $D_{15}$).
+- **Impact on Other Modules:** Phase 1 Task 5 training scripts will filter non-null target masks independently per horizon model. Model evaluation backtests will strictly test against verified complete horizons.
+
+---
+
+### TD-011: Strict Chronological Purge/Embargo Window Splitting
+- **Date:** 2026-11-17
+- **Topic:** Time-series validation, leakage prevention, and out-of-time evaluation boundaries.
+- **Context:** In Phase 1 Task 5, multi-horizon models ($D_7, D_{15}, D_{30}, D_{90}$) required empirical evaluation. In multi-day cumulative regression, an observation at date $t$ carries a forward label spanning $t+1..t+H$. Simple date-based train/validation splitting without purging would allow training observation targets to overlap into the validation period.
+- **Decision:** Mandate an explicit purge/embargo cutoff rule: for validation starting at date $V$, a training sample is eligible if and only if $t_{\text{train}} + H < V$ ($t_{\text{train}} \le V - H - 1\text{ day}$).
+- **Reasoning:**
+  1. Guarantees that zero future target information from the training set leaks into the validation period.
+  2. Ensures that validation samples are evaluated strictly out-of-time against genuine unseen future trading periods.
+  3. Formulates a rigorous academic evaluation methodology defendable in viva and technical demonstrations.
+- **Alternatives Considered:**
+  - Standard k-fold cross-validation or random train/test split (rejected: severe temporal leakage, producing artificially inflated accuracy metrics).
+  - Splitting on date $V$ without an embargo (rejected: samples observed $t \in [V - H, V]$ would have targets extending into the validation period).
+- **Impact on Other Modules:** All future backtesting and evaluation modules (Module 2, 7, 10) must use `get_chronological_split()` or adhere to the purge/embargo rule.
+
+---
+
+### TD-012: Continuous TargetEncoder for High-Cardinality Retail Product SKUs
+- **Date:** 2026-11-17
+- **Topic:** Categorical encoding, pipeline architecture, and inference resilience.
+- **Context:** The retail catalog contains 3,922 unique alphanumeric product SKUs (`StockCode`). One-hot encoding creates 3,922 sparse/dense columns, which causes memory exhaustion (>8 GB array allocations) and slow training for tree-based estimators like Random Forest over 800,000+ samples. Label/ordinal encoding artificially imposes ordinal arithmetic relationships on discrete products.
+- **Decision:** Implement scikit-learn's `TargetEncoder(smooth="auto", cv=KFold(5, shuffle=False), target_type="continuous")` coupled with `StandardScaler` inside a unified `Pipeline`.
+- **Reasoning:**
+  1. Compresses high-cardinality SKUs into a single informative continuous feature representing empirical target demand conditioned on SKU, with out-of-fold cross-validation and Bayes smoothing to prevent target leakage.
+  2. Ensures that unseen product SKUs at inference time automatically impute the global prior mean target without throwing exceptions or failing requests.
+  3. Keeps preprocessing entirely self-contained inside the `.joblib` serialized pipeline, ensuring identical transformations during offline evaluation and live FastAPI serving.
+- **Alternatives Considered:**
+  - High-cardinality OneHotEncoder (rejected: causes memory exhaustion and excessive artifact size).
+  - OrdinalEncoder (rejected: imposes arbitrary numerical distances between unrelated products).
+- **Impact on Other Modules:** Superseded by TD-013 following the Phase 1 Task 5.1 Temporal Leakage Audit.
+
+---
+
+### TD-013: OneHotEncoder Infrequent Categorical Encoding vs TargetEncoder Temporal Leakage
+- **Date:** 2026-11-17
+- **Topic:** Temporal target leakage elimination in high-cardinality SKU encoding.
+- **Context:** During the Phase 1 Task 5.1 technical audit, `TargetEncoder(smooth="auto", cv=KFold(5, shuffle=False))` was inspected for temporal leakage. Because `KFold` is non-temporal, target values from future dates (e.g., in fold 4) were used to compute SKU target encodings for earlier training observations (e.g., in folds 0-3). This introduced subtle internal cross-fitting target leakage into the training phase.
+- **Decision:** Replace `TargetEncoder` with `OneHotEncoder(max_categories=50, handle_unknown="infrequent_if_exist", sparse_output=False)`. Top 50 frequent high-volume SKUs receive individual binary indicator columns; all remaining 3,872 SKUs (and unseen SKUs at inference) automatically collapse into a single `infrequent_SKU` category.
+- **Reasoning:**
+  1. **Zero Target Leakage:** `OneHotEncoder` is purely unsupervised; it maps category identifiers without ever reading target labels $y$. Future target values cannot leak into earlier feature representations.
+  2. **Bounded Dimensionality:** Constraining `max_categories=50` adds exactly 51 columns (top 50 + 1 infrequent) regardless of total catalog size, preventing memory bloat and keeping Random Forest training within 20 seconds.
+  3. **Robust Unseen SKU Handling:** `handle_unknown="infrequent_if_exist"` ensures any unseen SKU encountered during inference smoothly activates the infrequent indicator without raising an error.
+  4. **Empirical Performance:** Ridge linear regression achieved 55.65% WAPE on $D_7$, and Random Forest achieved 50.00% on $D_{15}$, 48.73% on $D_{30}$, and 53.22% on $D_{90}$—all beating the Seasonal Naïve baseline without target leakage.
+- **Alternatives Considered:**
+  - Rolling target encoding (rejected: highly complex to maintain across sparse time series without lookahead risk).
+  - Raw OrdinalEncoder (rejected: creates false numeric hierarchy among SKUs).
+- **Impact on Other Modules:** Serialized pipelines in `backend/ml/models/` accept raw DataFrame inputs with string `StockCode` and output calibrated predictions directly. Preprocessing is 100% self-contained in the pipeline.

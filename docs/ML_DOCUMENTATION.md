@@ -16,10 +16,10 @@ The machine learning subsystem serves as the analytical intelligence engine of N
 | **Dataset Ingestion & EDA** | **Implemented** | `backend/ml/src/data_loader.py` implemented; generated statistical report `backend/ml/data/processed/eda_report.md`. |
 | **Preprocessing & Isolation** | **Implemented** | `backend/ml/src/preprocessing.py` partitions dataset into 4 verified CSV streams with 100% reconciliation. |
 | **Daily SKU Aggregation** | **Implemented** | `backend/ml/src/feature_engineering.py` creates continuous daily time-series (`daily_product_demand.csv`, 1,074,653 rows) with zero-demand padding within SKU lifespan boundaries and 100% unit reconciliation. |
-| **Feature Engineering** | **Partially Implemented** | Daily aggregation & zero-padding complete; calendar dynamics, lags (1, 7, 14, 28), and rolling windows (7, 28) planned. |
-| **Model Training & Comparison** | **Planned (Milestone 1)** | Seasonal baseline, Linear Regression, Random Forest, XGBoost planned across 4 horizons. |
-| **Chronological Evaluation** | **Planned (Milestone 1)** | MAE, RMSE, WAPE calculation via rolling-origin backtesting planned. |
-| **Artifact Persistence** | **Planned (Milestone 1)** | Joblib serialization to `backend/ml/models/` planned. |
+| **Feature Engineering** | **Implemented** | `backend/ml/src/feature_engineering.py` constructs 18-column matrix (`ml_feature_dataset.csv`, 1,074,653 rows) with calendar dynamics, lags (1, 7, 14, 28), rolling means (7, 28), and multi-horizon targets ($D_7, D_{15}, D_{30}, D_{90}$) with complete temporal isolation. |
+| **Model Training & Comparison** | **Implemented** | `backend/ml/src/train.py` trains Seasonal Naive, Linear Regression, and Random Forest pipelines across all 4 horizons. |
+| **Chronological Evaluation** | **Implemented** | `backend/ml/src/evaluate.py` implements strict purge/embargo splitting and computes MAE, RMSE, and WAPE out-of-time. |
+| **Artifact Persistence** | **Implemented** | Joblib serialized pipelines (`demand_model_{h}d.joblib`) and `models_metadata.json` saved in `backend/ml/models/`. |
 | **API Model Integration** | **Planned (Milestone 1)** | Hooking `prediction_service.py` to load serialized `.joblib` estimators planned. |
 
 > [!NOTE]
@@ -135,49 +135,74 @@ The aggregation and imputation pipeline (`backend/ml/src/feature_engineering.py`
 
 All feature generation (`backend/ml/src/feature_engineering.py`) enforces strict chronological boundaries:
 
-| Feature Category | Features | Calculation & Leakage Prevention Rule |
-| :--- | :--- | :--- |
-| **Calendar Dynamics** | `DayOfWeek`, `Month`, `DayOfMonth` | Extracted directly from transaction date; captures weekly cycles and monthly seasonality. |
-| **Lag Features** | `Lag1`, `Lag7`, `Lag14`, `Lag28` | Historical demand shifted by $t - k$. Never references current or future target days. |
-| **Rolling Statistics** | `RollingMean7`, `RollingMean28` | Moving averages calculated over prior windows ($t-1$ backwards). Rolling windows exclude the current observation date. |
-| **Horizon Alignment** | $D_7, D_{15}, D_{30}, D_{90}$ | Targets represent cumulative positive demand over the subsequent $H$ days: $\sum_{i=1}^{H} y_{t+i}$. In multi-step modeling, feature sets use information available strictly at time $t$. |
+| Feature Category | Features | Calculation & Leakage Prevention Rule | Available Rows in Dataset |
+| :--- | :--- | :--- | :---: |
+| **Calendar Dynamics** | `DayOfWeek`, `Month`, `DayOfMonth` | Extracted directly from observation date $t$; captures weekly cycles and monthly seasonality. | 1,074,653 (100.00%) |
+| **Lag Features** | `Lag1`, `Lag7`, `Lag14`, `Lag28` | Historical demand shifted by $t - k$. Never references current or future target days. Initial burn-in days strictly preserved as `NaN`. | 970,840 to 1,070,731 (90.34%–99.64%) |
+| **Rolling Statistics** | `RollingMean7`, `RollingMean28` | Moving averages calculated over prior windows ($t-1$ backwards) by shifting demand by 1 day before rolling with `min_periods=window`. Strictly excludes observation date $t$. | 970,840 to 1,048,251 (90.34%–97.54%) |
+| **Horizon Alignment** | $D_7, D_{15}, D_{30}, D_{90}$ | Targets represent cumulative positive demand over the subsequent $H$ days: $\sum_{i=1}^{H} y_{t+i}$. Strictly sums dates $t+1$ to $t+H$; observation date $t$ is strictly excluded. Incomplete horizons near SKU lifespan ends strictly remain `NaN` (critical incomplete-target rule). | 753,054 to 1,048,251 (70.07%–97.54%) |
+
+### Empirical Feature Availability & Missing Values (Phase 1, Task 4)
+- **Complete Feature Matrix Rows:** 970,840 rows (90.34% of 1,074,653) have complete non-null values across all calendar, lag, and rolling features.
+- **Initial Missing Values:** Row 0 of each SKU has `NaN` for `Lag1` (3,922 rows, 0.36%); the first 7 days have `NaN` for `Lag7` and `RollingMean7` (26,402 rows, 2.46%); the first 28 days have `NaN` for `Lag28` and `RollingMean28` (103,813 rows, 9.66%). These are never filled with artificial zeros.
 
 ---
 
 ## 6. Multi-Horizon Forecasting Targets
 
-| Target Code | Horizon Window | Operational Purpose in NEXORA |
-| :--- | :--- | :--- |
-| **D7** | 7 Days | Fast-moving item replenishment and weekly stockout prevention. |
-| **D15** | 15 Days | Bi-weekly supplier ordering and batch replenishment cycles. |
-| **D30** | 30 Days | Monthly warehouse space allocation and capital budgeting. |
-| **D90** | 90 Days | Quarterly supply chain capacity planning and vendor volume agreements. |
+| Target Code | Horizon Window | Operational Purpose in NEXORA | Available Targets | Eligible Rows for Training (Features + Target) |
+| :--- | :--- | :--- | :---: | :---: |
+| **D7** | 7 Days | Fast-moving item replenishment and weekly stockout prevention. | 1,048,251 (97.54%) | **945,345 rows (87.97%)** |
+| **D15** | 15 Days | Bi-weekly supplier ordering and batch replenishment cycles. | 1,018,506 (94.78%) | **916,376 rows (85.27%)** |
+| **D30** | 30 Days | Monthly warehouse space allocation and capital budgeting. | 963,538 (89.66%) | **862,938 rows (80.30%)** |
+| **D90** | 90 Days | Quarterly supply chain capacity planning and vendor volume agreements. | 753,054 (70.07%) | **661,228 rows (61.53%)** |
 
-*Model Strategy:* Dedicated regression models will be trained independently for each horizon ($H \in \{7, 15, 30, 90\}$) to optimize for horizon-specific variance and lead-time characteristics.
+*Critical Incomplete-Target Rule:* When the full future horizon of $H$ days is unavailable (within $H$ days of each SKU's last observed sale date), the target is explicitly set to `NaN`. Incomplete future windows are never zero-padded or filled with partial sums.
+
+*Model Strategy:* Dedicated regression models will be trained independently for each horizon ($H \in \{7, 15, 30, 90\}$) to optimize for horizon-specific variance and lead-time characteristics. Rows with complete features and a non-null target for that horizon are selected for training.
 
 ---
 
 ## 7. Model Candidates & Comparison Strategy
 
-1. **Seasonal Naïve Baseline:** Repeats historical demand from the prior seasonal cycle (e.g., prior 7-day average). Establishes the performance benchmark.
-2. **Linear Regression (Ridge / Lasso):** Provides a transparent, interpretable linear baseline.
-3. **Random Forest Regressor:** Non-linear ensemble model capturing complex feature interactions and non-monotonic seasonality.
-4. **XGBoost Regressor (Optional / Comparative):** Gradient boosting framework evaluated if computational environment and execution constraints permit.
+1. **Weekly-Average Demand-Rate Baseline (Seasonal Naïve Benchmark):** Scales the historical rolling weekly demand rate across the forecast horizon:
+   $$\hat{y}_{\text{Baseline}}(t) = \max(0, H \times \text{RollingMean7}(t))$$
+   Establishes the transparent, non-negative benchmark using solely prior weekly observations ($t-7..t-1$, shifted by 1 day in Task 4 to prevent lookahead).
+2. **Linear Regression Pipeline (Ridge + OneHotEncoder):** Uses scikit-learn `Pipeline` with `OneHotEncoder(max_categories=50, handle_unknown="infrequent_if_exist", sparse_output=False)` for product SKUs and `StandardScaler` for numerical predictors, regularized with `Ridge(alpha=1.0)`.
+   - *Zero Target Leakage:* Completely isolates categorical encoding from the target label $y$.
+   - *Bounded Dimensionality:* Only top 50 high-velocity SKUs receive dedicated indicators; all other 3,872 SKUs (and unseen test SKUs) are grouped into the infrequent category.
+3. **Random Forest Regressor Pipeline:** Uses `RandomForestRegressor(n_estimators=25, max_depth=10, random_state=42)` coupled with `OneHotEncoder(max_categories=50)` and `StandardScaler` to capture non-linear demand spikes and complex temporal interactions across lag windows.
 
 ---
 
-## 8. Chronological Evaluation & Metrics
+## 8. Chronological Evaluation & Metrics (Phase 1, Task 5.1 Audited Results)
 
-Random train/test splits cause extreme temporal data leakage in time-series forecasting. NEXORA enforces **chronological splitting** and **rolling-origin backtesting**:
-
-- **Evaluation Window:** The final months of the dataset are reserved strictly as an out-of-time test set.
+Random train/test splits cause extreme temporal data leakage in time-series forecasting. NEXORA enforces **strict chronological out-of-time holdouts** with a dedicated purge/embargo gap:
+- **Purge/Embargo Rule:** For horizon $H$, training samples observed at date $t$ are eligible only if $t + H < \text{val\_start}$ ($t \le \text{val\_start} - H - 1\text{ day}$). This eliminates any overlap between training target windows and validation periods.
+- **Single Out-of-Time Holdout:** Evaluated on a continuous out-of-time evaluation window formulated to maximize training history while maintaining complete forward target windows within the 12-month UCI dataset.
 - **Metric Definitions:**
-  - **MAE (Mean Absolute Error):** Measures average absolute deviation in units:
-    $$\text{MAE} = \frac{1}{n} \sum_{i=1}^{n} |y_i - \hat{y}_i|$$
-  - **RMSE (Root Mean Squared Error):** Penalizes large outlier forecast errors:
-    $$\text{RMSE} = \sqrt{\frac{1}{n} \sum_{i=1}^{n} (y_i - \hat{y}_i)^2}$$
-  - **WAPE (Weighted Absolute Percentage Error):** Robust to zero-demand days (avoids division-by-zero inherent to MAPE):
-    $$\text{WAPE} = \frac{\sum_{i=1}^{n} |y_i - \hat{y}_i|}{\sum_{i=1}^{n} y_i}$$
+  - **MAE (Mean Absolute Error):** $\text{MAE} = \frac{1}{n} \sum_{i=1}^{n} |y_i - \hat{y}_i|$
+  - **RMSE (Root Mean Squared Error):** $\text{RMSE} = \sqrt{\frac{1}{n} \sum_{i=1}^{n} (y_i - \hat{y}_i)^2}$
+  - **WAPE (Weighted Absolute Percentage Error):** $\text{WAPE} = \frac{\sum |y_i - \hat{y}_i|}{\sum y_i} \times 100\%$ (handles zero-demand days without division-by-zero instability).
+
+### Audited Multi-Horizon Out-of-Time Model Comparison Matrix
+
+| Horizon | Candidate Model | MAE (Units) | RMSE (Units) | WAPE (%) | Training Samples | Validation Samples | Embargo Gap | Selected Best Model | Selection Rationale |
+| :--- | :--- | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :--- |
+| **D_7** | Weekly-Average Baseline | 44.47 | 115.75 | 66.12% | 884,219 | 42,091 | 8 days | — | Baseline benchmark |
+| **D_7** | **Linear Regression (Ridge)** | **37.43** | **92.57** | **55.65%** | 884,219 | 42,091 | 8 days | **>>> BEST** | Lowest WAPE (55.65%) & lowest MAE/RMSE |
+| **D_7** | Random Forest | 48.98 | 140.50 | 72.83% | 884,219 | 42,091 | 8 days | — | Over-responsive to high-frequency noise |
+| **D_15**| Weekly-Average Baseline | 86.87 | 238.33 | 59.57% | 816,930 | 57,840 | 16 days | — | Baseline benchmark |
+| **D_15**| Linear Regression (Ridge) | 74.21 | 184.62 | 50.88% | 816,930 | 57,840 | 16 days | — | Strong competitive linear fit |
+| **D_15**| **Random Forest** | **72.93** | **217.49** | **50.00%** | 816,930 | 57,840 | 16 days | **>>> BEST** | Lowest WAPE (50.00%) & lowest MAE |
+| **D_30**| Weekly-Average Baseline | 159.02 | 509.06 | 61.98% | 678,252 | 100,262 | 31 days | — | Baseline benchmark |
+| **D_30**| Linear Regression (Ridge) | 134.49 | 403.82 | 52.42% | 678,252 | 100,262 | 31 days | — | Competitive linear fit |
+| **D_30**| **Random Forest** | **125.03** | **406.25** | **48.73%** | 678,252 | 100,262 | 31 days | **>>> BEST** | Lowest WAPE (48.73%) & lowest MAE |
+| **D_90**| Weekly-Average Baseline | 458.68 | 1253.71 | 71.09% | 320,428 | 98,157 | 91 days | — | Baseline benchmark |
+| **D_90**| Linear Regression (Ridge) | 358.93 | 925.34 | 55.63% | 320,428 | 98,157 | 91 days | — | Sub-optimal long-term nonlinear trend capture |
+| **D_90**| **Random Forest** | **343.36** | **890.18** | **53.22%** | 320,428 | 98,157 | 91 days | **>>> BEST** | Lowest WAPE (53.22%) & lowest MAE/RMSE |
+
+All best models were serialized via Joblib to `backend/ml/models/demand_model_{h}d.joblib` and validated for numerical reload consistency, non-negative finite bounds, and unseen SKU robustness.
 
 ---
 

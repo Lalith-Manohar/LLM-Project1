@@ -29,13 +29,13 @@ This document maintains an active registry of known technical issues, architectu
 - **Relevant Files:**
   - `backend/ml/src/data_loader.py` (RESOLVED: Implemented in Task 1)
   - `backend/ml/src/preprocessing.py` (RESOLVED: Implemented in Task 2)
-  - `backend/ml/src/feature_engineering.py` (PARTIALLY RESOLVED: Daily aggregation & zero-imputation complete in Task 3; lag/rolling feature generation next)
-  - `backend/ml/src/train.py`
-  - `backend/ml/src/evaluate.py`
+  - `backend/ml/src/feature_engineering.py` (RESOLVED: Implemented in Tasks 3 & 4)
+  - `backend/ml/src/train.py` (RESOLVED: Implemented in Task 5)
+  - `backend/ml/src/evaluate.py` (RESOLVED: Implemented in Task 5)
   - `backend/ml/src/predict.py`
-- **Description:** Pipeline scripts in `backend/ml/src/` were structured stubs. Tasks 1, 2, and 3 are now fully implemented and tested. The remaining steps include lag/rolling feature extraction, model training (`train.py`), backtesting (`evaluate.py`), and inference integration (`predict.py`).
-- **Current Status:** In Progress (Tasks 1–3 completed, Tasks 4–6 remaining for Milestone 1).
-- **Proposed Resolution:** Implement each pipeline module sequentially: lag/rolling feature engineering, model training, chronological evaluation, and FastAPI prediction service wiring.
+- **Description:** Pipeline scripts in `backend/ml/src/` were structured stubs. Tasks 1, 2, 3, 4, and 5 are now fully implemented and tested. The final remaining step for Milestone 1 is inference integration (`predict.py` and `prediction_service.py` wiring).
+- **Current Status:** In Progress (Tasks 1–5 completed, Task 6 remaining for Milestone 1).
+- **Proposed Resolution:** Wire FastAPI prediction service to load `.joblib` estimators at startup and verify inference endpoints via Swagger UI.
 - **Target Resolution Phase:** Phase 1 (Target: 21 November 2026).
 
 ---
@@ -86,5 +86,27 @@ This document maintains an active registry of known technical issues, architectu
 
 ---
 
+### ISSUE-007: Single Chronological Holdout Constraint vs Multi-Fold Rolling Backtesting
+- **Severity:** Low (Architectural / Data Constraint)
+- **Module Affected:** Machine Learning Subsystem / Evaluation
+- **Relevant Files:**
+  - `backend/ml/src/evaluate.py`
+  - `backend/ml/src/train.py`
+- **Description:** The project documentation describes rolling-origin backtesting. However, the UCI Online Retail II dataset contains only 12 continuous calendar months (December 2010 to December 2011). For a 90-day horizon ($D_{90}$), enforcing the required 90-day purge/embargo gap ($t_{\text{train}} + 90 < \text{val\_start}$) and reserving 40+ days for evaluation leaves only 5 months of training data. Rolling-origin evaluation across 3+ folds with expanding windows is physically impossible for $D_{90}$ without severely compromising training size or violating temporal boundaries.
+- **Current Status:** Open (Accepted operational limitation).
+- **Proposed Resolution:** Documented accurately that Phase 1 uses a single out-of-time chronological holdout per horizon with strict purge/embargo gaps. In future expansions with multi-year datasets, multi-fold rolling backtesting can be implemented.
+- **Target Resolution Phase:** Post-Phase 1 / Future Enhancement.
+
+---
+
 ## Resolved Issues
-*(No resolved issues yet — all verified fixes will be recorded here with resolution date and test confirmation.)*
+
+### ISSUE-006: TargetEncoder Temporal Target Leakage Across K-Fold Partitions
+- **Severity:** High
+- **Module Affected:** Machine Learning Subsystem / Training Pipeline
+- **Relevant Files:**
+  - `backend/ml/src/train.py`
+  - `backend/tests/test_model_training.py`
+- **Description:** Scikit-learn's `TargetEncoder(cv=KFold(5, shuffle=False))` partition logic on ordered retail time-series allows target values from later folds to influence SKU target encodings for observations in earlier training folds. This introduced subtle temporal target leakage in the training set.
+- **Resolution Date:** 2026-11-17.
+- **Resolution Details:** Replaced `TargetEncoder` with `OneHotEncoder(max_categories=50, handle_unknown="infrequent_if_exist", sparse_output=False)` coupled with Ridge linear regression and Random Forest. Categorical encoding is now purely unsupervised, eliminating all target leakage while bounding dimensionality and handling unseen SKUs natively. Confirmed by unit test `test_03b_zero_temporal_target_leakage` and full model retraining across all 4 horizons.

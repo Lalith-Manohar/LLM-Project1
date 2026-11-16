@@ -1,21 +1,22 @@
 """Forecast Pydantic Schemas for validation and serialization."""
 
 from typing import List, Optional
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ConfigDict
 
 
 class ForecastRequest(BaseModel):
     """Request schema for product demand forecast."""
-    stock_code: str = Field(..., description="Unique product stock code / SKU", example="85123A")
-    horizon_days: int = Field(..., description="Forecast horizon in days (e.g., 7, 15, 30, 90)", example=30)
+    stock_code: str = Field(..., description="Unique product stock code / SKU")
+    horizon_days: int = Field(..., description="Forecast horizon in days (e.g., 7, 15, 30, 90)")
 
-    class Config:
-        json_schema_extra = {
+    model_config = ConfigDict(
+        json_schema_extra={
             "example": {
                 "stock_code": "85123A",
                 "horizon_days": 30
             }
         }
+    )
 
 
 class ForecastItem(BaseModel):

@@ -112,8 +112,11 @@ def explore_dataset(df: pd.DataFrame) -> Dict[str, Any]:
     top_countries = df["Country"].value_counts().head(10).to_dict()
 
     # 4. Date parsing & temporal range
-    # Attempt parsing InvoiceDate safely
-    parsed_dates = pd.to_datetime(df["InvoiceDate"], errors="coerce")
+    # Parse InvoiceDate with explicit UK day-first format ('%d-%m-%y %H:%M')
+    parsed_dates = pd.to_datetime(df["InvoiceDate"], format="%d-%m-%y %H:%M", errors="coerce")
+    if parsed_dates.isnull().any():
+        fallback_mask = parsed_dates.isnull()
+        parsed_dates[fallback_mask] = pd.to_datetime(df.loc[fallback_mask, "InvoiceDate"], errors="coerce", dayfirst=True)
     invalid_dates_count = int(parsed_dates.isnull().sum())
     min_date = parsed_dates.min()
     max_date = parsed_dates.max()
