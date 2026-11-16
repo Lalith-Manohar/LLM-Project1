@@ -4,6 +4,60 @@ This document maintains a strict chronological development record for NEXORA. Ev
 
 ---
 
+### [2026-11-16] — Phase 1, Task 3: Daily SKU Demand Aggregation & Continuous Date Imputation
+
+- **Phase & Task:** Phase 1 (ML Demand Forecasting & API Serving) — Task 3: Daily SKU Demand Aggregation & Continuous Date Imputation.
+- **Task Description:** Transformed transaction-level gross sales (`clean_gross_sales.csv`) into a continuous daily time-series per product (`StockCode`), imputing zero demand (`daily_demand = 0`, `transaction_count = 0`, `revenue = 0.0`) for inactive calendar days strictly within each SKU's observed lifespan boundaries (`[min_date, max_date]`).
+- **What Was Implemented:**
+  - Implemented modular, validated pipeline functions in `backend/ml/src/feature_engineering.py`:
+    1. `load_clean_sales()`: Loads 530,105 gross sales records with explicit datetime parsing (`%d-%m-%y %H:%M`) and calculates line-level revenue.
+    2. `aggregate_daily_demand()`: Groups sales by `(StockCode, date)` computing total units sold (`daily_demand`), transaction count (`transaction_count`), and line revenue (`revenue`).
+    3. `create_continuous_date_series()`: Identifies `min_date` and `max_date` per SKU and reindexes each product across an unbroken daily calendar range, imputing zero demand on inactive days. Enforces strict boundary isolation (no dates before first sale or after last sale).
+    4. `validate_daily_demand_data()`: Automated mathematical verification checking for duplicate keys, missing identifiers, non-negative values, zero imputation integrity, calendar continuity per SKU, and exact demand preservation.
+    5. `save_daily_demand_data()`: Serializes continuous series to `backend/ml/data/processed/daily_product_demand.csv`.
+    6. `generate_feature_engineering_report()`: Generates comprehensive Markdown audit report at `backend/ml/data/processed/feature_engineering_report.md`.
+    7. `run_feature_engineering_pipeline()`: End-to-end execution entry point with timing and status summaries.
+  - Implemented unit test suite in `backend/tests/test_feature_engineering.py` covering:
+    - Multiple transactions for the same SKU and date (proper summation).
+    - Multiple SKUs on the same date (proper separation).
+    - Imputation of missing calendar days with zero demand, zero transaction count, and zero revenue.
+    - Lifespan boundaries: no imputation before `min_date` or after `max_date`.
+    - Single-day lifespans (1 row, 0 imputed).
+    - Alphanumeric `StockCode` string preservation.
+    - Exact unit demand reconciliation.
+    - Automated validation integrity checks & anomaly detection.
+    - Empty DataFrame handling.
+- **Files Created:**
+  - `backend/tests/test_feature_engineering.py` (Unit tests for daily aggregation and imputation)
+  - `backend/ml/data/processed/daily_product_demand.csv` (1,074,653 rows, 34.3 MB, continuous daily time-series)
+  - `backend/ml/data/processed/feature_engineering_report.md` (Detailed Markdown audit report)
+- **Files Modified:**
+  - `backend/ml/src/feature_engineering.py` (Replaced placeholder stub with complete pipeline)
+  - `docs/DEVELOPMENT_LOG.md` (Added this entry)
+  - `docs/FEATURES_STATUS.md` (Updated FEAT-M07-04 status)
+  - `docs/ML_DOCUMENTATION.md` (Documented aggregation and imputation methodology)
+  - `docs/DEVELOPMENT_ROADMAP.md` (Checked off Daily Product Aggregation task)
+  - `docs/TECHNICAL_DECISIONS.md` (Added TD-009 on SKU Lifespan Boundary Imputation)
+- **Empirical Pipeline Results:**
+  - **Source Transactions:** 530,105 gross sales records across 3,922 unique SKUs.
+  - **Total Units Sold:** 5,588,377 units (£10,666,702.54 total revenue).
+  - **Aggregated Product-Day Records:** 276,148 rows (days with positive sales).
+  - **Continuous Daily Series Rows:** 1,074,653 rows.
+  - **Imputed Zero-Demand Days:** 798,505 days (74.30% of all product lifespan days).
+  - **Observed Sales Days:** 276,148 days (25.70% of product lifespans).
+  - **Demand Unit Reconciliation:** $\sum \text{daily\_demand} = 5,588,377$ units (**100.00% exact match; 0 units lost**).
+  - **Integrity Validation:** 0 duplicate `(StockCode, date)` pairs, 0 null values, 100% non-negative values, 100% continuous calendar spans across all 3,922 products. Validation status: **PASSED (Valid)**.
+- **Tests & Verification Executed:**
+  - Unit tests: `backend/tests/test_feature_engineering.py` $\rightarrow$ **7 passed in 0.081s** (**Passed**).
+  - Full test suite: `python -m pytest backend/tests` $\rightarrow$ **15 passed in 3.46s** (**Passed**).
+  - Raw dataset check: `git status backend/ml/data/raw/online_retail_II.csv` $\rightarrow$ **0 modifications (Clean)**.
+- **Known Limitations:**
+  - High intermittency (74.30% zero-demand days) confirms the necessity of lag features (Lags 1, 7, 14, 28) and rolling statistics (Rolling 7, 28) to provide dense predictive signals for ML regressors.
+- **Next Recommended Task:**
+  - **Phase 1, Task 4:** Leakage-Free Feature Generation (Calendar Dynamics, Lags 1/7/14/28, Rolling Windows 7/28, and Multi-Horizon Cumulative Targets $D_7, D_{15}, D_{30}, D_{90}$).
+
+---
+
 ### [2026-11-16] — Project Governance: Permanent Python Environment & Dependency Management Rules in AGENTS.md
 
 - **Phase & Task:** Project Governance & Instructions — Codification of Permanent Environment Standards in `AGENTS.md`.

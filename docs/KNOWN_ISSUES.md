@@ -28,14 +28,14 @@ This document maintains an active registry of known technical issues, architectu
 - **Module Affected:** Machine Learning Subsystem
 - **Relevant Files:**
   - `backend/ml/src/data_loader.py` (RESOLVED: Implemented in Task 1)
-  - `backend/ml/src/preprocessing.py`
-  - `backend/ml/src/feature_engineering.py`
+  - `backend/ml/src/preprocessing.py` (RESOLVED: Implemented in Task 2)
+  - `backend/ml/src/feature_engineering.py` (PARTIALLY RESOLVED: Daily aggregation & zero-imputation complete in Task 3; lag/rolling feature generation next)
   - `backend/ml/src/train.py`
   - `backend/ml/src/evaluate.py`
   - `backend/ml/src/predict.py`
-- **Description:** Pipeline scripts in `backend/ml/src/` were structured stubs. With Phase 1 Task 1 completed, `data_loader.py` is fully implemented and tested. The remaining modules (`preprocessing.py`, `feature_engineering.py`, `train.py`, `evaluate.py`, `predict.py`) still contain stubs with `NotImplementedError`.
-- **Current Status:** In Progress (Task 1 completed, Tasks 2–5 remaining for Milestone 1).
-- **Proposed Resolution:** Implement each pipeline module sequentially starting with `preprocessing.py` and daily aggregation, followed by model training.
+- **Description:** Pipeline scripts in `backend/ml/src/` were structured stubs. Tasks 1, 2, and 3 are now fully implemented and tested. The remaining steps include lag/rolling feature extraction, model training (`train.py`), backtesting (`evaluate.py`), and inference integration (`predict.py`).
+- **Current Status:** In Progress (Tasks 1–3 completed, Tasks 4–6 remaining for Milestone 1).
+- **Proposed Resolution:** Implement each pipeline module sequentially: lag/rolling feature engineering, model training, chronological evaluation, and FastAPI prediction service wiring.
 - **Target Resolution Phase:** Phase 1 (Target: 21 November 2026).
 
 ---

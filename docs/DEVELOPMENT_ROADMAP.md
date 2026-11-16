@@ -28,7 +28,7 @@ flowchart LR
 - [x] **UCI Dataset Acquisition:** Acquired and verified UCI Online Retail II dataset (`backend/ml/data/raw/online_retail_II.csv`, 541,910 rows).
 - [x] **Dataset Ingestion & Exploratory Analysis (EDA):** Implemented in `backend/ml/src/data_loader.py`; generated `backend/ml/data/processed/eda_report.md` profiling missing values, price/quantity distributions, and cancellation vs return cross-tabulation.
 - [x] **Data Cleaning & Transaction Isolation:** Implemented in `backend/ml/src/preprocessing.py`; generated `clean_gross_sales.csv` (530,105 rows), `cancellation_transactions.csv` (9,288 rows), `return_transactions.csv` (1,336 rows), and `exceptional_transactions.csv` (1,181 rows) with 100% reconciliation.
-- [ ] **Daily Product Aggregation:** Aggregate daily sales per `StockCode` with continuous date ranges and zero-demand padding.
+- [x] **Daily Product Aggregation:** Implemented in `backend/ml/src/feature_engineering.py`; generated `daily_product_demand.csv` (1,074,653 rows) across 3,922 SKUs with continuous calendar zero-padding within product lifespans and 100% demand preservation (5,588,377 units). Tested via `test_feature_engineering.py`.
 - [ ] **Leakage-Free Feature Engineering:** Construct calendar dynamics, lags (1, 7, 14, 28), and rolling windows (7, 28).
 - [ ] **Model Training & Comparison:** Fit seasonal naïve baseline, Linear Regression, Random Forest, and optional XGBoost across 7, 15, 30, and 90-day targets.
 - [ ] **Chronological Validation:** Rolling-origin backtesting evaluating MAE, RMSE, and WAPE.

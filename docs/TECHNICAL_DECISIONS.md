@@ -111,3 +111,18 @@ This document formally records all major technical and architectural decisions f
 - **Alternatives Considered:**
   - Relying on global Python installation (rejected: prone to version conflicts and missing PATH variables across team members).
 - **Impact on Other Modules:** All terminal scripts, tests, and FastAPI startup commands must be invoked using `backend/.venv`.
+
+---
+
+### TD-009: SKU Lifespan Boundary Imputation vs Global Calendar Imputation
+- **Date:** 2026-11-16
+- **Topic:** Continuous time-series generation, zero-demand imputation, and temporal boundary integrity.
+- **Context:** In Phase 1 Task 3, daily retail sales needed to be padded with zero-demand records to support lag feature construction. Products in the UCI dataset were introduced, traded, and phased out at different points between 2009 and 2011.
+- **Decision:** Impute continuous calendar days strictly within each individual SKU's observed lifespan boundaries ($[\text{min\_date}, \text{max\_date}]$). Do not impute dates prior to a product's first recorded sale or after its final recorded sale.
+- **Reasoning:**
+  1. A product cannot have "zero sales" before it exists in the catalog or after it has been permanently discontinued. Pre-launch zero-inflation would artificially bias moving averages downward and distort lag distributions.
+  2. Imputing within $[\text{min\_date}, \text{max\_date}]$ accurately captures true intermittent demand during an active product lifecycle (e.g. 74.30% zero-demand days across active lifespans) without introducing artificial calendar leakage.
+- **Alternatives Considered:**
+  - Global calendar grid imputation across all SKUs from 2010-12-01 to 2011-12-09 (rejected: would inflate the dataset with over 1.4 million synthetic zero rows for products introduced late in 2011, contaminating demand velocity statistics).
+  - Dropping days with zero sales (rejected: breaks time-series continuity, invalidating lag shifts $t-k$ and rolling windows).
+- **Impact on Other Modules:** `daily_product_demand.csv` contains continuous date ranges per product; Phase 1 Task 4 will compute lags and rolling windows safely on this structured matrix.

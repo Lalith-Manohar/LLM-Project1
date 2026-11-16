@@ -15,8 +15,8 @@ The machine learning subsystem serves as the analytical intelligence engine of N
 | **Dataset Acquisition** | **Implemented** | Raw dataset verified at `backend/ml/data/raw/online_retail_II.csv` (541,910 rows). |
 | **Dataset Ingestion & EDA** | **Implemented** | `backend/ml/src/data_loader.py` implemented; generated statistical report `backend/ml/data/processed/eda_report.md`. |
 | **Preprocessing & Isolation** | **Implemented** | `backend/ml/src/preprocessing.py` partitions dataset into 4 verified CSV streams with 100% reconciliation. |
-| **Daily SKU Aggregation** | **Planned (Milestone 1)** | Zero-demand padding and chronological aggregation planned. |
-| **Feature Engineering** | **Planned (Milestone 1)** | Lags (1, 7, 14, 28) and rolling statistics (7, 28) planned without target leakage. |
+| **Daily SKU Aggregation** | **Implemented** | `backend/ml/src/feature_engineering.py` creates continuous daily time-series (`daily_product_demand.csv`, 1,074,653 rows) with zero-demand padding within SKU lifespan boundaries and 100% unit reconciliation. |
+| **Feature Engineering** | **Partially Implemented** | Daily aggregation & zero-padding complete; calendar dynamics, lags (1, 7, 14, 28), and rolling windows (7, 28) planned. |
 | **Model Training & Comparison** | **Planned (Milestone 1)** | Seasonal baseline, Linear Regression, Random Forest, XGBoost planned across 4 horizons. |
 | **Chronological Evaluation** | **Planned (Milestone 1)** | MAE, RMSE, WAPE calculation via rolling-origin backtesting planned. |
 | **Artifact Persistence** | **Planned (Milestone 1)** | Joblib serialization to `backend/ml/models/` planned. |
@@ -106,6 +106,28 @@ The preprocessing pipeline (`backend/ml/src/preprocessing.py`) executes mutually
 3. **`return_transactions.csv` (1,336 rows, 0.25%):** Non-cancellation negative quantities (`Quantity < 0`), identifying damaged, lost, or written-off items.
 4. **`exceptional_transactions.csv` (1,181 rows, 0.22%):** Non-sales entries including zero-price samples (`Price == 0.0`, 1,179 rows) and accounting adjustments (`Price == -11062.06`, 2 rows).
 - **Mathematical Reconciliation:** $530,105 + 9,288 + 1,336 + 1,181 = 541,910$ rows ($100.00\%$). Exactly zero records were dropped or lost.
+
+---
+
+## 4.1 Daily SKU Demand Aggregation & Continuous Imputation (Phase 1, Task 3)
+
+The aggregation and imputation pipeline (`backend/ml/src/feature_engineering.py`) converts the transaction-level `clean_gross_sales.csv` into a standardized daily time-series:
+
+1. **Aggregation:** Transactions are grouped by `(StockCode, date)` computing:
+   - `daily_demand`: Total units sold ($\sum \text{Quantity}$)
+   - `transaction_count`: Number of sales transactions ($\text{Count}$)
+   - `revenue`: Daily gross revenue ($\sum \text{Quantity} \times \text{Price}$)
+2. **Continuous Lifespan Zero-Padding:**
+   - For each SKU, the pipeline identifies its active commercial lifespan $[\text{min\_date}, \text{max\_date}]$.
+   - Missing calendar days within this interval are explicitly reindexed and imputed with $\text{daily\_demand} = 0$, $\text{transaction\_count} = 0$, and $\text{revenue} = 0.0$.
+   - **Boundary Isolation:** Dates prior to an item's first observed sale or following its last observed sale are never imputed. This prevents artificial pre-launch zero-inflation.
+3. **Verified Metrics & Reconciled Demand:**
+   - **Gross Sales Records Ingested:** 530,105 transactions across 3,922 unique SKUs.
+   - **Observed Sales Days (Active):** 276,148 product-days.
+   - **Continuous Time-Series Output:** 1,074,653 product-days (`daily_product_demand.csv`).
+   - **Imputed Zero-Demand Days:** 798,505 days (**74.30% of SKU lifespan**), highlighting high retail demand intermittency.
+   - **Unit Reconciliation:** $\sum \text{daily\_demand} = 5,588,377$ units, matching raw sales units exactly (**100.00% preservation; 0 loss**).
+   - **Integrity Validation:** 0 duplicate product-date pairs, 0 null values, 100% continuous calendar spans. Validated via `backend/tests/test_feature_engineering.py` (7/7 passed).
 
 ---
 
