@@ -45,18 +45,23 @@ The application follows a strictly decoupled 4-tier architecture:
 
 ---
 
-## 2. Source-of-Truth Hierarchy
+## 2. Source-of-Truth Hierarchy & Knowledge Registries
 
 When developing or inspecting code, resolve all discrepancies using the following strict hierarchy:
 1. **Approved Technical Blueprint (`docs/NEXORA — Technical Blueprint v1.0.md`):** Authoritative specification for intended scope, architecture, formulas, and operational boundaries.
 2. **Existing Working Source Code & Successfully Executed Tests:** Establishes actual implementation reality. Never assume a component is built just because it appears in docs.
-3. **Core Modern Documentation (`docs/`):**
+3. **Knowledge Registries & Historical Logs (`docs/`):**
+   - `DEVELOPMENT_LOG.md` — Chronological engineering ledger recording what was built, files touched, tests passed, and remaining work.
+   - `FEATURES_STATUS.md` — Central feature matrix tracking implementation status across all 13 modules.
+   - `TECHNICAL_DECISIONS.md` — Architectural Decision Records (ADR) detailing context, choices, alternatives, and module impacts.
+   - `KNOWN_ISSUES.md` — Active defect, inconsistency, and technical debt tracking.
+4. **Core Technical Documentation (`docs/`):**
    - `PROJECT_OVERVIEW.md` — System objectives, technology stack, operational boundaries.
    - `ML_DOCUMENTATION.md` — Preprocessing rules, feature engineering, horizons, evaluation.
    - `DATABASE_SCHEMA.md` — 19 MySQL relational tables, constraints, precision rules.
    - `API_DOCUMENTATION.md` — Active and planned REST endpoints under `/api/v1`.
    - `DEVELOPMENT_ROADMAP.md` — Phased progress and milestone deadlines.
-4. **Historical Reference Files (`docs/PROJECT_SPEC.md`, `DATABASE_DESIGN.md`, `ML_DESIGN.md`):** Legacy notes. Must remain untouched unless the team explicitly approves archival.
+5. **Historical Reference Files (`docs/PROJECT_SPEC.md`, `DATABASE_DESIGN.md`, `ML_DESIGN.md`):** Legacy draft notes. Must remain untouched unless the team explicitly approves archival.
 
 ---
 
@@ -240,7 +245,8 @@ flowchart TD
 ```
 
 ### Phase 1 Priority Checklist (Immediate Target: 21 November 2026)
-- [ ] Ingest and verify raw UCI dataset (`backend/ml/data/raw/online_retail_II.csv`).
+- [x] Ingest and verify raw UCI dataset placement (`backend/ml/data/raw/online_retail_II.csv`).
+- [ ] Exploratory data inspection, null checking, and invoice profiling in `data_loader.py`.
 - [ ] Preprocess data, separating cancellations (`'C'`) and returns (`Quantity < 0`) from gross demand.
 - [ ] Aggregate daily demand per `StockCode`, padding inactive days with zero demand.
 - [ ] Build leakage-free feature matrix (Calendar, Lags 1/7/14/28, Rolling 7/28).
@@ -292,17 +298,43 @@ NEXORA is being developed by a student engineering team. The code must be unders
 
 ---
 
-## 15. Required Task Execution Workflow
+## 15. Permanent Documentation & Knowledge-Tracking Rules
 
-Every Antigravity agent assigned a task must execute it following these 8 steps:
+To ensure knowledge continuity between different developers and AI agents operating in separate sessions, every agent must adhere to strict documentation maintenance:
+
+### Core Documentation Registries
+- **`docs/DEVELOPMENT_LOG.md`:** Must be updated with a new dated entry at the top for *every* completed development task. Record the date, task description, files touched, technical details, test results, limitations, and next recommended task.
+- **`docs/FEATURES_STATUS.md`:** Must be updated whenever a feature transitions between status categories (`IMPLEMENTED`, `PARTIALLY IMPLEMENTED`, `PLANNED`, `POSTPONED`, `EXCLUDED`).
+- **`docs/TECHNICAL_DECISIONS.md`:** Must document every significant technical or architectural decision (ADR) using the structured format (Decision ID, Topic, Context, Decision, Reasoning, Alternatives, Impact).
+- **`docs/KNOWN_ISSUES.md`:** Must record newly discovered defects, schema mismatches, or technical debt, and document verified resolutions.
+- **Core Guides (`PROJECT_OVERVIEW.md`, `ML_DOCUMENTATION.md`, `DATABASE_SCHEMA.md`, `API_DOCUMENTATION.md`, `DEVELOPMENT_ROADMAP.md`):** Keep continuously synchronized with actual codebase changes.
+
+### Documentation Accuracy Rules
+- **No Fabrications:** Never document planned features as implemented. Never invent API endpoints, database tables, or model accuracy metrics.
+- **No Phantom Test Results:** Never claim tests passed without executing them.
+- **Synchronized State:** All documentation must faithfully reflect the actual, verifiable state of the repository.
+
+---
+
+## 16. Mandatory Agent Execution Workflow
+
+Every Antigravity agent assigned a task must execute it following these mandatory steps:
 
 ```text
-  1. UNDERSTAND   --> Read the prompt and map it to blueprint requirements.
-  2. INSPECT      --> Check existing files, code reality, and active tests.
-  3. IDENTIFY     --> Identify shared dependencies and interface contracts.
-  4. PLAN         --> State a concise implementation plan before editing.
-  5. IMPLEMENT    --> Write clean, beginner-friendly, scoped code.
-  6. TEST         --> Run the code, verify endpoints, and execute tests.
-  7. DOCUMENT     --> Keep docs/ (OVERVIEW, ML, DB, API, ROADMAP) synchronized.
-  8. EXPLAIN      --> Deliver an honest, clear technical summary to the user.
+  === BEFORE IMPLEMENTATION ===
+  1. READ         --> Read AGENTS.md, relevant docs/, and the Technical Blueprint.
+  2. INSPECT      --> Check existing code reality, active tests, and file locations.
+  3. REVIEW STATE --> Check docs/FEATURES_STATUS.md and docs/DEVELOPMENT_LOG.md.
+  4. CHECK ISSUES --> Consult docs/KNOWN_ISSUES.md and docs/TECHNICAL_DECISIONS.md.
+  5. PLAN         --> State a concise, scoped implementation plan before editing.
+
+  === DURING & AFTER IMPLEMENTATION ===
+  6. IMPLEMENT    --> Write clean, beginner-friendly, modular code within assigned scope.
+  7. TEST         --> Run the code, verify endpoints, and execute real tests.
+  8. RECORD LOG   --> Update docs/DEVELOPMENT_LOG.md with results, files, and next tasks.
+  9. UPDATE MATRIX--> Update docs/FEATURES_STATUS.md if feature status changed.
+  10. UPDATE TECH --> Update affected core technical docs (API, DB, ML, OVERVIEW).
+  11. RECORD ADR  --> Record significant design choices in docs/TECHNICAL_DECISIONS.md.
+  12. LOG ISSUES  --> Document new bugs or verified fixes in docs/KNOWN_ISSUES.md.
+  13. EXPLAIN     --> Deliver an honest, clear technical summary to the user.
 ```
