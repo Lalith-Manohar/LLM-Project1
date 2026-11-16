@@ -316,25 +316,85 @@ To ensure knowledge continuity between different developers and AI agents operat
 
 ---
 
-## 16. Mandatory Agent Execution Workflow
+## 16. Permanent Python Environment & Dependency Management Rules
+
+To prevent interpreter confusion, missing package errors, and environment drift across multi-agent sessions, all developers and AI agents must strictly obey these environment rules:
+
+### 1. Mandatory Virtual Environment
+All Python development, script execution, testing, ML pipelines, and backend server operations must run exclusively inside the project-local virtual environment:
+```text
+backend/.venv/
+```
+On Windows, the exact interpreter is:
+```text
+backend/.venv/Scripts/python.exe
+```
+
+### 2. Interpreter Consistency & Antigravity Execution Rule
+- **Never assume the global `python` command points to the project environment.** In Windows environments, `python` in PATH may point to an unconfigured system Python or Microsoft Store stub.
+- **Pre-execution verification:** Before executing Python commands, verify which interpreter is active (`python -c "import sys; print(sys.executable)"`). If the virtual environment is not active, explicitly invoke the virtual environment's executable (`backend/.venv/Scripts/python.exe`) or activate the virtual environment first.
+
+### 3. Environment Activation in Windows PowerShell
+Students and developers should activate the virtual environment in PowerShell using:
+```powershell
+.\backend\.venv\Scripts\Activate.ps1
+```
+*Note on Execution Policy:* If PowerShell restricts script activation, running `Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser` enables it. Alternatively, explicitly invoking `backend/.venv/Scripts/python.exe <script.py>` is always valid.
+
+### 4. Dependency Declaration & Management
+- Every mandatory third-party package must be explicitly declared with version constraints in `backend/requirements.txt`.
+- Before adding new dependencies, verify whether existing libraries (`pandas`, `numpy`, `scikit-learn`, `fastapi`, `pydantic`, `sqlalchemy`) can already perform the required task. Avoid unnecessary packages or duplicate dependencies.
+- **Optional Dependencies:** Packages like `xgboost` remain strictly optional. Core demand forecasting, preprocessing, and API endpoints must never fail if an optional package is omitted. Document optional installation steps separately.
+
+### 5. Dependency Verification Procedure
+Whenever setting up or verifying the Python environment, execute the following standardized checks with the project virtual environment active:
+```powershell
+# 1. Verify Python Version (Must be Python 3.10+, standard: 3.11)
+python --version
+
+# 2. Verify Core Package Imports
+python -c "import pandas, numpy, sklearn, joblib, fastapi, uvicorn, pydantic, pydantic_settings, sqlalchemy, pymysql, dotenv, pytest, httpx; print('Core dependencies verified successfully!')"
+
+# 3. Verify Pip Package Consistency
+python -m pip check
+```
+
+### 6. Synchronizing Environment Changes
+Whenever dependencies or environment requirements change:
+1. Update `backend/requirements.txt`.
+2. Update setup instructions in `README.md`.
+3. Verify installation inside `backend/.venv` using `python -m pip install -r backend/requirements.txt`.
+4. Record significant changes and package versions in `docs/DEVELOPMENT_LOG.md`.
+5. Add an Architectural Decision Record to `docs/TECHNICAL_DECISIONS.md` when introducing a meaningful architectural change.
+
+### 7. Test Execution Standard
+All automated tests must run through the project virtual environment:
+```powershell
+python -m pytest backend/tests
+```
+
+---
+
+## 17. Mandatory Agent Execution Workflow
 
 Every Antigravity agent assigned a task must execute it following these mandatory steps:
 
 ```text
   === BEFORE IMPLEMENTATION ===
   1. READ         --> Read AGENTS.md, relevant docs/, and the Technical Blueprint.
-  2. INSPECT      --> Check existing code reality, active tests, and file locations.
-  3. REVIEW STATE --> Check docs/FEATURES_STATUS.md and docs/DEVELOPMENT_LOG.md.
-  4. CHECK ISSUES --> Consult docs/KNOWN_ISSUES.md and docs/TECHNICAL_DECISIONS.md.
-  5. PLAN         --> State a concise, scoped implementation plan before editing.
+  2. VERIFY ENV   --> Verify Python interpreter is backend/.venv/Scripts/python.exe.
+  3. INSPECT      --> Check existing code reality, active tests, and file locations.
+  4. REVIEW STATE --> Check docs/FEATURES_STATUS.md and docs/DEVELOPMENT_LOG.md.
+  5. CHECK ISSUES --> Consult docs/KNOWN_ISSUES.md and docs/TECHNICAL_DECISIONS.md.
+  6. PLAN         --> State a concise, scoped implementation plan before editing.
 
   === DURING & AFTER IMPLEMENTATION ===
-  6. IMPLEMENT    --> Write clean, beginner-friendly, modular code within assigned scope.
-  7. TEST         --> Run the code, verify endpoints, and execute real tests.
-  8. RECORD LOG   --> Update docs/DEVELOPMENT_LOG.md with results, files, and next tasks.
-  9. UPDATE MATRIX--> Update docs/FEATURES_STATUS.md if feature status changed.
-  10. UPDATE TECH --> Update affected core technical docs (API, DB, ML, OVERVIEW).
-  11. RECORD ADR  --> Record significant design choices in docs/TECHNICAL_DECISIONS.md.
-  12. LOG ISSUES  --> Document new bugs or verified fixes in docs/KNOWN_ISSUES.md.
-  13. EXPLAIN     --> Deliver an honest, clear technical summary to the user.
+  7. IMPLEMENT    --> Write clean, beginner-friendly, modular code within assigned scope.
+  8. TEST         --> Run the code and execute real tests using backend/.venv.
+  9. RECORD LOG   --> Update docs/DEVELOPMENT_LOG.md with results, files, and next tasks.
+  10. UPDATE MATRIX--> Update docs/FEATURES_STATUS.md if feature status changed.
+  11. UPDATE TECH --> Update affected core technical docs (API, DB, ML, OVERVIEW).
+  12. RECORD ADR  --> Record significant design choices in docs/TECHNICAL_DECISIONS.md.
+  13. LOG ISSUES  --> Document new bugs or verified fixes in docs/KNOWN_ISSUES.md.
+  14. EXPLAIN     --> Deliver an honest, clear technical summary to the user.
 ```

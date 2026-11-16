@@ -80,4 +80,34 @@ This document formally records all major technical and architectural decisions f
 - **Reasoning:** Client-side route guarding can be bypassed via direct API calls (e.g., Postman or curl). True security requires backend validation of JWT role claims.
 - **Alternatives Considered:**
   - Frontend-only permission checks (rejected: violates fundamental security principles).
+  - Role check in UI only (rejected: leaves API wide open).
 - **Impact on Other Modules:** Every backend route handler for restricted operations must declare role dependencies.
+
+---
+
+### TD-007: Four-Way Mutually Exclusive and Collectively Exhaustive (MECE) Partitioning
+- **Date:** 2026-11-16
+- **Topic:** Data preprocessing, reconciliation, and exceptional record handling.
+- **Context:** In Phase 1 Task 2, raw retail data needed to be partitioned without dropping records, while isolating pure commercial demand from cancellations, returns, and administrative non-sales adjustments.
+- **Decision:** Implement a 4-way MECE classification:
+  1. Gross Sales: `Quantity > 0`, `Price > 0`, `Invoice` not starting with `'C'`, and valid identifiers.
+  2. Cancellations: `Invoice` starts with `'C'`.
+  3. Returns: `Quantity < 0`, `Invoice` does not start with `'C'`.
+  4. Exceptional: All remaining records (zero/negative prices, zero quantity, missing critical identifiers).
+- **Reasoning:** Guarantees that every raw record is accounted for ($\sum \text{Streams} = \text{Total Raw}$), preventing silent data loss while insulating the ML demand models from contaminated £0 price entries or accounting debt adjustments.
+- **Alternatives Considered:**
+  - Dropping zero/negative price rows without tracking (rejected: violates NEXORA audit and reconciliation rules).
+  - Grouping zero-price items into returns (rejected: inaccurate because many zero-price items are samples or promotional gifts).
+- **Impact on Other Modules:** `clean_gross_sales.csv` provides clean training data for Task 3, while `exceptional_transactions.csv` is preserved for finance and data audit views in Module 11.
+
+---
+
+### TD-008: Standardization of Project-Local Virtual Environment (backend/.venv)
+- **Date:** 2026-11-16
+- **Topic:** Development environment and interpreter standardization.
+- **Context:** A developer encountered `ModuleNotFoundError: No module named 'pandas'` because the system PATH defaulted to a bare Python 3.15 executable, while dependencies were installed in Python 3.11 without a project-local virtual environment.
+- **Decision:** Standardize all development on a project-local virtual environment located at `backend/.venv` created with Python 3.11.9. Ensure `backend/.venv` is gitignored and referenced in `README.md`.
+- **Reasoning:** Eliminates interpreter ambiguity across different developer machines and Google Antigravity sessions. Isolates dependencies per `backend/requirements.txt`.
+- **Alternatives Considered:**
+  - Relying on global Python installation (rejected: prone to version conflicts and missing PATH variables across team members).
+- **Impact on Other Modules:** All terminal scripts, tests, and FastAPI startup commands must be invoked using `backend/.venv`.

@@ -25,8 +25,9 @@ flowchart LR
 - [x] **API Route & Schemas:** Defined forecast schemas in Pydantic v2.
 - [x] **ML Pipeline Stubs:** Structured stubs in `backend/ml/src/` (`data_loader.py`, `preprocessing.py`, `feature_engineering.py`, `train.py`, `evaluate.py`, `predict.py`).
 - [x] **Documentation Modernization:** Complete alignment of documentation with Technical Blueprint v1.0.
-- [ ] **UCI Dataset Acquisition:** Acquire and verify UCI Online Retail II dataset (`backend/ml/data/raw/`).
-- [ ] **Data Cleaning & Transaction Isolation:** Isolate cancellations (`C` prefix) and returns (`Quantity < 0`) from gross demand.
+- [x] **UCI Dataset Acquisition:** Acquired and verified UCI Online Retail II dataset (`backend/ml/data/raw/online_retail_II.csv`, 541,910 rows).
+- [x] **Dataset Ingestion & Exploratory Analysis (EDA):** Implemented in `backend/ml/src/data_loader.py`; generated `backend/ml/data/processed/eda_report.md` profiling missing values, price/quantity distributions, and cancellation vs return cross-tabulation.
+- [x] **Data Cleaning & Transaction Isolation:** Implemented in `backend/ml/src/preprocessing.py`; generated `clean_gross_sales.csv` (530,105 rows), `cancellation_transactions.csv` (9,288 rows), `return_transactions.csv` (1,336 rows), and `exceptional_transactions.csv` (1,181 rows) with 100% reconciliation.
 - [ ] **Daily Product Aggregation:** Aggregate daily sales per `StockCode` with continuous date ranges and zero-demand padding.
 - [ ] **Leakage-Free Feature Engineering:** Construct calendar dynamics, lags (1, 7, 14, 28), and rolling windows (7, 28).
 - [ ] **Model Training & Comparison:** Fit seasonal naïve baseline, Linear Regression, Random Forest, and optional XGBoost across 7, 15, 30, and 90-day targets.

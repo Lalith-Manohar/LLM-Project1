@@ -12,8 +12,9 @@ The machine learning subsystem serves as the analytical intelligence engine of N
 | **ML Directory Layout** | **Implemented** | `backend/ml/data/raw/`, `processed/`, `models/`, `notebooks/`, `src/` created. |
 | **Pipeline Module Stubs** | **Implemented** | `data_loader.py`, `preprocessing.py`, `feature_engineering.py`, `train.py`, `evaluate.py`, `predict.py` created with `NotImplementedError` guards. |
 | **FastAPI Forecast Stub** | **Implemented** | Endpoints active under `/api/v1/forecast/`, returning `model_not_trained` status without fabricated values. |
-| **Dataset Acquisition** | **Planned (Milestone 1)** | Raw dataset not yet downloaded into `backend/ml/data/raw/`. |
-| **Preprocessing & Isolation** | **Planned (Milestone 1)** | Cancellation (`C` prefix) and return separation logic planned. |
+| **Dataset Acquisition** | **Implemented** | Raw dataset verified at `backend/ml/data/raw/online_retail_II.csv` (541,910 rows). |
+| **Dataset Ingestion & EDA** | **Implemented** | `backend/ml/src/data_loader.py` implemented; generated statistical report `backend/ml/data/processed/eda_report.md`. |
+| **Preprocessing & Isolation** | **Implemented** | `backend/ml/src/preprocessing.py` partitions dataset into 4 verified CSV streams with 100% reconciliation. |
 | **Daily SKU Aggregation** | **Planned (Milestone 1)** | Zero-demand padding and chronological aggregation planned. |
 | **Feature Engineering** | **Planned (Milestone 1)** | Lags (1, 7, 14, 28) and rolling statistics (7, 28) planned without target leakage. |
 | **Model Training & Comparison** | **Planned (Milestone 1)** | Seasonal baseline, Linear Regression, Random Forest, XGBoost planned across 4 horizons. |
@@ -55,6 +56,24 @@ The UCI dataset is an uncurated historical transaction dump. It specifically lac
 
 *Design Principle:* Historical sales demand is derived from the dataset; current operational inventory, suppliers, customers, and shipments are maintained natively in MySQL.
 
+### Verified Dataset Empirical Findings (Phase 1, Task 1)
+- **Total Rows & Columns:** 541,910 rows $\times$ 8 columns.
+- **Encoding Requirement:** The dataset contains the British Pound sign (`£` = byte `0xa3`), requiring `latin1` (ISO-8859-1) encoding to read without Unicode decode errors.
+- **Temporal Span:** Invoices span from **12 January 2010 to 10 December 2011** across 25,900 unique invoices and 38 countries (91.43% United Kingdom).
+- **Missing Value Breakdown:**
+  - `Customer ID`: 135,080 missing values (24.93%). Because demand forecasting aggregates daily quantity per `StockCode`, missing customer IDs do not prevent SKU-level modeling.
+  - `Description`: 1,454 missing values (0.27%). Handled by falling back to `StockCode`.
+  - All other columns (`Invoice`, `StockCode`, `Quantity`, `InvoiceDate`, `Price`, `Country`) are 100% complete (0 nulls).
+- **Duplicate Rows:** 5,268 records (0.97%) are exact duplicate rows across all 8 columns.
+- **Transaction Stream Classification:**
+  - **Gross Positive Customer Sales:** 530,105 rows (97.82%) have `Quantity > 0`, `Price > 0`, and no `'C'` prefix. This is the sole stream used for demand forecasting models.
+  - **Invoice Cancellations:** 9,288 rows (1.71%) have invoices starting with `'C'`, all having negative quantities.
+  - **Returns / Credits without 'C':** 1,336 rows (0.25%) have negative quantities but lack the `'C'` prefix.
+  - **Zero / Negative Prices:** 2,517 rows (0.46%) have unit price $\le 0$ (administrative adjustments, sample giveaways, or bookkeeping entries).
+- **Top Product SKUs:**
+  - Most frequent transaction: `85123A` (WHITE HANGING HEART T-LIGHT HOLDER, 2,265 transactions).
+  - Highest gross sales volume: `23843` (80,995 units sold).
+
 ---
 
 ## 4. Data Preprocessing & Demand Isolation Logic
@@ -79,6 +98,14 @@ flowchart TD
 1. **Separate Accounting Measures:** Maintain distinct counts for gross sales, cancellations, returns, and net volume (`Net = Gross - Returns - Cancellations`).
 2. **Positive Demand for Training:** Demand forecasting models are trained on true customer sales demand (positive quantities from valid invoices). Returns and cancellations are monitored separately under Product Health & Anomaly modules.
 3. **Sparse Demand Zero-Filling:** Retail products often have inactive days. The pipeline generates continuous daily date ranges per product and fills missing sales days with `0` rather than dropping dates.
+
+### Verified Preprocessing Outputs & Reconciliation (Phase 1, Task 2)
+The preprocessing pipeline (`backend/ml/src/preprocessing.py`) executes mutually exclusive, collectively exhaustive classification, writing 4 partitioned datasets to `backend/ml/data/processed/`:
+1. **`clean_gross_sales.csv` (530,105 rows, 97.82%):** Contains only valid commercial demand (`Quantity > 0`, `Price > 0`, and no `'C'` prefix). Forms the unpolluted input for time-series aggregation.
+2. **`cancellation_transactions.csv` (9,288 rows, 1.71%):** Invoices starting with `'C'`, 100% verified to have negative quantities.
+3. **`return_transactions.csv` (1,336 rows, 0.25%):** Non-cancellation negative quantities (`Quantity < 0`), identifying damaged, lost, or written-off items.
+4. **`exceptional_transactions.csv` (1,181 rows, 0.22%):** Non-sales entries including zero-price samples (`Price == 0.0`, 1,179 rows) and accounting adjustments (`Price == -11062.06`, 2 rows).
+- **Mathematical Reconciliation:** $530,105 + 9,288 + 1,336 + 1,181 = 541,910$ rows ($100.00\%$). Exactly zero records were dropped or lost.
 
 ---
 

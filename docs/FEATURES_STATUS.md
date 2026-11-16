@@ -102,8 +102,8 @@ Allowed Statuses:
 | :--- | :--- | :---: | :--- | :--- | :--- | :---: | :--- |
 | `FEAT-M07-01` | Supported Horizon Listing | `IMPLEMENTED` | `backend/app/api/routes/forecast.py` | `GET /api/v1/forecast/horizons` | None | **Passed** | Returns `[7, 15, 30, 90]` |
 | `FEAT-M07-02` | Multi-Horizon Forecast Inference API | `PARTIALLY IMPLEMENTED` | `backend/app/api/routes/forecast.py`, `prediction_service.py` | `POST /api/v1/forecast/` | None | **Passed** | Placeholder returns `model_not_trained`; awaiting trained `.joblib` model |
-| `FEAT-M07-03` | Dataset Ingestion Pipeline | `PARTIALLY IMPLEMENTED` | `backend/ml/src/data_loader.py` | None | None | Not Executed | Dataset verified on disk; loading code raises `NotImplementedError` |
-| `FEAT-M07-04` | Leakage-Free Preprocessing & Features | `PARTIALLY IMPLEMENTED` | `preprocessing.py`, `feature_engineering.py` | None | None | Not Executed | Function stubs created; implementation pending |
+| `FEAT-M07-03` | Dataset Ingestion Pipeline | `IMPLEMENTED` | `backend/ml/src/data_loader.py` | None | None | **Passed** | Reads raw CSV (latin1 encoding), generates statistical profile & eda_report.md |
+| `FEAT-M07-04` | Leakage-Free Preprocessing & Features | `PARTIALLY IMPLEMENTED` | `preprocessing.py`, `feature_engineering.py` | None | None | **Passed (Preprocessing)** | Preprocessing and stream isolation complete & verified; feature engineering pending |
 | `FEAT-M07-05` | Horizon Regressors Training (7/15/30/90d)| `PLANNED` | `backend/ml/src/train.py` | None | None | Not Executed | Target: 21 Nov 2026 |
 | `FEAT-M07-06` | Out-of-Time Backtesting (MAE/RMSE/WAPE) | `PLANNED` | `backend/ml/src/evaluate.py` | `GET /api/v1/forecast/model-metrics` | `model_runs` | Not Executed | Target: 21 Nov 2026 |
 | `FEAT-M07-07` | Stockout Risk Scoring (CRITICAL/ELEVATED/SAFE) | `PLANNED` | `prediction_service.py` | `POST /api/v1/forecast/predict` | `inventory_alerts` | Not Executed | Planned for Phase 1/2 |
