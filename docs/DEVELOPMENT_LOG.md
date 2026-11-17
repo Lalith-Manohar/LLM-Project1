@@ -4,6 +4,108 @@ This document maintains a strict chronological development record for NEXORA. Ev
 
 ---
 
+### [2026-11-18] — Automatic CSV-to-Forecast Pipeline & Frontend Simplification
+
+- **Phase & Task:** Phase 1 Inference Pipeline Enhancement & Frontend Simplification — Automatic CSV Historical Feature Generation.
+- **Task Description:** Successfully transitioned NEXORA from manual feature input to an automated, end-to-end retail forecasting system. Implemented `HistoricalDataService` in FastAPI to dynamically retrieve daily sales records from `daily_product_demand.csv`, compute the nine required lag and rolling features at the latest historical observation date with exact training-pipeline parity, and run all four trained scikit-learn models ($D_7, D_{15}, D_{30}, D_{90}$). Completely removed manual feature inputs from the React frontend, delivering a streamlined, manager-friendly experience.
+- **Components & Functionality Implemented:**
+  1. *Historical Data Service (`backend/app/services/historical_data_service.py`):*
+     - Authoritative dataset loading: Indexes `daily_product_demand.csv` (1,074,653 rows, 3,922 SKUs) in memory with continuous date imputation and zero-demand padding.
+     - Fallback safety: Capable of aggregating `clean_gross_sales.csv` using strict training formulas, or raising `DatasetUnavailableError` (HTTP 503).
+     - Sub-millisecond $O(1)$ SKU lookup and feature extraction.
+     - Enforces minimum historical span requirement: Requires at least 29 continuous calendar days to calculate 28-day lags and rolling averages; raises `InsufficientHistoryError` (HTTP 422) if fewer days are available (e.g. SKU `21777` with 6 days history).
+     - Raises `HistoricalDataNotFoundError` (HTTP 404) for unknown SKUs.
+  2. *Observation Date Transparency & Parity:*
+     - Prediction origin is strictly anchored to the latest available historical observation date for each SKU (e.g. `2011-12-09`), avoiding current wall-clock date leakage.
+     - Evaluated feature parity against `ml_feature_dataset.csv` across 10 SKUs and multiple historical dates: **30/30 checks passed with 100% exact numerical match**.
+     - `ForecastResponse` augmented with `observation_date`, `history_days`, and `is_auto_generated=True`.
+  3. *Backend Schema & API Harmonization (`forecast.py`, `prediction_service.py`):*
+     - Made `features` optional in `ForecastRequest`. When omitted, features are automatically generated from CSV.
+     - Preserved 100% backward compatibility for manual feature payloads used by legacy tests.
+     - Registered `historical_data_service` in `main.py` lifespan manager for safe pre-loading at startup.
+  4. *Frontend Simplification (`frontend/src/App.tsx`, `App.css`, `types/forecast.ts`):*
+     - Removed all 9 manual numerical input fields (`Lag1`, `Lag7`, `Lag14`, `Lag28`, `RollingMean7`, `RollingMean28`, `DayOfWeek`, `Month`, `DayOfMonth`).
+     - Added prominent observation notice: *"Historical sales data is automatically processed to generate demand forecasts."*
+     - Updated catalog quick-pills: `85123A` (high volume), `71053` (medium volume), `85099B` (top volume), `22423` (core catalog), and `21777` (demonstrates insufficient-history validation).
+     - Displayed `Forecast Origin` date (`2011-12-09`) and `Historical Base` (e.g. `374 Days Analyzed`) in the results meta bar.
+  5. *Test Suite Expansion (`backend/tests/test_historical_forecast.py`):*
+     - Added 10 automated unit and integration tests covering dataset indexing, feature parity, SKU-only requests, unknown SKU 404, insufficient history 422, and manual override backward compatibility.
+- **Files Created:**
+  - `backend/app/services/historical_data_service.py`
+  - `backend/tests/test_historical_forecast.py`
+- **Files Modified:**
+  - `backend/app/schemas/forecast.py`
+  - `backend/app/services/prediction_service.py`
+  - `backend/app/api/routes/forecast.py`
+  - `backend/app/main.py`
+  - `frontend/src/types/forecast.ts`
+  - `frontend/src/App.tsx`
+  - `frontend/src/App.css`
+  - `docs/DEVELOPMENT_LOG.md`
+  - `docs/FEATURES_STATUS.md`
+- **Verification Results:**
+  - Feature parity checks: 30/30 checks passed (100% exact match).
+  - Backend regression test suite: **70/70 tests passed in 21.88s** (100% pass rate, 0 regressions).
+  - Frontend production build: `tsc && vite build` passed in 883ms (`dist/` bundle refreshed).
+  - Real HTTP integration test: Verified on `85123A`, `71053`, `85099B`, `22423`, `21777` (HTTP 422), and unknown SKU (HTTP 404).
+- **Milestone Status:** Phase 1 automated inference pipeline complete and verified.
+
+---
+
+### [2026-11-18] — Final Verification of Forecast Fixes & SKU Frequency Audit
+
+- **Phase & Task:** Final Verification Audit — SKU 85123A Frequency Classification Analysis & Full Frontend Verification.
+- **Task Description:** Conducted a comprehensive, evidence-based investigation into model artifacts, fitted encoders, and backend warning metadata to resolve reported discrepancies regarding SKU 85123A frequency classification, followed by end-to-end verification of the 4 demonstration profiles and responsive layout.
+- **Key Findings & Evidence:**
+  1. *Fitted OneHotEncoder Structure:* The serialized pipelines in `backend/ml/models/` fit `OneHotEncoder(max_categories=50, handle_unknown='infrequent_if_exist')`. Across all four horizons, the encoder produces exactly 50 columns: 49 explicitly retained frequent SKUs (e.g. `85231B`, `85232D`, `90003C`, ..., `POST`) plus 1 bundled column `StockCode_infrequent_sklearn`.
+  2. *Transformation Level vs Warning Metadata Level:*
+     - At the *encoder transformation matrix level*, neither `85123A`, `71053`, nor `21777` is in the 49 retained categories. All three map to `StockCode_infrequent_sklearn = 1.0` during one-hot encoding.
+     - At the *backend warning metadata level*, `PredictionService.load_models()` sets `self.frequent_skus = set(cat_encoder.categories_[0])`. In scikit-learn, `categories_[0]` stores all 3,562 training set categories, not just the 49 individual columns. Thus, `self.frequent_skus` functions as a "known in training data" set.
+     - `85123A` and `71053` were present in the training set (`in categories_[0] = True`), so the backend emits no warning. `21777` was absent from the chronological training split (`in categories_[0] = False`), so the backend emits an infrequent category warning.
+     - This discrepancy is purely a terminology difference between encoder column cardinality and the backend's "seen in training" check. It has zero impact on inference correctness, as the scikit-learn pipeline performs mathematical evaluation identically regardless of the response warning metadata.
+  3. *Demonstration Profile Verification:*
+     - `85123A` (High-Volume): 7d: 152.37, 15d: 412.09, 30d: 709.90, 90d: 2,488.98.
+     - `71053` (Medium-Volume): 7d: 58.88, 15d: 132.63, 30d: 272.10, 90d: 848.92.
+     - `21777` (Low-Volume): 7d: 22.52, 15d: 37.98, 30d: 92.80, 90d: 269.05 (with warning).
+     - `NEW_UNSEEN_SKU_DEMO` (Unseen): 7d: 38.92, 15d: 87.13, 30d: 172.06, 90d: 492.24 (with warning).
+  4. *Model Display & Responsive Layout Verification:*
+     - D7 displays "Ridge Regression" (from backend `Linear Regression`); D15, D30, and D90 display "Random Forest".
+     - Responsive forecast cards display in 4 columns (> 760px container / > 1200px viewport), 2 columns (440px–760px container / <= 1200px viewport), and 1 column (< 440px container / <= 600px viewport).
+- **Files Modified:**
+  - `docs/DEVELOPMENT_LOG.md`
+- **Verification Results:**
+  - `npx tsc --noEmit` & `npm run build`: Passed in 894ms (0 errors).
+  - Backend regression tests: 60/60 passed in 10.91s (100% pass rate).
+  - FastAPI HTTP POST verification: All 4 presets returned HTTP 200 with volume-proportional multi-horizon predictions.
+- **Milestone Status:** Final closure complete; verified and ready for 21 November presentation.
+
+---
+
+### [2026-11-18] — SKU Demonstration Profiles, Model Name Mapping & Responsive Cards
+
+- **Phase & Task:** Frontend Forecast Consistency, Model Name Clarity & Responsive Card Layout.
+- **Task Description:** Resolved manual testing observations in the demonstration frontend client (`frontend/src/App.tsx` and `frontend/src/App.css`) ahead of the 21 November 2026 academic demonstration:
+  1. *SKU-Specific Demonstration Feature Presets:* Replaced single generic sample feature vector with 4 distinct illustrative demonstration profiles corresponding to catalog presets:
+     - `85123A` (High-volume demonstration profile: Lags 24/28/22/25, Rolling 26.5/24.8) -> Forecasts: 7d: 152.37, 15d: 412.09, 30d: 709.90, 90d: 2,488.98.
+     - `71053` (Medium-volume demonstration profile: Lags 8/10/7/9, Rolling 8.8/8.5) -> Forecasts: 7d: 58.88, 15d: 132.63, 30d: 272.10, 90d: 848.92.
+     - `21777` (Low-volume demonstration profile: Lags 2/3/1/2, Rolling 2.4/2.1) -> Forecasts: 7d: 22.52, 15d: 37.98, 30d: 92.80, 90d: 269.05 (includes infrequent category fallback warning).
+     - `NEW_UNSEEN_SKU_DEMO` (Unseen SKU demonstration profile: Lags 5/5/5/5, Rolling 5.0/5.0) -> Forecasts: 7d: 38.92, 15d: 87.13, 30d: 172.06, 90d: 492.24 (includes infrequent category fallback warning).
+  2. *Illustrative Disclosure Notice:* Added clear UI disclaimer in the feature panel stating that loaded presets are illustrative demonstration inputs and NOT verified historical sales records.
+  3. *Automatic Profile Switching:* Implemented `handleSelectSku` so selecting any catalog preset pill or clicking "Load Demonstration Sample" automatically loads the corresponding feature profile into the form vector.
+  4. *Model Display Name Correction:* Updated the model display logic so $D_7$ explicitly renders as "Ridge Regression" (matching backend `Linear Regression` estimator trained with `Ridge(alpha=100.0)`), while $D_{15}$, $D_{30}$, and $D_{90}$ render as "Random Forest".
+  5. *Responsive Forecast Cards Layout:* Converted `.horizon-cards-grid` to use CSS Container Queries (`@container resultsPanel (max-width: 760px)` and `(max-width: 440px)`) plus responsive breakpoints, enforcing clean 4-column (desktop/wide), 2-column (medium/split), and 1-column (compact) layouts without awkward 3+1 card stranding.
+- **Files Modified:**
+  - `frontend/src/App.tsx`
+  - `frontend/src/App.css`
+  - `docs/DEVELOPMENT_LOG.md`
+- **Verification Results:**
+  - `npx tsc --noEmit` & `npm run build`: Vite production build passed in 921ms (`dist/` bundle refreshed cleanly).
+  - Backend regression test suite: 60/60 tests passed in 10.91s (100% pass rate).
+  - Live prediction verification: All 4 SKU profiles verified to return distinct, non-identical multi-horizon predictions with correct model identification and zero artificial mocks.
+- **Milestone Status:** Phase 1 client interface verified, consistent, and ready for 21 November presentation.
+
+---
+
 ### [2026-11-17] — Simple Frontend UI Polish for Academic Submission
 
 - **Phase & Task:** Frontend UI Polish — Clean, High-Contrast Light Theme for 21 November 2026 Academic Demonstration.

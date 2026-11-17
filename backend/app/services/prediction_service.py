@@ -22,6 +22,7 @@ from app.schemas.forecast import (
     HorizonPredictionDetail,
     SUPPORTED_HORIZONS
 )
+from app.services.historical_data_service import historical_data_service
 
 
 class PredictionService:
@@ -127,6 +128,17 @@ class PredictionService:
         features = request.features
         requested_horizons = request.horizons or self.supported_horizons
 
+        observation_date: Optional[str] = None
+        history_days: Optional[int] = None
+        is_auto_generated: bool = False
+
+        # When caller does not provide manual features, generate them automatically from CSV dataset
+        if features is None:
+            features, context = historical_data_service.get_features_for_sku(sku)
+            observation_date = context.get("observation_date")
+            history_days = context.get("history_days")
+            is_auto_generated = True
+
         # Construct input DataFrame matching exact feature contract:
         # ['StockCode', 'DayOfWeek', 'Month', 'DayOfMonth', 'Lag1', 'Lag7', 'Lag14', 'Lag28', 'RollingMean7', 'RollingMean28']
         input_data = {
@@ -143,8 +155,13 @@ class PredictionService:
         }
         X_df = pd.DataFrame(input_data)
 
-        # Informational warnings
+        # Informational warnings and context
         warnings = []
+        if is_auto_generated and observation_date:
+            warnings.append(
+                f"Historical demand features automatically generated from {history_days} daily records "
+                f"up to observation date {observation_date} (UCI Online Retail II dataset)."
+            )
         if self.frequent_skus and sku not in self.frequent_skus:
             warnings.append(
                 f"StockCode '{sku}' is outside the top-50 training categories; "
@@ -201,7 +218,10 @@ class PredictionService:
             warnings=warnings,
             status="success",
             total_predicted_demand=primary_val,
-            horizon_days=primary_h if len(requested_horizons) == 1 else None
+            horizon_days=primary_h if len(requested_horizons) == 1 else None,
+            observation_date=observation_date,
+            history_days=history_days,
+            is_auto_generated=is_auto_generated
         )
 
     def get_supported_horizons(self) -> Dict[str, Any]:

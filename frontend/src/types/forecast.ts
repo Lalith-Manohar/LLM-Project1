@@ -48,6 +48,9 @@ export interface ForecastResponse {
   timestamp: string;
   warnings: string[];
   status: string;
+  observation_date?: string;
+  history_days?: number;
+  is_auto_generated?: boolean;
   total_predicted_demand?: number;
   horizon_days?: number;
 }

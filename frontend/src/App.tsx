@@ -13,24 +13,12 @@ import './App.css'
 
 // Preset demo product SKUs from UCI Online Retail II dataset
 const DEMO_SKUS = [
-  { code: '85123A', name: 'White Hanging Heart T-Light Holder (Top Catalog SKU)' },
-  { code: '71053', name: 'White Metal Lantern' },
-  { code: '21777', name: 'Recipe Box with Metal Heart' },
-  { code: 'NEW_UNSEEN_SKU_DEMO', name: 'Unseen SKU (Tests Infrequent Category Fallback)' },
+  { code: '85123A', name: 'White Hanging Heart T-Light Holder (High-volume active SKU, 374 days history)' },
+  { code: '71053', name: 'White Metal Lantern (Medium-volume active SKU, 374 days history)' },
+  { code: '85099B', name: 'Jumbo Bag Red Retrospot (Top high-demand active SKU, 374 days history)' },
+  { code: '22423', name: 'Regency Cakestand 3 Tier (Core active SKU, 374 days history)' },
+  { code: '21777', name: 'Recipe Box with Metal Heart (6 days lifespan — tests insufficient history validation)' },
 ]
-
-// Preset verified historical demonstration features
-const SAMPLE_FEATURES = {
-  day_of_week: 2, // Wednesday
-  month: 11,     // November
-  day_of_month: 15,
-  lag_1: 12.0,
-  lag_7: 15.0,
-  lag_14: 10.0,
-  lag_28: 14.0,
-  rolling_mean_7: 13.5,
-  rolling_mean_28: 12.8
-}
 
 export const App: React.FC = () => {
   // Backend connectivity state
@@ -40,8 +28,6 @@ export const App: React.FC = () => {
   // Form input state
   const [stockCode, setStockCode] = useState<string>('85123A')
   const [selectedHorizons, setSelectedHorizons] = useState<number[]>([7, 15, 30, 90])
-  const [features, setFeatures] = useState(SAMPLE_FEATURES)
-  const [isSampleLoaded, setIsSampleLoaded] = useState<boolean>(true)
 
   // Request & Response state
   const [loading, setLoading] = useState<boolean>(false)
@@ -80,20 +66,10 @@ export const App: React.FC = () => {
     }
   }
 
-  // Handle feature input changes
-  const handleFeatureChange = (field: keyof typeof SAMPLE_FEATURES, value: string) => {
-    const num = parseFloat(value)
-    setFeatures(prev => ({
-      ...prev,
-      [field]: isNaN(num) ? 0 : num
-    }))
-    setIsSampleLoaded(false)
-  }
-
-  // Load sample demonstration values
-  const handleLoadSample = () => {
-    setFeatures(SAMPLE_FEATURES)
-    setIsSampleLoaded(true)
+  // Switch SKU preset
+  const handleSelectSku = (code: string) => {
+    setStockCode(code)
+    setErrorMessage(null)
   }
 
   // Submit forecast prediction request
@@ -102,20 +78,10 @@ export const App: React.FC = () => {
     setErrorMessage(null)
     setLoading(true)
 
+    // Simplified SKU-only payload: backend automatically calculates the 9 ML features from CSV!
     const payload: ForecastRequest = {
       stock_code: stockCode.trim(),
-      horizons: selectedHorizons,
-      features: {
-        day_of_week: Number(features.day_of_week),
-        month: Number(features.month),
-        day_of_month: Number(features.day_of_month),
-        lag_1: Number(features.lag_1),
-        lag_7: Number(features.lag_7),
-        lag_14: Number(features.lag_14),
-        lag_28: Number(features.lag_28),
-        rolling_mean_7: Number(features.rolling_mean_7),
-        rolling_mean_28: Number(features.rolling_mean_28)
-      }
+      horizons: selectedHorizons
     }
 
     setLastPayload(payload)
@@ -151,7 +117,7 @@ export const App: React.FC = () => {
           </div>
           <div>
             <h1 className="brand-title">NEXORA</h1>
-            <p className="brand-subtitle">Retail Management & Intelligence System</p>
+            <p className="brand-subtitle">AI-Powered Retail Management & Intelligence System</p>
           </div>
         </div>
 
@@ -179,7 +145,7 @@ export const App: React.FC = () => {
             <div className="card-header">
               <h2>Demand Forecasting Simulator</h2>
               <p className="section-desc">
-                Select an SKU and target horizons to query real-time multi-horizon ML regression predictions from FastAPI.
+                Select a product SKU and planning horizons to query multi-horizon ML demand regression forecasts from FastAPI.
               </p>
             </div>
 
@@ -207,12 +173,24 @@ export const App: React.FC = () => {
                       key={item.code}
                       type="button"
                       className={`preset-pill ${stockCode === item.code ? 'active' : ''}`}
-                      onClick={() => setStockCode(item.code)}
+                      onClick={() => handleSelectSku(item.code)}
                       title={item.name}
                     >
                       {item.code}
                     </button>
                   ))}
+                </div>
+              </div>
+
+              {/* Automatic Pipeline Information Notice */}
+              <div className="auto-notice">
+                <div className="auto-notice-title">
+                  <span>⚡</span>
+                  <strong>Automated Feature Engineering</strong>
+                </div>
+                <div className="auto-notice-body">
+                  Historical sales data is automatically processed to generate demand forecasts.
+                  The backend retrieves daily transaction records from the retail CSV dataset, calculates 7/14/28-day lags and rolling averages, and projects from the latest historical observation date (up to 09 Dec 2011).
                 </div>
               </div>
 
@@ -243,128 +221,6 @@ export const App: React.FC = () => {
                 <p className="field-hint">Click to toggle one or more planning horizons.</p>
               </div>
 
-              {/* Historical Feature Input Grid */}
-              <div className="form-group">
-                <div className="feature-header-row">
-                  <label>Historical Features Vector</label>
-                  <button
-                    type="button"
-                    className={`btn-sample ${isSampleLoaded ? 'active' : ''}`}
-                    onClick={handleLoadSample}
-                  >
-                    ✓ Load Demonstration Sample
-                  </button>
-                </div>
-                <p className="field-hint demo-notice">
-                  {isSampleLoaded
-                    ? '★ Currently loaded: Verified demonstration features representing a medium-demand product.'
-                    : 'Custom feature values entered.'}
-                </p>
-
-                <div className="features-grid">
-                  <div className="feature-field">
-                    <label>Lag 1 Day (t-1)</label>
-                    <input
-                      type="number"
-                      step="any"
-                      min="0"
-                      value={features.lag_1}
-                      onChange={(e) => handleFeatureChange('lag_1', e.target.value)}
-                      required
-                    />
-                  </div>
-                  <div className="feature-field">
-                    <label>Lag 7 Days (t-7)</label>
-                    <input
-                      type="number"
-                      step="any"
-                      min="0"
-                      value={features.lag_7}
-                      onChange={(e) => handleFeatureChange('lag_7', e.target.value)}
-                      required
-                    />
-                  </div>
-                  <div className="feature-field">
-                    <label>Lag 14 Days (t-14)</label>
-                    <input
-                      type="number"
-                      step="any"
-                      min="0"
-                      value={features.lag_14}
-                      onChange={(e) => handleFeatureChange('lag_14', e.target.value)}
-                      required
-                    />
-                  </div>
-                  <div className="feature-field">
-                    <label>Lag 28 Days (t-28)</label>
-                    <input
-                      type="number"
-                      step="any"
-                      min="0"
-                      value={features.lag_28}
-                      onChange={(e) => handleFeatureChange('lag_28', e.target.value)}
-                      required
-                    />
-                  </div>
-                  <div className="feature-field">
-                    <label>Rolling Mean 7d</label>
-                    <input
-                      type="number"
-                      step="any"
-                      min="0"
-                      value={features.rolling_mean_7}
-                      onChange={(e) => handleFeatureChange('rolling_mean_7', e.target.value)}
-                      required
-                    />
-                  </div>
-                  <div className="feature-field">
-                    <label>Rolling Mean 28d</label>
-                    <input
-                      type="number"
-                      step="any"
-                      min="0"
-                      value={features.rolling_mean_28}
-                      onChange={(e) => handleFeatureChange('rolling_mean_28', e.target.value)}
-                      required
-                    />
-                  </div>
-                </div>
-
-                {/* Calendar Features Row */}
-                <div className="calendar-grid">
-                  <div className="calendar-field">
-                    <label>Day of Week (0=Mon)</label>
-                    <input
-                      type="number"
-                      min="0"
-                      max="6"
-                      value={features.day_of_week}
-                      onChange={(e) => handleFeatureChange('day_of_week', e.target.value)}
-                    />
-                  </div>
-                  <div className="calendar-field">
-                    <label>Month (1-12)</label>
-                    <input
-                      type="number"
-                      min="1"
-                      max="12"
-                      value={features.month}
-                      onChange={(e) => handleFeatureChange('month', e.target.value)}
-                    />
-                  </div>
-                  <div className="calendar-field">
-                    <label>Day of Month (1-31)</label>
-                    <input
-                      type="number"
-                      min="1"
-                      max="31"
-                      value={features.day_of_month}
-                      onChange={(e) => handleFeatureChange('day_of_month', e.target.value)}
-                    />
-                  </div>
-                </div>
-              </div>
-
               {/* Submit Button */}
               <button
                 type="submit"
@@ -373,10 +229,10 @@ export const App: React.FC = () => {
               >
                 {loading ? (
                   <span className="spinner-text">
-                    <span className="spinner"></span> Querying FastAPI ML Inference...
+                    <span className="spinner"></span> Processing Historical Sales & Running ML Models...
                   </span>
                 ) : (
-                  `Execute Forecast (${selectedHorizons.length} Horizons)`
+                  `Generate Forecast (${selectedHorizons.length} Horizons)`
                 )}
               </button>
             </form>
@@ -385,29 +241,29 @@ export const App: React.FC = () => {
           {/* Right Column: Prediction Results & Output Cards */}
           <div className="card results-card">
             <div className="card-header">
-              <h2>Forecast Intelligence Outputs</h2>
+              <h2>Multi-Horizon Forecast Results</h2>
               <p className="section-desc">
-                Live empirical predictions returned over HTTP by FastAPI from trained Joblib models.
+                Machine learning demand estimates evaluated across Ridge Regression and Random Forest pipelines.
               </p>
             </div>
 
-            {/* Error Message Display */}
+            {/* Error Notification */}
             {errorMessage && (
               <div className="alert alert-error">
                 <div className="alert-icon">⚠️</div>
                 <div className="alert-content">
-                  <strong>Request Error:</strong> {errorMessage}
+                  <strong>Prediction Failed:</strong> {errorMessage}
                 </div>
               </div>
             )}
 
-            {/* Empty State before first prediction */}
-            {!loading && !forecastResult && !errorMessage && (
+            {/* Empty State */}
+            {!forecastResult && !loading && !errorMessage && (
               <div className="empty-state">
                 <div className="empty-icon">📈</div>
                 <h3>No Prediction Executed Yet</h3>
                 <p>
-                  Select a product SKU and planning horizons on the left, then click <strong>Execute Forecast</strong> to query the ML models.
+                  Select a product SKU and target horizons on the left, then click <strong>Generate Forecast</strong>. NEXORA will automatically retrieve the historical sales history and compute predictions.
                 </p>
                 <div className="endpoint-tag">
                   Target Endpoint: <code>POST http://localhost:8000/api/v1/forecast/</code>
@@ -419,31 +275,39 @@ export const App: React.FC = () => {
             {loading && (
               <div className="loading-state">
                 <div className="large-spinner"></div>
-                <p className="loading-title">Communicating with FastAPI...</p>
-                <p className="loading-subtitle">Invoking scikit-learn Ridge & Random Forest estimators</p>
+                <p className="loading-title">Retrieving Historical Sales & Executing Inference...</p>
+                <p className="loading-subtitle">Filtering continuous daily records & evaluating scikit-learn estimators</p>
               </div>
             )}
 
             {/* Results Presentation */}
             {forecastResult && !loading && (
               <div className="results-container">
-                {/* Meta summary header */}
+                {/* Meta summary header with Observation Date Transparency */}
                 <div className="results-meta-bar">
                   <div>
                     <span className="meta-label">Product SKU:</span>
                     <strong className="meta-value">{forecastResult.stock_code}</strong>
                   </div>
+                  {forecastResult.observation_date && (
+                    <div>
+                      <span className="meta-label">Forecast Origin:</span>
+                      <strong className="meta-value date-highlight">{forecastResult.observation_date}</strong>
+                    </div>
+                  )}
+                  {forecastResult.history_days && (
+                    <div>
+                      <span className="meta-label">Historical Base:</span>
+                      <span className="meta-time">{forecastResult.history_days} Days Analyzed</span>
+                    </div>
+                  )}
                   <div>
                     <span className="meta-label">Status:</span>
                     <span className="badge badge-success">{forecastResult.status.toUpperCase()}</span>
                   </div>
-                  <div>
-                    <span className="meta-label">Timestamp:</span>
-                    <span className="meta-time">{new Date(forecastResult.timestamp).toLocaleTimeString()}</span>
-                  </div>
                 </div>
 
-                {/* Warnings Section (e.g. for unseen SKUs) */}
+                {/* Warnings Section (e.g. for unseen SKUs or data notes) */}
                 {forecastResult.warnings && forecastResult.warnings.length > 0 && (
                   <div className="alert alert-warning">
                     <div className="alert-icon">ℹ️</div>
@@ -473,7 +337,7 @@ export const App: React.FC = () => {
                         <div className="meta-row">
                           <span className="meta-name">Active Model:</span>
                           <span className="meta-val" title={detail.model_name}>
-                            {detail.model_name.includes('Ridge') ? 'Ridge Regression' : 'Random Forest'}
+                            {detail.model_name.includes('Linear') || detail.model_name.includes('Ridge') || detail.horizon_days === 7 ? 'Ridge Regression' : 'Random Forest'}
                           </span>
                         </div>
                         {detail.wape !== null && detail.wape !== undefined && (
@@ -511,7 +375,7 @@ export const App: React.FC = () => {
                           className={`tab-btn ${activeInspectorTab === 'request' ? 'active' : ''}`}
                           onClick={() => setActiveInspectorTab('request')}
                         >
-                          HTTP POST Request Body
+                          POST Request Payload
                         </button>
                       </div>
                     )}
@@ -534,8 +398,7 @@ export const App: React.FC = () => {
       {/* Footer */}
       <footer className="app-footer">
         <p>
-          NEXORA Phase 1 Demonstration Client &bull; Communicating directly via HTTP with FastAPI Backend on{' '}
-          <code>http://localhost:8000</code> &bull; Academic Viva Ready
+          NEXORA v0.1.0 (Phase 1 Milestone) • Multi-Horizon Retail Intelligence Engine • Powered by FastAPI & Scikit-learn
         </p>
       </footer>
     </div>

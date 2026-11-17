@@ -15,6 +15,11 @@ from app.schemas.forecast import (
     ModelInfoResponse
 )
 from app.services.prediction_service import prediction_service
+from app.services.historical_data_service import (
+    HistoricalDataNotFoundError,
+    InsufficientHistoryError,
+    DatasetUnavailableError
+)
 
 router = APIRouter(prefix="/forecast", tags=["Forecast"])
 
@@ -64,13 +69,28 @@ def get_model_info() -> Dict[str, Any]:
     "/",
     response_model=ForecastResponse,
     summary="Generate multi-horizon demand forecast",
-    description="Submits an SKU and historical feature values to generate estimated demand over requested horizons."
+    description="Submits an SKU to generate estimated demand over requested horizons from historical CSV data (or manual features for testing)."
 )
 def predict_demand(request: ForecastRequest) -> ForecastResponse:
     """Generates demand forecasts for one or more requested horizons (7, 15, 30, 90 days)."""
     try:
         response = prediction_service.get_forecast(request)
         return response
+    except HistoricalDataNotFoundError as e:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(e)
+        )
+    except InsufficientHistoryError as e:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=str(e)
+        )
+    except DatasetUnavailableError as e:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=f"Historical dataset unavailable: {str(e)}"
+        )
     except FileNotFoundError as e:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,

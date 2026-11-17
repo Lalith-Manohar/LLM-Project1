@@ -8,16 +8,18 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.core.config import settings
 from app.api.routes import api_router
 from app.services.prediction_service import prediction_service
+from app.services.historical_data_service import historical_data_service
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Application lifespan manager: loads ML models into memory once at startup."""
+    """Application lifespan manager: loads ML models and historical sales data into memory once at startup."""
     print("[NEXORA Startup] Initializing application lifespan...")
     try:
         prediction_service.load_models()
+        historical_data_service.load_dataset()
     except Exception as e:
-        print(f"[NEXORA Startup Warning] Model loading deferred or encountered an error: {e}")
+        print(f"[NEXORA Startup Warning] Service loading deferred or encountered an error: {e}")
     yield
     print("[NEXORA Shutdown] Application shutting down cleanly.")
 

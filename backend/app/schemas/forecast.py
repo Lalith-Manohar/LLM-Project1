@@ -165,46 +165,50 @@ class ForecastRequest(BaseModel):
             self.horizons = list(SUPPORTED_HORIZONS)
 
         # 3. Harmonize Historical Features
-        # If nested 'features' object is missing, check flat fields
+        # If nested 'features' object is missing, check if caller provided flat fields (backward compatibility).
+        # If any flat feature was provided, ensure all required numerical features are present and valid.
+        # If no features or flat fields are provided at all, self.features remains None, signalling
+        # the PredictionService to automatically generate features from the historical CSV dataset.
+        required_num = ["lag_1", "lag_7", "lag_14", "lag_28", "rolling_mean_7", "rolling_mean_28"]
         if self.features is None:
-            missing_flat = []
-            required_num = ["lag_1", "lag_7", "lag_14", "lag_28", "rolling_mean_7", "rolling_mean_28"]
-            for f in required_num:
-                if getattr(self, f) is None:
-                    missing_flat.append(f)
-            if missing_flat:
-                raise ValueError(
-                    f"Missing required historical demand features: {missing_flat}. "
-                    "Provide them either nested under 'features' or as top-level fields."
+            any_flat_provided = any(getattr(self, f) is not None for f in required_num)
+            if any_flat_provided:
+                missing_flat = [f for f in required_num if getattr(self, f) is None]
+                if missing_flat:
+                    raise ValueError(
+                        f"Missing required historical demand features: {missing_flat}. "
+                        "Provide all numerical lag/rolling features when specifying manual features, "
+                        "or omit features completely for automatic CSV-based feature generation."
+                    )
+
+                # Check finite
+                for f in required_num:
+                    val = getattr(self, f)
+                    if math.isnan(val) or math.isinf(val):
+                        raise ValueError(f"Feature '{f}' must be a finite numerical value.")
+
+                # Create internal HistoricalFeatures
+                self.features = HistoricalFeatures(
+                    day_of_week=self.day_of_week,
+                    month=self.month,
+                    day_of_month=self.day_of_month,
+                    lag_1=self.lag_1,
+                    lag_7=self.lag_7,
+                    lag_14=self.lag_14,
+                    lag_28=self.lag_28,
+                    rolling_mean_7=self.rolling_mean_7,
+                    rolling_mean_28=self.rolling_mean_28
                 )
 
-            # Check finite
-            for f in required_num:
-                val = getattr(self, f)
-                if math.isnan(val) or math.isinf(val):
-                    raise ValueError(f"Feature '{f}' must be a finite numerical value.")
-
-            # Create internal HistoricalFeatures
-            self.features = HistoricalFeatures(
-                day_of_week=self.day_of_week,
-                month=self.month,
-                day_of_month=self.day_of_month,
-                lag_1=self.lag_1,
-                lag_7=self.lag_7,
-                lag_14=self.lag_14,
-                lag_28=self.lag_28,
-                rolling_mean_7=self.rolling_mean_7,
-                rolling_mean_28=self.rolling_mean_28
-            )
-
-        # 4. Fill calendar defaults if not provided
-        today = datetime.date.today()
-        if self.features.day_of_week is None:
-            self.features.day_of_week = today.weekday()
-        if self.features.month is None:
-            self.features.month = today.month
-        if self.features.day_of_month is None:
-            self.features.day_of_month = today.day
+        # 4. Fill calendar defaults if manual features were provided without calendar values
+        if self.features is not None:
+            today = datetime.date.today()
+            if self.features.day_of_week is None:
+                self.features.day_of_week = today.weekday()
+            if self.features.month is None:
+                self.features.month = today.month
+            if self.features.day_of_month is None:
+                self.features.day_of_month = today.day
 
         return self
 
@@ -235,6 +239,20 @@ class ForecastResponse(BaseModel):
     warnings: List[str] = Field(
         default=[],
         description="Informational notes or warnings (e.g., infrequent SKU mapping)."
+    )
+
+    # Historical context & transparency
+    observation_date: Optional[str] = Field(
+        None,
+        description="Historical observation cutoff date (YYYY-MM-DD) from which the forecast is projected."
+    )
+    history_days: Optional[int] = Field(
+        None,
+        description="Number of continuous daily historical records evaluated."
+    )
+    is_auto_generated: bool = Field(
+        default=False,
+        description="True if historical features were automatically derived from CSV dataset."
     )
 
     # Backward-compatible fields
