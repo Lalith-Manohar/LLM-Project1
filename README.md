@@ -51,8 +51,14 @@ NEXORA/
 │   ├── requirements.txt               # Backend & ML dependencies
 │   └── .env.example                   # Environment configuration template
 │
-├── frontend/                          # Future React + TypeScript frontend
-│   └── README.md
+├── frontend/                          # React + TypeScript demonstration client
+│   ├── src/
+│   │   ├── services/api.ts            # Typed HTTP API client (fetch)
+│   │   ├── types/forecast.ts          # Schema interfaces matching backend
+│   │   ├── App.tsx                    # Interactive forecasting UI & JSON inspector
+│   │   └── main.tsx                   # Entry point
+│   ├── package.json                   # React 18, TypeScript 5, Vite 5
+│   └── README.md                      # Frontend architecture & setup guide
 │
 └── docs/                              # System documentation & knowledge registries
     ├── NEXORA — Technical Blueprint v1.0.md  # Canonical specification
@@ -189,6 +195,20 @@ python -m uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 - **Interactive Swagger UI Documentation:** [http://localhost:8000/docs](http://localhost:8000/docs)
 - **ReDoc Documentation:** [http://localhost:8000/redoc](http://localhost:8000/redoc)
 - **Health Probe:** [http://localhost:8000/health](http://localhost:8000/health)
+
+---
+
+### Step 8: How to Start the React Frontend Client
+
+In a separate PowerShell window, start the frontend development client:
+```powershell
+cd frontend
+npm install
+npm run dev
+```
+
+- **Client Web Interface:** [http://localhost:5173](http://localhost:5173)
+- Features real-time backend health check, demo SKU selector presets, multi-horizon forecast inputs, model metrics display (WAPE), and an interactive HTTP Request/Response JSON Inspector drawer for academic viva demonstrations.
 
 ---
 

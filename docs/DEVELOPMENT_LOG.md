@@ -4,6 +4,53 @@ This document maintains a strict chronological development record for NEXORA. Ev
 
 ---
 
+### [2026-11-17] — Phase 1 Client Application & FastAPI Integration
+
+- **Phase & Task:** Phase 1 Client & Backend Integration — React + TypeScript Client Application & FastAPI Integration.
+- **Task Description:** Built and verified a complete, responsive, modern React 18 + TypeScript + Vite demonstration client application inside `frontend/` to establish and prove real HTTP communication with the NEXORA FastAPI ML inference backend for the 21 November 2026 academic project demonstration and viva presentation.
+- **Components & Functionality Implemented:**
+  1. *Project Setup & Bundler:* Initialized Vite + React 18 + TypeScript 5 in `frontend/` with strict bundler resolution and dev-server on port 5173 (`frontend/vite.config.ts`, `frontend/tsconfig.json`, `frontend/package.json`).
+  2. *Type Contracts:* Implemented strict TypeScript schema interfaces matching backend Pydantic models in `frontend/src/types/forecast.ts` (`ForecastRequest`, `ForecastResponse`, `HistoricalFeatures`, `HorizonPredictionDetail`, `HealthResponse`, `SupportedHorizonsResponse`).
+  3. *HTTP Client Layer:* Implemented strongly-typed browser `fetch` service in `frontend/src/services/api.ts` handling `GET /health`, `GET /api/v1/forecast/horizons`, and `POST /api/v1/forecast/` with structured error decoding (`ApiError`).
+  4. *Interactive Client UI:* Built `frontend/src/App.tsx` with:
+     - Real-time backend connection status indicator (checking / online / offline) polling `GET /health`.
+     - Stock code input with catalog preset buttons (`85123A`, `71053`, `21777`, `NEW_UNSEEN_SKU_DEMO`).
+     - Multi-horizon selector for all 4 horizons (**7, 15, 30, and 90 days**).
+     - Numerical inputs for historical lag and rolling features with clear label hints.
+     - "Load Sample Feature Values" button explicitly labeled as demonstration data.
+     - Responsive prediction cards displaying projected demand units, active ML pipeline name, and out-of-time validation WAPE (%) benchmarks.
+     - Informational warning banner for unseen or infrequent SKUs.
+     - Expandable **HTTP Request/Response JSON Inspector drawer** allowing examination of the raw request payload and HTTP 200 response during viva evaluation.
+  5. *Design System & Styling:* Created enterprise dark-theme stylesheet in `frontend/src/index.css` and `frontend/src/App.css` aligned with the NEXORA visual branding.
+  6. *CORS Configuration:* Updated `CORSMiddleware` in `backend/app/main.py` to explicitly authorize frontend development origins (`http://localhost:5173`, `http://127.0.0.1:5173`, `http://localhost:3000`).
+- **Files Created:**
+  - `frontend/package.json`
+  - `frontend/tsconfig.json`
+  - `frontend/vite.config.ts`
+  - `frontend/index.html`
+  - `frontend/.env.example`
+  - `frontend/public/favicon.svg`
+  - `frontend/src/main.tsx`
+  - `frontend/src/App.tsx`
+  - `frontend/src/App.css`
+  - `frontend/src/index.css`
+  - `frontend/src/vite-env.d.ts`
+  - `frontend/src/services/api.ts`
+  - `frontend/src/types/forecast.ts`
+  - `frontend/README.md`
+- **Files Modified:**
+  - `backend/app/main.py`
+  - `README.md`
+  - `docs/DEVELOPMENT_LOG.md`
+  - `docs/FEATURES_STATUS.md`
+- **Verification & Testing Results:**
+  - `npm run build`: TypeScript compilation and Vite production bundle succeeded cleanly in 943ms with zero errors.
+  - Live HTTP Integration Test: Verified real TCP communication against running Uvicorn server for `GET /health` (200 OK), `GET /api/v1/forecast/horizons` (200 OK), and `POST /api/v1/forecast/` with multi-horizon evaluation (200 OK, CORS header validated) and unseen SKU handling (200 OK with warning).
+  - Backend Regression Test Suite: Full 60 tests collected and passed in 10.84s (100% pass rate).
+- **Next Recommended Milestone:** Proceed to Phase 2: MySQL Relational Database Configuration & Operational CRUD.
+
+---
+
 ### [2026-11-17] — Phase 1 Code Simplification, Maintainability & Regression Audit
 
 - **Phase & Task:** Quality & Maintainability — Phase 1 Code Simplification, Maintainability & Regression Audit.

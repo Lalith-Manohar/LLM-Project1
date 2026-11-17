@@ -406,3 +406,16 @@ Every Antigravity agent assigned a task must execute it following these mandator
   13. LOG ISSUES  --> Document new bugs or verified fixes in docs/KNOWN_ISSUES.md.
   14. EXPLAIN     --> Deliver an honest, clear technical summary to the user.
 ```
+### Code Simplicity Rule
+
+All new code must follow a simple, readable, student-friendly implementation style.
+
+- Avoid unnecessary abstractions, inheritance and design patterns.
+- Avoid duplicate logic and redundant functions.
+- Prefer straightforward functions and readable control flow.
+- Do not introduce unnecessary dependencies.
+- Keep modules focused and appropriately sized.
+- Explain complex business logic with meaningful comments.
+- Before implementing a feature, inspect existing code and reuse suitable functionality.
+- Do not sacrifice correctness, security, performance or maintainability for fewer lines of code.
+- Do not refactor already verified working modules without identifying a concrete problem and demonstrating the benefit.
