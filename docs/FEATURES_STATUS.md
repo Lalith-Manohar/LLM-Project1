@@ -107,7 +107,7 @@ Allowed Statuses:
 | `FEAT-M07-05` | Horizon Regressors Training (7/15/30/90d)| `IMPLEMENTED` | `backend/ml/src/train.py`, `models/` | None | None | **Passed** | Trained Seasonal Naive, Linear Regression, and Random Forest; serialized 4 pipelines to .joblib |
 | `FEAT-M07-06` | Out-of-Time Backtesting (MAE/RMSE/WAPE) | `IMPLEMENTED` | `backend/ml/src/evaluate.py`, `models_metadata.json` | None | None | **Passed** | Strict chronological purge/embargo backtesting with MAE, RMSE, and WAPE across all 4 horizons |
 | `FEAT-M07-07` | Stockout Risk Scoring (CRITICAL/ELEVATED/SAFE) | `PLANNED` | `prediction_service.py` | `POST /api/v1/forecast/predict` | `inventory_alerts` | Not Executed | Planned for Phase 1/2 |
-| `FEAT-M07-08` | Phase 1 Demonstration Frontend Client | `IMPLEMENTED` | `frontend/src/App.tsx`, `api.ts`, `types/forecast.ts` | `GET /health`, `GET /api/v1/forecast/horizons`, `POST /api/v1/forecast/` | None | **Passed** | Responsive React + TS + Vite interface; real HTTP fetch, catalog presets, multi-horizon forecasts, WAPE display, JSON request/response inspector |
+| `FEAT-M07-08` | Phase 1 Demonstration Frontend Client | `IMPLEMENTED` | `frontend/src/App.tsx`, `api.ts`, `types/forecast.ts` | `GET /health`, `GET /api/v1/forecast/horizons`, `POST /api/v1/forecast/` | None | **Passed** | Clean, modern light-theme React + TS + Vite interface; real HTTP fetch, catalog presets, multi-horizon forecasts, WAPE display, collapsible JSON request/response inspector |
 
 ---
 

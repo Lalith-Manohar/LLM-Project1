@@ -4,6 +4,29 @@ This document maintains a strict chronological development record for NEXORA. Ev
 
 ---
 
+### [2026-11-17] — Simple Frontend UI Polish for Academic Submission
+
+- **Phase & Task:** Frontend UI Polish — Clean, High-Contrast Light Theme for 21 November 2026 Academic Demonstration.
+- **Task Description:** Refined the demonstration frontend interface (`frontend/src/index.css` and `frontend/src/App.css`) with a clean, light-mode design system optimized for projector visibility and academic evaluation. Converted dark surfaces into clean white cards with subtle borders (`#e2e8f0`), soft shadows, deep slate typography (`#0f172a`), and modern indigo/blue accents (`#4f46e5`). Preserved all backend endpoints, Pydantic schemas, ML prediction logic, and interactive components.
+- **Improvements Implemented:**
+  1. *Color Palette:* Light grey canvas (`#f4f6fa`), crisp white card containers (`#ffffff`), and indigo action buttons (`#4f46e5` / `#4338ca`).
+  2. *Readability & Typography:* High-contrast text hierarchy with 15px base size, dark slate headings (`#1e293b`), and legible field labels (`#475569`).
+  3. *Consistent Cards & Radii:* Uniform 10px and 14px rounded corners (`--radius-md`, `--radius-lg`) with elevation shadows (`--shadow-sm`, `--shadow-md`).
+  4. *Legible Predictions:* 4 clean white horizon cards ($D_7, D_{15}, D_{30}, D_{90}$) featuring large numeric figures (`1.85rem`), active model badges, and green validation WAPE indicators.
+  5. *Collapsible Inspector Drawer:* Clean light code viewer (`#f8fafc`) for demonstrating raw HTTP 200 responses and POST request payloads during viva.
+- **Files Modified:**
+  - `frontend/src/index.css`
+  - `frontend/src/App.css`
+  - `docs/DEVELOPMENT_LOG.md`
+  - `docs/FEATURES_STATUS.md`
+- **Verification Results:**
+  - `npx tsc --noEmit`: 0 errors.
+  - `npm run build`: Vite production build passed in 983ms (`dist/` bundle created).
+  - Backend regression test suite: 60/60 tests passed in 11.49s (100% pass rate).
+- **Milestone Status:** Demonstration client polished and verified for 21 November presentation.
+
+---
+
 ### [2026-11-17] — Phase 1 Client Application & FastAPI Integration
 
 - **Phase & Task:** Phase 1 Client & Backend Integration — React + TypeScript Client Application & FastAPI Integration.

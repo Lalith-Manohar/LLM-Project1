@@ -256,6 +256,7 @@ flowchart TD
 - [x] Wire `backend/app/services/prediction_service.py` to load model artifacts.
 - [x] Test multi-horizon prediction endpoints via Swagger UI (`/docs`) and automated test suite.
 - [x] Code simplification, maintainability audit, and 60-test regression verification.
+- [x] React + TypeScript demonstration client, live HTTP integration, and 21 November presentation audit.
 
 ### Phase 2 Priority Checklist (Immediate Next Target: MySQL & Operational CRUD)
 - [ ] Configure MySQL 8.x database connection, connection pooling, and Alembic migrations.
