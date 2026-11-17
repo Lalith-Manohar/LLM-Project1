@@ -11,9 +11,8 @@ It validates that no records are lost during partitioning (Reconciliation Check)
 and exports clean CSV files and a comprehensive markdown report to backend/ml/data/processed/.
 """
 
-import os
 from pathlib import Path
-from typing import Dict, Tuple, Optional, Any
+from typing import Dict, Optional, Any
 import pandas as pd
 import numpy as np
 
@@ -68,12 +67,11 @@ def classify_transactions(df: pd.DataFrame) -> pd.DataFrame:
     # By definition, this guarantees mutual exclusivity and collective exhaustiveness.
     mask_exceptional = ~(mask_gross_sales | mask_cancellation | mask_return)
 
-    # Initialize stream column
+    # Initialize stream column (defaults to 'exceptional' for unclassified rows)
     df_classified["transaction_stream"] = "exceptional"
     df_classified.loc[mask_gross_sales, "transaction_stream"] = "gross_sales"
     df_classified.loc[mask_cancellation, "transaction_stream"] = "cancellation"
     df_classified.loc[mask_return, "transaction_stream"] = "return_credit"
-    df_classified.loc[mask_exceptional, "transaction_stream"] = "exceptional"
 
     return df_classified
 

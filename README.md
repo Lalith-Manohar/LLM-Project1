@@ -41,8 +41,13 @@ NEXORA/
 │   │       └── predict.py             # Inference pipeline
 │   │
 │   ├── tests/
-│   │   ├── test_main.py               # FastAPI endpoint tests
-│   │   └── test_preprocessing.py      # Preprocessing unit tests
+│   │   ├── test_feature_engineering.py # Daily aggregation & boundary tests (7 tests)
+│   │   ├── test_ml_features.py         # Leakage-free features & targets tests (10 tests)
+│   │   ├── test_model_training.py      # Pipelines, OneHot, reproducibility tests (10 tests)
+│   │   ├── test_model_evaluation.py    # Purge/embargo & metric tests (9 tests)
+│   │   ├── test_forecast_api.py        # Multi-horizon inference API & offline tests (16 tests)
+│   │   ├── test_main.py                # FastAPI root & health endpoints (3 tests)
+│   │   └── test_preprocessing.py       # Stream isolation & reconciliation tests (5 tests)
 │   ├── requirements.txt               # Backend & ML dependencies
 │   └── .env.example                   # Environment configuration template
 │
@@ -143,20 +148,32 @@ Always run scripts from the project root using the virtual environment:
    ```
    *Generates `clean_gross_sales.csv`, `cancellation_transactions.csv`, `return_transactions.csv`, and `preprocessing_report.md`.*
 
+3. **Run Multi-Horizon Feature Engineering:**
+   ```powershell
+   python backend/ml/src/feature_engineering.py
+   ```
+   *Generates `daily_product_demand.csv` and `ml_feature_dataset.csv`.*
+
+4. **Run Model Training & Evaluation:**
+   ```powershell
+   python backend/ml/src/train.py
+   ```
+   *Trains Ridge and Random Forest models across all 4 horizons, saving artifacts to `backend/ml/models/`.*
+
+5. **Run Quick CLI Prediction:**
+   ```powershell
+   python backend/ml/src/predict.py
+   ```
+   *Runs demo inference on SKU '85123A' across 7, 15, 30, and 90-day horizons.*
+
 ---
 
 ### Step 6: How to Run Automated Tests
 
-Run the unit test suites:
+Run the complete 60-test backend verification suite:
 ```powershell
-# Run ML preprocessing tests
-python -m pytest backend/tests/test_preprocessing.py
-
-# Run FastAPI endpoint tests
-python -m pytest backend/tests/test_main.py
-
-# Run all tests
-python -m pytest backend/tests
+# Run the complete test suite with timeout safety
+python -m pytest backend/tests/ -v --tb=short
 ```
 
 ---

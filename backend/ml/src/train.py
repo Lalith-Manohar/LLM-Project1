@@ -10,7 +10,6 @@ Implements multi-horizon model training for 7, 15, 30, and 90-day demand targets
 7. Joblib serialization to backend/ml/models/ and JSON metadata generation.
 """
 
-import os
 import sys
 import json
 import time
@@ -189,6 +188,40 @@ def validate_model_predictions(
     }
 
 
+def _evaluate_candidate_model(
+    model: Any,
+    X_train: pd.DataFrame,
+    y_train: pd.Series,
+    X_val: pd.DataFrame,
+    y_val: pd.Series,
+    model_name: str,
+    algorithm: str,
+    hyperparameters: Dict[str, Any],
+    is_baseline: bool = False
+) -> Tuple[Dict[str, Any], Any]:
+    """Fits, predicts, evaluates out-of-time metrics, and returns model summary dictionary."""
+    t0 = time.time()
+    model.fit(X_train, y_train)
+    fit_time = 0.001 if is_baseline else (time.time() - t0)
+
+    t0 = time.time()
+    preds = np.clip(np.asarray(model.predict(X_val), dtype=float), 0.0, None)
+    pred_time = time.time() - t0
+
+    metrics = evaluate_predictions(y_val.values, preds)
+    result = {
+        "model_name": model_name,
+        "algorithm": algorithm,
+        "fit_time_sec": round(fit_time, 3),
+        "pred_time_sec": round(pred_time, 4),
+        "mae": metrics["mae"],
+        "rmse": metrics["rmse"],
+        "wape": metrics["wape"],
+        "hyperparameters": hyperparameters
+    }
+    return result, model
+
+
 def train_and_evaluate_horizon(
     df: pd.DataFrame,
     horizon: int,
@@ -221,98 +254,47 @@ def train_and_evaluate_horizon(
     results = {}
     fitted_models = {}
 
-    # -------------------------------------------------------------
     # 2. Weekly-Average Demand-Rate Baseline (Seasonal Naive)
-    # -------------------------------------------------------------
     print("Evaluating Model 1: Weekly-Average Demand-Rate Baseline (Seasonal Naive)...")
-    t0 = time.time()
-    naive_model = WeeklyAverageDemandRateBaseline(horizon=horizon)
-    naive_model.fit(X_train, y_train)
-    naive_preds = naive_model.predict(X_val)
-    t_naive_pred = time.time() - t0
-    
-    metrics_naive = evaluate_predictions(y_val.values, naive_preds)
-    results["Seasonal Naive"] = {
-        "model_name": "Weekly-Average Demand-Rate Baseline (Seasonal Naive)",
-        "algorithm": "Seasonal Naive (Weekly Demand Scaled)",
-        "fit_time_sec": 0.001,
-        "pred_time_sec": round(t_naive_pred, 4),
-        "mae": metrics_naive["mae"],
-        "rmse": metrics_naive["rmse"],
-        "wape": metrics_naive["wape"],
-        "hyperparameters": {"horizon": horizon}
-    }
-    fitted_models["Seasonal Naive"] = naive_model
-    print(f"  -> MAE: {metrics_naive['mae']:.2f}, RMSE: {metrics_naive['rmse']:.2f}, WAPE: {metrics_naive['wape']:.2f}%")
-
-    # -------------------------------------------------------------
-    # 3. Linear Regression Pipeline (Ridge + OneHot top-50)
-    # -------------------------------------------------------------
-    print("Evaluating Model 2: Linear Regression (Ridge + OneHotEncoder top-50)...")
-    pipe_lr = build_linear_regression_pipeline(cat_cols, num_cols)
-    t0 = time.time()
-    pipe_lr.fit(X_train, y_train)
-    t_lr_fit = time.time() - t0
-    
-    t0 = time.time()
-    lr_preds = np.clip(pipe_lr.predict(X_val), 0.0, None)
-    t_lr_pred = time.time() - t0
-    
-    metrics_lr = evaluate_predictions(y_val.values, lr_preds)
-    results["Linear Regression"] = {
-        "model_name": "Linear Regression Pipeline (Ridge alpha=1.0)",
-        "algorithm": "Ridge Linear Regression (OneHot top-50 + StandardScaler)",
-        "fit_time_sec": round(t_lr_fit, 3),
-        "pred_time_sec": round(t_lr_pred, 4),
-        "mae": metrics_lr["mae"],
-        "rmse": metrics_lr["rmse"],
-        "wape": metrics_lr["wape"],
-        "hyperparameters": {"alpha": 1.0, "max_categories": 50}
-    }
-    fitted_models["Linear Regression"] = pipe_lr
-    print(f"  -> Fit: {t_lr_fit:.2f}s | MAE: {metrics_lr['mae']:.2f}, RMSE: {metrics_lr['rmse']:.2f}, WAPE: {metrics_lr['wape']:.2f}%")
-
-    # -------------------------------------------------------------
-    # 4. Random Forest Regressor Pipeline (OneHot top-50)
-    # -------------------------------------------------------------
-    print("Evaluating Model 3: Random Forest Regressor (n_estimators=25, max_depth=10)...")
-    pipe_rf = build_random_forest_pipeline(
-        cat_cols=cat_cols,
-        num_cols=num_cols,
-        n_estimators=25,
-        max_depth=10,
-        random_state=random_state
+    res_naive, model_naive = _evaluate_candidate_model(
+        model=WeeklyAverageDemandRateBaseline(horizon=horizon),
+        X_train=X_train, y_train=y_train, X_val=X_val, y_val=y_val,
+        model_name="Weekly-Average Demand-Rate Baseline (Seasonal Naive)",
+        algorithm="Seasonal Naive (Weekly Demand Scaled)",
+        hyperparameters={"horizon": horizon},
+        is_baseline=True
     )
-    t0 = time.time()
-    pipe_rf.fit(X_train, y_train)
-    t_rf_fit = time.time() - t0
-    
-    t0 = time.time()
-    rf_preds = np.clip(pipe_rf.predict(X_val), 0.0, None)
-    t_rf_pred = time.time() - t0
-    
-    metrics_rf = evaluate_predictions(y_val.values, rf_preds)
-    results["Random Forest"] = {
-        "model_name": "Random Forest Regressor Pipeline",
-        "algorithm": "Random Forest (OneHot top-50, n_estimators=25, max_depth=10)",
-        "fit_time_sec": round(t_rf_fit, 3),
-        "pred_time_sec": round(t_rf_pred, 4),
-        "mae": metrics_rf["mae"],
-        "rmse": metrics_rf["rmse"],
-        "wape": metrics_rf["wape"],
-        "hyperparameters": {
-            "n_estimators": 25,
-            "max_depth": 10,
-            "max_categories": 50,
-            "random_state": random_state
-        }
-    }
-    fitted_models["Random Forest"] = pipe_rf
-    print(f"  -> Fit: {t_rf_fit:.2f}s | MAE: {metrics_rf['mae']:.2f}, RMSE: {metrics_rf['rmse']:.2f}, WAPE: {metrics_rf['wape']:.2f}%")
+    results["Seasonal Naive"] = res_naive
+    fitted_models["Seasonal Naive"] = model_naive
+    print(f"  -> MAE: {res_naive['mae']:.2f}, RMSE: {res_naive['rmse']:.2f}, WAPE: {res_naive['wape']:.2f}%")
 
-    # -------------------------------------------------------------
+    # 3. Linear Regression Pipeline (Ridge + OneHot top-50)
+    print("Evaluating Model 2: Linear Regression (Ridge + OneHotEncoder top-50)...")
+    res_lr, model_lr = _evaluate_candidate_model(
+        model=build_linear_regression_pipeline(cat_cols, num_cols),
+        X_train=X_train, y_train=y_train, X_val=X_val, y_val=y_val,
+        model_name="Linear Regression Pipeline (Ridge alpha=1.0)",
+        algorithm="Ridge Linear Regression (OneHot top-50 + StandardScaler)",
+        hyperparameters={"alpha": 1.0, "max_categories": 50}
+    )
+    results["Linear Regression"] = res_lr
+    fitted_models["Linear Regression"] = model_lr
+    print(f"  -> Fit: {res_lr['fit_time_sec']:.2f}s | MAE: {res_lr['mae']:.2f}, RMSE: {res_lr['rmse']:.2f}, WAPE: {res_lr['wape']:.2f}%")
+
+    # 4. Random Forest Regressor Pipeline (OneHot top-50)
+    print("Evaluating Model 3: Random Forest Regressor (n_estimators=25, max_depth=10)...")
+    res_rf, model_rf = _evaluate_candidate_model(
+        model=build_random_forest_pipeline(cat_cols, num_cols, n_estimators=25, max_depth=10, random_state=random_state),
+        X_train=X_train, y_train=y_train, X_val=X_val, y_val=y_val,
+        model_name="Random Forest Regressor Pipeline",
+        algorithm="Random Forest (OneHot top-50, n_estimators=25, max_depth=10)",
+        hyperparameters={"n_estimators": 25, "max_depth": 10, "max_categories": 50, "random_state": random_state}
+    )
+    results["Random Forest"] = res_rf
+    fitted_models["Random Forest"] = model_rf
+    print(f"  -> Fit: {res_rf['fit_time_sec']:.2f}s | MAE: {res_rf['mae']:.2f}, RMSE: {res_rf['rmse']:.2f}, WAPE: {res_rf['wape']:.2f}%")
+
     # 5. Model Selection (Lowest WAPE / RMSE)
-    # -------------------------------------------------------------
     ml_candidates = ["Linear Regression", "Random Forest"]
     best_candidate_name = min(ml_candidates, key=lambda m: (results[m]["wape"], results[m]["rmse"]))
     best_model = fitted_models[best_candidate_name]

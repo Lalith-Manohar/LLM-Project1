@@ -7,7 +7,6 @@ matching the pipeline contract, guarantees non-negative finite predictions, and
 handles unseen product SKUs via native infrequent categorical encoding.
 """
 
-import os
 import json
 import joblib
 import datetime

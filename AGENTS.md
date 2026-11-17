@@ -2,7 +2,7 @@
 **Project:** NEXORA – AI-Powered Retail Management & Intelligence System  
 **Audience:** All AI Coding Agents & Student Developers (Google Antigravity Sessions)  
 **Primary Reference:** `docs/NEXORA — Technical Blueprint v1.0.md`  
-**Current Milestone Target:** Phase 1 (ML Demand Forecasting & FastAPI Inference) — **21 November 2026**
+**Current Milestone Target:** Phase 2 (MySQL Database & Operational CRUD) — **Phase 1 Completed & Verified (17 November 2026)**
 
 ---
 
@@ -244,17 +244,25 @@ flowchart TD
     P6 --> P7["Phase 7: End-to-End Integration & Demo Prep"]
 ```
 
-### Phase 1 Priority Checklist (Immediate Target: 21 November 2026)
+### Phase 1 Priority Checklist — COMPLETED (17 November 2026)
 - [x] Ingest and verify raw UCI dataset placement (`backend/ml/data/raw/online_retail_II.csv`).
-- [ ] Exploratory data inspection, null checking, and invoice profiling in `data_loader.py`.
-- [ ] Preprocess data, separating cancellations (`'C'`) and returns (`Quantity < 0`) from gross demand.
-- [ ] Aggregate daily demand per `StockCode`, padding inactive days with zero demand.
-- [ ] Build leakage-free feature matrix (Calendar, Lags 1/7/14/28, Rolling 7/28).
-- [ ] Train and evaluate baseline, Linear Regression, and Random Forest models across 7, 15, 30, and 90-day horizons.
-- [ ] Compute chronological out-of-time evaluation metrics (MAE, RMSE, WAPE).
-- [ ] Persist best model artifacts as `.joblib` binaries in `backend/ml/models/`.
-- [ ] Wire `backend/app/services/prediction_service.py` to load model artifacts.
-- [ ] Test multi-horizon prediction endpoints via Swagger UI (`/docs`).
+- [x] Exploratory data inspection, null checking, and invoice profiling in `data_loader.py`.
+- [x] Preprocess data, separating cancellations (`'C'`) and returns (`Quantity < 0`) from gross demand.
+- [x] Aggregate daily demand per `StockCode`, padding inactive days with zero demand.
+- [x] Build leakage-free feature matrix (Calendar, Lags 1/7/14/28, Rolling 7/28).
+- [x] Train and evaluate baseline, Linear Regression, and Random Forest models across 7, 15, 30, and 90-day horizons.
+- [x] Compute chronological out-of-time evaluation metrics (MAE, RMSE, WAPE).
+- [x] Persist best model artifacts as `.joblib` binaries in `backend/ml/models/`.
+- [x] Wire `backend/app/services/prediction_service.py` to load model artifacts.
+- [x] Test multi-horizon prediction endpoints via Swagger UI (`/docs`) and automated test suite.
+- [x] Code simplification, maintainability audit, and 60-test regression verification.
+
+### Phase 2 Priority Checklist (Immediate Next Target: MySQL & Operational CRUD)
+- [ ] Configure MySQL 8.x database connection, connection pooling, and Alembic migrations.
+- [ ] Define SQLAlchemy declarative models for initial operational tables (`products`, `inventory`, `inventory_movements`, `transactions`, `transaction_items`).
+- [ ] Implement product catalog CRUD endpoints with soft-deletion support under `/api/v1/products`.
+- [ ] Implement inventory management endpoints, tracking live stock levels and threshold alerts under `/api/v1/inventory`.
+- [ ] Establish transactional inventory movements ledger logging all physical adjustments.
 
 ---
 

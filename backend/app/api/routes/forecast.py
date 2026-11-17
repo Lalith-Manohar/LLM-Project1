@@ -28,8 +28,6 @@ router = APIRouter(prefix="/forecast", tags=["Forecast"])
 def get_supported_horizons():
     """Returns supported forecasting horizons (7, 15, 30, and 90 days)."""
     return prediction_service.get_supported_horizons()
-
-
 @router.get(
     "/model-metrics",
     summary="Get model evaluation benchmark metrics",

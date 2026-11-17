@@ -252,6 +252,17 @@ class TestForecastAPI(unittest.TestCase):
             with self.assertRaises(FileNotFoundError):
                 empty_service.load_models()
 
+    def test_16_predict_module_run_inference(self):
+        """Test ml.src.predict.run_inference function returns valid prediction dictionary."""
+        from ml.src.predict import run_inference
+        result = run_inference("85123A", horizons=[7, 30])
+        self.assertEqual(result["status"], "success")
+        self.assertEqual(result["stock_code"], "85123A")
+        self.assertIn("7", result["predictions"])
+        self.assertIn("30", result["predictions"])
+        self.assertGreaterEqual(result["predictions"]["7"], 0.0)
+        self.assertGreaterEqual(result["predictions"]["30"], 0.0)
+
 
 if __name__ == "__main__":
     unittest.main()

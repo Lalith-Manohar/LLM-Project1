@@ -4,6 +4,41 @@ This document maintains a strict chronological development record for NEXORA. Ev
 
 ---
 
+### [2026-11-17] — Phase 1 Code Simplification, Maintainability & Regression Audit
+
+- **Phase & Task:** Quality & Maintainability — Phase 1 Code Simplification, Maintainability & Regression Audit.
+- **Task Description:** Performed an exhaustive code quality, simplicity, and maintainability audit across all Phase 1 source files (`train.py`, `feature_engineering.py`, `preprocessing.py`, `evaluate.py`, `predict.py`, `prediction_service.py`, `forecast.py`). Established a verified 59-test baseline. Refactored repeated model evaluation boilerplate in `train.py` into a reusable `_evaluate_candidate_model` helper. Eliminated redundant classification assignment in `preprocessing.py`. Removed unused imports (`os`, `Tuple`) across 4 files. Resolved pre-existing Pydantic boolean coercion error for `DEBUG=release` environment variables in `config.py`. Implemented a functional `run_inference()` utility in `predict.py` connecting directly to `PredictionService` and added `test_16_predict_module_run_inference`. Verified complete 60-test backend suite with 100% pass rate in 11.17s with zero regressions. Produced `docs/PHASE_1_CODE_SIMPLIFICATION_AUDIT.md` and `docs/PHASE_1_CODE_SIMPLIFICATION_REPORT.md`.
+- **Simplifications Implemented:**
+  1. *`train.py`:* Extracted repeated fitting, prediction timing, clipping, metric evaluation, and dictionary construction into `_evaluate_candidate_model()`, saving ~45 lines of boilerplate. Removed unused imports `os` and `Tuple`.
+  2. *`preprocessing.py`:* Removed redundant re-assignment `df_classified.loc[mask_exceptional, "transaction_stream"] = "exceptional"`. Removed unused imports `os` and `Tuple`.
+  3. *`feature_engineering.py`:* Removed unused import `os`.
+  4. *`prediction_service.py`:* Removed unused import `os`.
+  5. *`predict.py`:* Replaced dead `NotImplementedError` stub with a fully working, clean programmatic and CLI inference function `run_inference()` delegating to `PredictionService`.
+  6. *`config.py`:* Added `@field_validator("DEBUG", mode="before")` to prevent crash when `DEBUG=release` is set as an OS environment variable.
+  7. *`forecast.py`:* Removed duplicate stubs and docstrings at the top of the route file.
+  8. *`test_forecast_api.py`:* Added `test_16_predict_module_run_inference` verifying offline inference.
+- **Files Created:**
+  - `docs/PHASE_1_CODE_SIMPLIFICATION_AUDIT.md` (Stage A audit report)
+  - `docs/PHASE_1_CODE_SIMPLIFICATION_REPORT.md` (Stage B final report and scorecard)
+- **Files Modified:**
+  - `backend/ml/src/train.py`
+  - `backend/ml/src/preprocessing.py`
+  - `backend/ml/src/feature_engineering.py`
+  - `backend/ml/src/predict.py`
+  - `backend/app/services/prediction_service.py`
+  - `backend/app/core/config.py`
+  - `backend/app/api/routes/forecast.py`
+  - `backend/tests/test_forecast_api.py`
+  - `docs/DEVELOPMENT_LOG.md`
+- **Verification & Regression Results:**
+  - 60 backend tests collected, 60 passed in 11.17s (0 failed, 0 skipped, 0 errors).
+  - All 4 model artifacts verified loadable and unchanged.
+  - API request/response contracts 100% preserved.
+- **Scorecard Results:** Original Score: **88 / 100** $\rightarrow$ Refactored Score: **97 / 100** (+9 improvement).
+- **Next Recommended Milestone:** Proceed to Phase 2: MySQL Relational Persistence & Operational CRUD.
+
+---
+
 ### [2026-11-17] — Backend Test Suite Performance Diagnosis, Loopback Hang Fix & Full Verification
 
 - **Phase & Task:** Test Infrastructure & Verification — Backend Test Suite Performance Diagnosis, Loopback Hang Fix & Full Verification.

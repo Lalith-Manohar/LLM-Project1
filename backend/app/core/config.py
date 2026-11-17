@@ -2,6 +2,8 @@
 
 import os
 from pathlib import Path
+from typing import Union
+from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -10,6 +12,18 @@ class Settings(BaseSettings):
     VERSION: str = "0.1.0"
     API_V1_STR: str = "/api/v1"
     DEBUG: bool = True
+
+    @field_validator("DEBUG", mode="before")
+    @classmethod
+    def parse_debug(cls, v: Union[bool, str, int]) -> bool:
+        """Coerce common string values (e.g. 'release', 'prod', 'debug') into a boolean."""
+        if isinstance(v, str):
+            val = v.strip().lower()
+            if val in ("true", "1", "yes", "debug", "dev", "development"):
+                return True
+            if val in ("false", "0", "no", "release", "prod", "production"):
+                return False
+        return bool(v)
 
     # Future MySQL Database Settings
     DB_HOST: str = "localhost"
