@@ -4,6 +4,41 @@ This document maintains a strict chronological development record for NEXORA. Ev
 
 ---
 
+### [2026-11-18] — Self-Contained Deployment: Tracking Essential Datasets & Trained Models in Git
+
+- **Phase & Task:** Task 1 — Make the GitHub ZIP Self-Contained with Required Data and Trained Models (`uni_api_submission` branch).
+- **Task Description:** Configured Git tracking and updated `.gitignore` so that anyone downloading the repository as a ZIP from GitHub receives all essential datasets and pre-trained model artifacts required to run the existing NEXORA forecasting application without downloading external datasets, running preprocessing, or retraining models.
+- **Key Actions & Deliverables:**
+  1. *Identified Runtime Assets:*
+     - Raw dataset: `backend/ml/data/raw/online_retail_II.csv` (42.92 MB, already tracked in Git).
+     - Processed historical demand time-series: `backend/ml/data/processed/daily_product_demand.csv` (32.76 MB, required by `historical_data_service.py`).
+     - Pre-trained model artifacts: `backend/ml/models/demand_model_7d.joblib` (0.02 MB), `demand_model_15d.joblib` (1.10 MB), `demand_model_30d.joblib` (1.09 MB), `demand_model_90d.joblib` (0.99 MB).
+     - Model manifest: `backend/ml/models/models_metadata.json` (0.01 MB).
+  2. *Granular `.gitignore` Refinement:*
+     - Selectively un-ignored `daily_product_demand.csv`, `models_metadata.json`, and the four `.joblib` model binaries while continuing to ignore intermediate/temporary datasets (`clean_gross_sales.csv`, `ml_feature_dataset.csv`, etc.).
+  3. *Size & GitHub Constraints Verification:*
+     - Total uncompressed size of all 7 assets is **78.88 MB** (newly added files: **35.97 MB**).
+     - All individual files are strictly below GitHub's 50 MB warning threshold and 100 MB hard limit (largest is 42.92 MB).
+     - Git LFS was intentionally avoided, guaranteeing that GitHub's standard "Download ZIP" packages the **actual, full binary `.joblib` files and CSVs** directly into the archive without pointer stubs.
+     - Total `.git` repository size is ~60.49 MB; resulting compressed ZIP download is estimated at 25–30 MB.
+  4. *Quality & Model Immutability Verification:*
+     - Zero models retrained or altered. Checksums match initial training run.
+     - 70/70 backend pytest tests passing in 25.08s.
+     - Frontend Vite build passing in 854ms.
+- **Files Modified:**
+  - `.gitignore`
+  - `docs/DEVELOPMENT_LOG.md`
+- **Files Tracked & Committed:**
+  - `backend/ml/data/processed/daily_product_demand.csv`
+  - `backend/ml/models/demand_model_7d.joblib`
+  - `backend/ml/models/demand_model_15d.joblib`
+  - `backend/ml/models/demand_model_30d.joblib`
+  - `backend/ml/models/demand_model_90d.joblib`
+  - `backend/ml/models/models_metadata.json`
+- **Commit Reference:** `756faf3` (and documentation update).
+
+---
+
 ### [2026-11-18] — Automatic CSV-to-Forecast Pipeline & Frontend Simplification
 
 - **Phase & Task:** Phase 1 Inference Pipeline Enhancement & Frontend Simplification — Automatic CSV Historical Feature Generation.
