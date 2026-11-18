@@ -4,6 +4,39 @@ This document maintains a strict chronological development record for NEXORA. Ev
 
 ---
 
+### [2026-11-18] — Automated Windows Setup & Startup: Robust `start.ps1` Launcher
+
+- **Phase & Task:** Task 2 — Fix Windows Automatic Setup and Startup (`start.ps1`) (`uni_api_submission` branch).
+- **Task Description:** Re-engineered the project root launcher `start.ps1` into a fully automated, self-healing Windows setup and execution tool. A user downloading a fresh GitHub ZIP can simply execute `.\start.ps1` in PowerShell, and the script automatically verifies essential ML assets, discovers compatible host Python installations (3.10+), creates `backend/.venv` if missing, installs required backend pip packages, verifies Node.js & npm, installs frontend npm packages via `npm ci`, and launches FastAPI and Vite in separate console windows.
+- **Root Causes Identified in Original `start.ps1`:**
+  1. Failed immediately on any fresh clone/ZIP because `backend/.venv` and `frontend/node_modules` are git-ignored and did not exist.
+  2. Forced users to manually execute `python -m venv`, `pip install`, and `npm install`.
+  3. Lacked automated host Python discovery (`py`, `python`, explicit registry paths) and Python version verification (>= 3.10).
+  4. Lacked Node.js and npm prerequisite validation and helpful installation links.
+  5. Did not verify essential datasets and pre-trained `.joblib` models before launching, allowing silent runtime failures.
+  6. Lacked dependency caching, causing redundant package installation checks.
+- **Key Enhancements Implemented in `start.ps1`:**
+  1. *Asset Pre-Flight Verification:* Validates existence of all 6 essential runtime files (`daily_product_demand.csv`, `models_metadata.json`, and the four `.joblib` models) before attempting to boot servers.
+  2. *Intelligent Python Discovery:* Dynamically searches for compatible Python interpreters (checking `py -3.11`, `py -3.12`, `py -3.10`, LocalAppData, ProgramFiles, and PATH), validating `major == 3` and `minor >= 10`.
+  3. *Zero-Effort Virtual Environment:* Automatically builds `backend/.venv` if missing and activates `backend/.venv/Scripts/python.exe`.
+  4. *Idempotent Dependency Caching:* Hashes `requirements.txt` and `package-lock.json` to marker files within ignored directories (`.venv` and `node_modules`). Dependencies install automatically on first run and are skipped in subsequent runs (< 2s startup).
+  5. *Prerequisite Guidance:* Displays official download links (`python.org`, `nodejs.org`) if host tools are missing.
+  6. *Port Conflict Detection:* Non-intrusively tests TCP ports 8000 and 5173 to warn users if another instance is already running.
+  7. *Documentation Updated:* Overhauled `README.md` to feature `.\start.ps1` as the primary Windows quickstart while preserving separate Kaggle instructions.
+- **Files Modified:**
+  - `start.ps1`
+  - `README.md`
+  - `docs/DEVELOPMENT_LOG.md`
+- **Verification & Test Scenarios:**
+  - Fresh venv creation: Verified.
+  - Dependency caching: Verified (< 2s second run).
+  - Missing asset validation: Verified.
+  - End-to-end forecast request (SKU `85123A`): HTTP 200 with all 4 multi-horizon predictions.
+  - 70/70 backend pytest tests passing.
+  - Frontend Vite build passing.
+
+---
+
 ### [2026-11-18] — Self-Contained Deployment: Tracking Essential Datasets & Trained Models in Git
 
 - **Phase & Task:** Task 1 — Make the GitHub ZIP Self-Contained with Required Data and Trained Models (`uni_api_submission` branch).
