@@ -44,6 +44,7 @@ class HistoricalDataService:
         self._data_path = Path(data_path) if data_path else None
         self._sku_records: Dict[str, pd.DataFrame] = {}
         self._is_loaded: bool = False
+        self._load_error: Optional[str] = None
         self._lock = threading.Lock()
         
         self.total_skus: int = 0
@@ -54,8 +55,10 @@ class HistoricalDataService:
 
     def _resolve_data_path(self) -> Path:
         """Resolves the authoritative path to the processed historical CSV dataset."""
-        if self._data_path and self._data_path.is_file():
-            return self._data_path
+        if self._data_path is not None:
+            if self._data_path.is_file():
+                return self._data_path
+            raise DatasetUnavailableError(f"Specified dataset path not found: {self._data_path.name}")
 
         # Standard repository location: backend/ml/data/processed/daily_product_demand.csv
         base_dir = Path(__file__).resolve().parent.parent.parent
@@ -68,23 +71,27 @@ class HistoricalDataService:
             return fallback_path
 
         raise DatasetUnavailableError(
-            f"Historical sales dataset not found. Looked for primary '{primary_path}' "
-            f"and fallback '{fallback_path}'. Ensure data preprocessing has executed."
+            f"Historical sales dataset not found. Looked for primary '{primary_path.name}' "
+            f"and fallback '{fallback_path.name}'. Ensure data preprocessing has executed."
         )
 
     def load_dataset(self, file_path: Optional[str] = None) -> None:
         """Loads and indexes daily demand records into memory.
         
+        Validates schema, column existence, non-emptiness, and date continuity.
         Thread-safe; executes once at application startup.
         """
         with self._lock:
+            self._is_loaded = False
+            self._load_error = None
+
             if file_path:
                 self._data_path = Path(file_path)
 
-            resolved_path = self._resolve_data_path()
-            print(f"[NEXORA HistoricalDataService] Loading historical demand dataset from: {resolved_path}...")
-
             try:
+                resolved_path = self._resolve_data_path()
+                print(f"[NEXORA HistoricalDataService] Loading historical demand dataset from: {resolved_path}...")
+
                 # Primary source: pre-aggregated daily demand
                 if resolved_path.name == "daily_product_demand.csv":
                     df = pd.read_csv(
@@ -92,9 +99,26 @@ class HistoricalDataService:
                         dtype={"StockCode": str},
                         low_memory=False
                     )
+                    
+                    # Schema & Content Validation
+                    required_cols = {"StockCode", "date", "daily_demand"}
+                    missing_cols = required_cols - set(df.columns)
+                    if missing_cols:
+                        raise DatasetUnavailableError(
+                            f"Historical demand dataset is missing required column(s): {sorted(list(missing_cols))}"
+                        )
+
+                    if len(df) == 0:
+                        raise DatasetUnavailableError("Historical demand dataset is empty (0 records).")
+
                     df["StockCode"] = df["StockCode"].astype(str).str.strip()
-                    df["date"] = pd.to_datetime(df["date"]).dt.date
-                    df["daily_demand"] = df["daily_demand"].astype(int)
+                    df["date"] = pd.to_datetime(df["date"], errors="coerce").dt.date
+                    
+                    if df["date"].isna().any():
+                        raise DatasetUnavailableError("Historical demand dataset contains unparseable date values.")
+
+                    df["daily_demand"] = pd.to_numeric(df["daily_demand"], errors="coerce").fillna(0).astype(int)
+
                 elif resolved_path.name == "clean_gross_sales.csv":
                     # Fallback source: aggregate clean gross sales strictly using training formulas
                     print("[NEXORA HistoricalDataService] Aggregating fallback gross sales dataset...")
@@ -105,18 +129,32 @@ class HistoricalDataService:
                         encoding="latin1",
                         low_memory=False
                     )
+                    
+                    required_fallback_cols = {"StockCode", "Quantity", "Price", "InvoiceDate"}
+                    missing_fallback = required_fallback_cols - set(clean_df.columns)
+                    if missing_fallback:
+                        raise DatasetUnavailableError(
+                            f"Fallback sales dataset is missing required column(s): {sorted(list(missing_fallback))}"
+                        )
+
+                    if len(clean_df) == 0:
+                        raise DatasetUnavailableError("Fallback sales dataset is empty (0 records).")
+
                     clean_df["date"] = pd.to_datetime(clean_df["InvoiceDate"], errors="coerce").dt.date
                     clean_df["line_revenue"] = clean_df["Quantity"].astype(float) * clean_df["Price"].astype(float)
                     daily_agg = aggregate_daily_demand(clean_df)
                     df, _ = create_continuous_date_series(daily_agg)
                 else:
-                    raise DatasetUnavailableError(f"Unsupported dataset format: {resolved_path}")
+                    raise DatasetUnavailableError(f"Unsupported dataset format: {resolved_path.name}")
 
                 # Index records per SKU, sorted strictly chronologically
                 records: Dict[str, pd.DataFrame] = {}
                 for sku, group in df.groupby("StockCode"):
                     sorted_group = group.sort_values("date").reset_index(drop=True)
                     records[sku] = sorted_group
+
+                if len(records) == 0:
+                    raise DatasetUnavailableError("No valid SKU time series could be indexed from historical dataset.")
 
                 self._sku_records = records
                 self.total_skus = len(records)
@@ -125,6 +163,7 @@ class HistoricalDataService:
                 self.global_max_date = df["date"].max()
                 self.loaded_file = str(resolved_path.name)
                 self._is_loaded = True
+                self._load_error = None
 
                 print(
                     f"[NEXORA HistoricalDataService] Successfully indexed {self.total_skus:,} SKUs "
@@ -132,14 +171,31 @@ class HistoricalDataService:
                 )
             except Exception as e:
                 self._is_loaded = False
+                self._load_error = str(e)
                 if isinstance(e, DatasetUnavailableError):
                     raise
                 raise DatasetUnavailableError(f"Failed to load or parse historical sales data: {e}") from e
+
+    def is_ready(self) -> bool:
+        """Returns True if and only if historical data is fully loaded and indexed."""
+        return bool(self._is_loaded and self.total_skus > 0 and self._load_error is None)
+
+    def get_status(self) -> Dict[str, Any]:
+        """Returns structured subsystem status for readiness and diagnostic probes."""
+        return {
+            "ready": self.is_ready(),
+            "total_skus": self.total_skus,
+            "total_records": self.total_records,
+            "dataset_file": self.loaded_file,
+            "error": self._load_error
+        }
 
     def ensure_loaded(self) -> None:
         """Ensures the historical dataset is loaded; triggers loading if uninitialized."""
         if not self._is_loaded:
             self.load_dataset()
+        if not self.is_ready():
+            raise DatasetUnavailableError(f"Historical sales dataset is not ready: {self._load_error or 'uninitialized'}")
 
     def has_sku(self, stock_code: str) -> bool:
         """Checks if an SKU exists in the historical dataset."""

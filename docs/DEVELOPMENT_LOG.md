@@ -4,6 +4,43 @@ This document maintains a strict chronological development record for NEXORA. Ev
 
 ---
 
+### [2026-11-18] — Backend Startup Reliability, Model Loading and Readiness Verification
+
+- **Phase & Task:** Task 3 — Backend Startup Reliability, Model Loading and Readiness Verification (`uni_api_submission` branch).
+- **Task Description:** Re-engineered FastAPI startup lifecycle, subsystem error handling, and health/readiness endpoints. Decoupled ML model loading and historical demand dataset indexing into independent, thread-safe initialization pipelines. Implemented active model usability testing, strict historical dataset schema validation, a dedicated `/ready` probe (HTTP 200 when all systems verified; HTTP 503 when not ready), and integrated readiness polling into `start.ps1` to prevent race conditions during Windows launcher startup.
+- **Root Causes Identified in Original Implementation:**
+  1. Coupled initialization in `lifespan`: If `load_models()` threw an error, `load_dataset()` was skipped entirely.
+  2. Suppressed startup exceptions: Initialization errors were caught and printed as warnings, leaving the server running in an uninitialized state.
+  3. Misleading health check: `GET /health` unconditionally returned `status: "healthy"` even when models or datasets failed to load.
+  4. Missing readiness endpoint: No `/ready` endpoint existed to distinguish process liveness from inference readiness.
+  5. Missing schema & usability checks: The services did not execute active dummy inference or validate non-empty dataset rows prior to marking services as loaded.
+  6. Race conditions: Requests arriving before background initialization completed could trigger unhandled 500 crashes.
+- **Key Enhancements Implemented:**
+  1. *Decoupled Startup Lifespan (`backend/app/main.py`):* Independently initializes `prediction_service` and `historical_data_service` in isolated try-except blocks, storing explicit error diagnostics without crashing the process.
+  2. *Active Model Usability Smoke Tests (`backend/app/services/prediction_service.py`):* Validates pipeline presence, calls dummy inference to verify finite output, records `load_error`, and implements `is_ready()` and `get_status()`.
+  3. *Strict Dataset Schema & Row Validation (`backend/app/services/historical_data_service.py`):* Validates required columns (`StockCode`, `date`, `daily_demand`), non-empty row count, date parsing, and SKU indexing.
+  4. *Liveness vs. Readiness Probes (`GET /health` & `GET /ready`):*
+     - `/health` reports process liveness (200 OK).
+     - `/ready` reports structured subsystem readiness (200 OK when ready, 503 Service Unavailable when uninitialized or failed).
+  5. *Prediction Endpoint Guarding (`backend/app/api/routes/forecast.py`):* Pre-validates readiness; returns HTTP 503 if models or datasets are unready, while preserving 404 (unknown SKU) and 422 (insufficient history).
+  6. *Windows Launcher Readiness Polling (`start.ps1`):* Polls `http://127.0.0.1:8000/ready` up to 25s before launching the frontend, ensuring the backend is fully initialized.
+  7. *Comprehensive Test Suite (`backend/tests/test_startup_readiness.py`):* 14 automated unit and integration tests covering all failure, readiness, and error scenarios.
+- **Files Modified:**
+  - `backend/app/main.py`
+  - `backend/app/schemas/forecast.py`
+  - `backend/app/services/prediction_service.py`
+  - `backend/app/services/historical_data_service.py`
+  - `backend/app/api/routes/forecast.py`
+  - `start.ps1`
+  - `docs/DEVELOPMENT_LOG.md`
+- **Files Created:**
+  - `backend/tests/test_startup_readiness.py`
+- **Automated Verification:**
+  - 84/84 backend pytest tests passing in 21.39s.
+  - Frontend production build passing in 851ms.
+
+---
+
 ### [2026-11-18] — Automated Windows Setup & Startup: Robust `start.ps1` Launcher
 
 - **Phase & Task:** Task 2 — Fix Windows Automatic Setup and Startup (`start.ps1`) (`uni_api_submission` branch).

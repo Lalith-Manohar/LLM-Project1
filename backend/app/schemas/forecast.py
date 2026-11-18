@@ -298,3 +298,23 @@ class ModelInfoResponse(BaseModel):
     categorical_columns: List[str]
     numerical_columns: List[str]
     unseen_sku_handling: str
+
+
+class ComponentReadiness(BaseModel):
+    """Readiness status for an individual subsystem."""
+    ready: bool
+    models_count: Optional[int] = None
+    loaded_horizons: Optional[List[int]] = None
+    total_skus: Optional[int] = None
+    total_records: Optional[int] = None
+    dataset_file: Optional[str] = None
+    error: Optional[str] = None
+
+
+class ReadinessResponse(BaseModel):
+    """Overall readiness response schema for health and lifecycle probes."""
+    status: str
+    service: str
+    version: str
+    models: ComponentReadiness
+    historical_data: ComponentReadiness

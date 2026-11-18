@@ -263,25 +263,67 @@ if ($NeedsFrontendInstall) {
 }
 
 # -------------------------------------------------------------
-# STEP 4: Port Safety & Service Launching
+# STEP 4: Start Backend & Await Subsystem Readiness
 # -------------------------------------------------------------
-Write-Host "[4/4] Preparing development servers..." -ForegroundColor Yellow
+Write-Host "[4/4] Starting FastAPI Backend server and awaiting readiness..." -ForegroundColor Yellow
 
 if (Test-PortListening 8000) {
     Write-Host "      [WARNING] Port 8000 is already active on 127.0.0.1." -ForegroundColor Yellow
     Write-Host "                An existing FastAPI instance may already be running." -ForegroundColor Yellow
 }
 
+# Launch FastAPI backend in dedicated window
+Write-Host "      Launching FastAPI Backend server in a separate window..." -ForegroundColor Cyan
+$BackendCommand = "Set-Location '$BackendDir'; & '$VenvPython' -m uvicorn app.main:app --reload --host 127.0.0.1 --port 8000"
+Start-Process powershell.exe -ArgumentList "-NoExit", "-ExecutionPolicy", "Bypass", "-Command", $BackendCommand
+
+# Poll readiness probe (http://127.0.0.1:8000/ready)
+Write-Host "      Awaiting backend model and dataset initialization..." -ForegroundColor Yellow
+$ReadyUrl = "http://127.0.0.1:8000/ready"
+$HealthUrl = "http://127.0.0.1:8000/health"
+$MaxWaitSec = 25
+$StartTime = Get-Date
+$BackendReady = $false
+
+while (((Get-Date) - $StartTime).TotalSeconds -lt $MaxWaitSec) {
+    try {
+        $resp = Invoke-RestMethod -Uri $ReadyUrl -Method Get -TimeoutSec 2 -ErrorAction Stop
+        if ($resp -and $resp.status -eq "ready") {
+            $BackendReady = $true
+            break
+        }
+    } catch {
+        # Check if HTTP 503 was returned (server is alive but initialization is still in progress)
+        if ($_.Exception.Response -and $_.Exception.Response.StatusCode.value__ -eq 503) {
+            # Subsystems are still loading
+        }
+    }
+    Start-Sleep -Milliseconds 700
+}
+
+if (-not $BackendReady) {
+    Write-Host ""
+    Write-Host "[ERROR] FastAPI backend failed readiness verification within $MaxWaitSec seconds." -ForegroundColor Red
+    try {
+        $healthResp = Invoke-RestMethod -Uri $HealthUrl -Method Get -TimeoutSec 2 -ErrorAction Stop
+        Write-Host "        Liveness probe (/health) is ALIVE: $($healthResp.status), but readiness probe (/ready) failed." -ForegroundColor Yellow
+        Write-Host "        One or more models or historical dataset failed initialization." -ForegroundColor Red
+    } catch {
+        Write-Host "        Backend process did not respond on http://127.0.0.1:8000 within timeout." -ForegroundColor Red
+    }
+    Write-Host "        Check the backend PowerShell console window for tracebacks." -ForegroundColor White
+    exit 1
+}
+
+Write-Host "      Backend is fully READY (4 ML models verified, historical sales data indexed)." -ForegroundColor Green
+
+# -------------------------------------------------------------
+# STEP 5: Launch React/Vite Frontend Client
+# -------------------------------------------------------------
 if (Test-PortListening 5173) {
     Write-Host "      [INFO] Port 5173 is already in use. Vite will use the next available port." -ForegroundColor Yellow
 }
 
-# Launch FastAPI backend in dedicated window
-Write-Host "Starting FastAPI Backend server in a separate window..." -ForegroundColor Cyan
-$BackendCommand = "Set-Location '$BackendDir'; & '$VenvPython' -m uvicorn app.main:app --reload --host 127.0.0.1 --port 8000"
-Start-Process powershell.exe -ArgumentList "-NoExit", "-ExecutionPolicy", "Bypass", "-Command", $BackendCommand
-
-# Launch React/Vite frontend in dedicated window
 Write-Host "Starting React/Vite Frontend client in a separate window..." -ForegroundColor Cyan
 $FrontendCommand = "Set-Location '$FrontendDir'; npm run dev"
 Start-Process powershell.exe -ArgumentList "-NoExit", "-ExecutionPolicy", "Bypass", "-Command", $FrontendCommand
@@ -295,7 +337,8 @@ Write-Host "Access Points:" -ForegroundColor White
 Write-Host "  - Frontend Client:       http://localhost:5173" -ForegroundColor Yellow
 Write-Host "  - Backend API:           http://localhost:8000" -ForegroundColor Yellow
 Write-Host "  - Swagger Documentation:  http://localhost:8000/docs" -ForegroundColor Yellow
-Write-Host "  - Health Probe:          http://localhost:8000/health" -ForegroundColor Yellow
+Write-Host "  - Liveness Health Probe: http://localhost:8000/health" -ForegroundColor Yellow
+Write-Host "  - Readiness Health Probe: http://localhost:8000/ready" -ForegroundColor Yellow
 Write-Host ""
 Write-Host "Server Management:" -ForegroundColor White
 Write-Host "  - Both servers are running in separate PowerShell windows with real-time logs." -ForegroundColor Gray
