@@ -1,0 +1,270 @@
+{
+  "info": {
+    "_postman_id": "a9c2d14e-7b3f-4e92-9b21-8f51a2e37910",
+    "name": "NEXORA Academic Deployment API",
+    "description": "Postman Collection for NEXORA AI-Powered Retail Demand Forecasting API.\nConfigured for Academic Demonstration on 21 November 2026.\nDeployed via FastAPI and exposed publicly through ngrok HTTPS forwarding tunnel.\nTarget Public Host: https://antonym-headband-harpist.ngrok-free.dev",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "https://antonym-headband-harpist.ngrok-free.dev",
+      "type": "string",
+      "description": "Base URL of the deployed FastAPI backend. Set to the active public ngrok forwarding HTTPS URL (or http://localhost:8000 for local testing)."
+    }
+  ],
+  "item": [
+    {
+      "name": "1. Liveness Probe (GET /health)",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "ngrok-skip-browser-warning",
+            "value": "69420",
+            "type": "text",
+            "description": "Bypasses the ngrok free-tier browser warning interstitial page."
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/health",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "health"
+          ]
+        },
+        "description": "Verifies that the deployed FastAPI process is active and responsive.\nExpected: HTTP 200 OK with status: 'healthy'."
+      },
+      "response": [
+        {
+          "name": "200 Healthy",
+          "status": "OK",
+          "code": 200,
+          "_postman_previewlanguage": "json",
+          "body": "{\n  \"status\": \"healthy\",\n  \"service\": \"backend\",\n  \"version\": \"0.1.0\"\n}"
+        }
+      ]
+    },
+    {
+      "name": "2. Readiness Probe (GET /ready)",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "ngrok-skip-browser-warning",
+            "value": "69420",
+            "type": "text",
+            "description": "Bypasses the ngrok free-tier browser warning interstitial page."
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/ready",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "ready"
+          ]
+        },
+        "description": "Verifies that all 4 ML forecasting models (D7, D15, D30, D90) and the historical sales dataset (3,922 SKUs) are initialized and ready for inference.\nExpected: HTTP 200 OK with status: 'ready'."
+      },
+      "response": [
+        {
+          "name": "200 Ready",
+          "status": "OK",
+          "code": 200,
+          "_postman_previewlanguage": "json",
+          "body": "{\n  \"status\": \"ready\",\n  \"service\": \"backend\",\n  \"version\": \"0.1.0\",\n  \"models\": {\n    \"ready\": true,\n    \"models_count\": 4,\n    \"loaded_horizons\": [7, 15, 30, 90],\n    \"total_skus\": null,\n    \"total_records\": null,\n    \"dataset_file\": null,\n    \"error\": null\n  },\n  \"historical_data\": {\n    \"ready\": true,\n    \"models_count\": null,\n    \"loaded_horizons\": null,\n    \"total_skus\": 3922,\n    \"total_records\": 1074653,\n    \"dataset_file\": \"daily_product_demand.csv\",\n    \"error\": null\n  }\n}"
+        }
+      ]
+    },
+    {
+      "name": "3. Supported Horizons (GET /api/v1/forecast/horizons)",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "ngrok-skip-browser-warning",
+            "value": "69420",
+            "type": "text",
+            "description": "Bypasses the ngrok free-tier browser warning interstitial page."
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/forecast/horizons",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "v1",
+            "forecast",
+            "horizons"
+          ]
+        },
+        "description": "Retrieves the operational planning horizon windows (7, 15, 30, and 90 days) supported by NEXORA."
+      },
+      "response": [
+        {
+          "name": "200 Supported Horizons",
+          "status": "OK",
+          "code": 200,
+          "_postman_previewlanguage": "json",
+          "body": "{\n  \"supported_horizons_days\": [7, 15, 30, 90],\n  \"description\": \"Multi-horizon retail demand planning windows (7 to 90 days).\",\n  \"horizon_definitions\": {\n    \"7\": \"Weekly fast-moving replenishment & shelf restock\",\n    \"15\": \"Bi-weekly supplier batch ordering\",\n    \"30\": \"Monthly inventory planning & space allocation\",\n    \"90\": \"Quarterly supplier volume quotas & supply chain planning\"\n  }\n}"
+        }
+      ]
+    },
+    {
+      "name": "4. Valid Multi-Horizon Forecast (POST /api/v1/forecast/predict)",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json",
+            "type": "text"
+          },
+          {
+            "key": "ngrok-skip-browser-warning",
+            "value": "69420",
+            "type": "text",
+            "description": "Bypasses the ngrok free-tier browser warning interstitial page."
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"stock_code\": \"85123A\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/forecast/predict",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "v1",
+            "forecast",
+            "predict"
+          ]
+        },
+        "description": "Submits SKU '85123A' to generate multi-horizon demand forecasts across 7, 15, 30, and 90 days.\nHistorical features are automatically calculated from indexed sales records.\nExpected: HTTP 200 OK with predictions for D7, D15, D30, and D90."
+      },
+      "response": [
+        {
+          "name": "200 Prediction Success",
+          "status": "OK",
+          "code": 200,
+          "_postman_previewlanguage": "json",
+          "body": "{\n  \"stock_code\": \"85123A\",\n  \"horizons\": [7, 15, 30, 90],\n  \"predictions\": {\n    \"7\": 771.5717,\n    \"15\": 3009.3201,\n    \"30\": 3062.395,\n    \"90\": 9427.142\n  },\n  \"horizon_details\": [\n    {\n      \"horizon_days\": 7,\n      \"predicted_demand\": 771.5717,\n      \"model_name\": \"Linear Regression\",\n      \"wape\": 55.65\n    },\n    {\n      \"horizon_days\": 15,\n      \"predicted_demand\": 3009.3201,\n      \"model_name\": \"Random Forest\",\n      \"wape\": 50.0\n    },\n    {\n      \"horizon_days\": 30,\n      \"predicted_demand\": 3062.395,\n      \"model_name\": \"Random Forest\",\n      \"wape\": 48.73\n    },\n    {\n      \"horizon_days\": 90,\n      \"predicted_demand\": 9427.142,\n      \"model_name\": \"Random Forest\",\n      \"wape\": 53.22\n    }\n  ],\n  \"units\": \"units\",\n  \"model_version\": \"Phase 1 (Task 5 Model Training & Serialization)\",\n  \"observation_date\": \"2011-12-09\",\n  \"history_days\": 374,\n  \"is_auto_generated\": true,\n  \"status\": \"success\"\n}"
+        }
+      ]
+    },
+    {
+      "name": "5. Unknown SKU Error Test (POST /api/v1/forecast/predict)",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json",
+            "type": "text"
+          },
+          {
+            "key": "ngrok-skip-browser-warning",
+            "value": "69420",
+            "type": "text",
+            "description": "Bypasses the ngrok free-tier browser warning interstitial page."
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"stock_code\": \"NON_EXISTENT_SKU_99999\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/forecast/predict",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "v1",
+            "forecast",
+            "predict"
+          ]
+        },
+        "description": "Submits an invalid / unrecognized SKU identifier.\nExpected: HTTP 404 Not Found."
+      },
+      "response": [
+        {
+          "name": "404 Not Found",
+          "status": "Not Found",
+          "code": 404,
+          "_postman_previewlanguage": "json",
+          "body": "{\n  \"detail\": \"Product SKU 'NON_EXISTENT_SKU_99999' was not found in historical sales records. Ensure the SKU exists in the UCI Online Retail II catalog.\"\n}"
+        }
+      ]
+    },
+    {
+      "name": "6. Insufficient History Error Test (POST /api/v1/forecast/predict)",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json",
+            "type": "text"
+          },
+          {
+            "key": "ngrok-skip-browser-warning",
+            "value": "69420",
+            "type": "text",
+            "description": "Bypasses the ngrok free-tier browser warning interstitial page."
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"stock_code\": \"21777\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/forecast/predict",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "v1",
+            "forecast",
+            "predict"
+          ]
+        },
+        "description": "Submits SKU '21777' which has only 6 calendar days of records (minimum 29 required).\nExpected: HTTP 422 Unprocessable Content."
+      },
+      "response": [
+        {
+          "name": "422 Unprocessable Content",
+          "status": "Unprocessable Entity",
+          "code": 422,
+          "_postman_previewlanguage": "json",
+          "body": "{\n  \"detail\": \"Insufficient historical sales data for SKU '21777' (6 calendar days available; minimum 29 days required to compute 28-day lag and rolling average features).\"\n}"
+        }
+      ]
+    }
+  ]
+}

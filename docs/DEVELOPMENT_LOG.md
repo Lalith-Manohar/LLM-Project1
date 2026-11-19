@@ -4,6 +4,33 @@ This document maintains a strict chronological development record for NEXORA. Ev
 
 ---
 
+### [2026-11-20] — Final Academic Deployment: FastAPI, Public URL Generation and Postman Verification
+
+- **Phase & Task:** Task 5 — Final Academic Deployment: FastAPI, Public URL Generation and Postman Verification (`uni_api_submission` branch).
+- **Task Description:** Fully deployed the trained multi-horizon machine learning forecasting system locally on FastAPI and generated a public secure HTTPS forwarding URL via ngrok. Successfully verified live HTTP requests over the public internet URL across all college evaluation criteria: liveness (`/health`), readiness (`/ready`), 4-horizon demand prediction (`/api/v1/forecast/predict`), unknown SKU error handling (`404`), and insufficient-history error handling (`422`). Created and exported the official Postman collection and demonstration evidence guide for the 21 November presentation.
+- **Academic Requirements Verification Matrix:**
+  1. *Requirement 1 (Build and train ML model):* Verified 4 multi-horizon models ($D_7$ Ridge Regression, $D_{15}/D_{30}/D_{90}$ Random Forest) loaded into memory with zero warnings.
+  2. *Requirement 2 (Deploy on local server using FastAPI):* Backend actively running on `http://127.0.0.1:8000`. Liveness (`GET /health`) and readiness (`GET /ready`) probes returning HTTP 200 OK.
+  3. *Requirement 3 (Generate public URL using ngrok):* ngrok tunnel established to port 8000; public HTTPS endpoint generated: `https://antonym-headband-harpist.ngrok-free.dev`.
+  4. *Requirement 4 (Test deployed model using Postman):* Real HTTP requests executed against public URL; exact reference predictions verified for SKU `85123A`:
+     - $D_7$: 771.5717 units
+     - $D_{15}$: 3009.3201 units
+     - $D_{30}$: 3062.3950 units
+     - $D_{90}$: 9427.1420 units
+- **Error Handling Verified on Public URL:**
+  - Unknown SKU (`NON_EXISTENT_SKU_99999`): HTTP 404 Not Found.
+  - Insufficient history SKU (`21777` with 6 days): HTTP 422 Unprocessable Content.
+- **Files Created:**
+  - `docs/postman/NEXORA_Academic_API.postman_collection.json` (Official Postman Collection v2.1 export with live public domain)
+  - `docs/postman/DEMONSTRATION_GUIDE.md` (Step-by-step demonstration and restart instructions for demo day)
+- **Files Modified:**
+  - `docs/DEVELOPMENT_LOG.md`
+- **Integrity Guarantee:**
+  - Zero retraining, zero hyperparameter edits, zero model artifact changes (SHA256 hashes preserved).
+  - Frontend untouched per strict backend-only college demonstration scope.
+
+---
+
 ### [2026-11-19] — Dependency Compatibility Audit and Deployment Readiness
 
 - **Phase & Task:** Task 4 — Dependency Compatibility Audit and Deployment Readiness (`uni_api_submission` branch).
