@@ -4,6 +4,46 @@ This document maintains a strict chronological development record for NEXORA. Ev
 
 ---
 
+### [2026-11-19] — Dependency Compatibility Audit and Deployment Readiness
+
+- **Phase & Task:** Task 4 — Dependency Compatibility Audit and Deployment Readiness (`uni_api_submission` branch).
+- **Task Description:** Completed an end-to-end dependency compatibility audit, Windows fresh-installation verification, FastAPI deployment validation, and Postman API contract verification for the upcoming 21 November academic deadline. Validated that all backend and frontend dependencies install without compilation or version conflicts, all four ML model artifacts load cleanly with zero warnings, and the API is ready for public tunneling via ngrok (Task 5 prerequisite).
+- **Core Findings & Validations:**
+  1. *Backend Python Dependency Audit:*
+     - Scanned all imports across `backend/app/`, `backend/ml/src/`, and `backend/tests/`. Every external import is strictly declared in `backend/requirements.txt` with bounded version ranges (`fastapi`, `uvicorn`, `pydantic`, `pandas`, `numpy`, `scikit-learn`, `joblib`, `openpyxl`, `sqlalchemy`, `pymysql`, `cryptography`, `python-dotenv`, `pytest`, `pytest-timeout`, `httpx`).
+     - Zero undeclared, conflicting, or unconstrained packages found.
+     - Confirmed Python 3.10+ compatibility (fully certified on Python 3.11.9 64-bit Windows).
+  2. *Model Serialization & Deserialization Compatibility:*
+     - Model artifacts were saved using scikit-learn 1.9.1, NumPy 2.4.6, Joblib 1.6.0 on Python 3.11.9.
+     - Production model loading smoke test executed: 4/4 models loaded into memory with **0 warnings** and identical SHA256 hashes (`demand_model_7d.joblib`, `demand_model_15d.joblib`, `demand_model_30d.joblib`, `demand_model_90d.joblib`).
+     - Strict ML immutability rules observed: 0 retraining, 0 hyperparameter changes, 0 feature engineering modifications.
+  3. *Windows Fresh-Installation Verification:*
+     - Verified `start.ps1` automated discovery and launcher: auto-discovers Python 3.10+, provisions `backend/.venv`, installs dependencies with hash caching (< 2s on repeat runs), installs frontend via `npm ci`, and verifies all 6 essential ML assets before startup.
+     - Confirmed pure pre-compiled binary wheel availability for Windows (no C++ build tools required).
+  4. *FastAPI & ngrok Deployment Readiness:*
+     - Uvicorn host binding tested (`127.0.0.1:8000` / `0.0.0.0:8000`).
+     - CORS middleware explicitly permits wildcard origins (`allow_origins=["*"]`) and all HTTP methods/headers.
+     - No restrictive `TrustedHostMiddleware` or hardcoded host redirection present; incoming forwarded host headers (e.g. `*.ngrok-free.app`) pass without proxy errors.
+     - Documented `ngrok-skip-browser-warning: 69420` header to bypass ngrok free-tier browser interstitials when querying from Postman or cURL.
+  5. *Postman API Testing Contract Verification:*
+     - Verified exact endpoint: `POST /api/v1/forecast/predict` (and route alias `POST /api/v1/forecast/`).
+     - Automated CSV inference payload verified: `{"stock_code": "85123A"}` -> returns `200 OK` with predictions for 7, 15, 30, and 90 days.
+     - Error contracts verified:
+       - Unknown SKU `NON_EXISTENT_SKU_99999` -> `404 Not Found`.
+       - Insufficient history SKU `21777` (< 29 days) -> `422 Unprocessable Content`.
+       - Liveness probe `GET /health` -> `200 OK`.
+       - Readiness probe `GET /ready` -> `200 OK` (when subsystems loaded) / `503 Service Unavailable` (when unready).
+- **Files Modified:**
+  - `README.md` (Updated access points, 84-test count, comprehensive Postman guide & deployment specs)
+  - `docs/API_DOCUMENTATION.md` (Documented `/ready` probe, automated CSV request schema, and Postman examples)
+  - `docs/DEVELOPMENT_LOG.md` (Recorded Task 4 audit entry)
+- **Automated Verification:**
+  - 84/84 backend pytest tests passing in 22.06s.
+  - Frontend production build passing in 981ms (`vite v5.4.21`).
+  - Model artifacts SHA256 integrity: 100% match.
+
+---
+
 ### [2026-11-18] — Backend Startup Reliability, Model Loading and Readiness Verification
 
 - **Phase & Task:** Task 3 — Backend Startup Reliability, Model Loading and Readiness Verification (`uni_api_submission` branch).

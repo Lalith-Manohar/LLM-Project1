@@ -100,10 +100,12 @@ When you run `.\start.ps1`, the script executes four automated stages without re
 4. **Service Orchestration:** Checks port availability, then launches the FastAPI Backend and Vite Frontend in separate PowerShell console windows to keep real-time logs visible.
 
 ### Application Access Points
-Once launched, open your web browser to:
+Once launched, open your web browser or API client (Postman/curl) to:
 - **Frontend Dashboard:** [http://localhost:5173](http://localhost:5173) (Interactive UI with automated demand forecasting)
 - **Backend API Docs (Swagger UI):** [http://localhost:8000/docs](http://localhost:8000/docs)
-- **Backend Health Probe:** [http://localhost:8000/health](http://localhost:8000/health)
+- **Liveness Health Probe:** [http://localhost:8000/health](http://localhost:8000/health) (Reports process liveness: `200 OK`)
+- **Readiness Subsystem Probe:** [http://localhost:8000/ready](http://localhost:8000/ready) (Reports model & dataset readiness: `200 OK` or `503 Service Unavailable`)
+- **Forecast Prediction Endpoint:** [http://localhost:8000/api/v1/forecast/predict](http://localhost:8000/api/v1/forecast/predict) (Multi-horizon demand inference)
 
 ### How to Stop the Services
 - Simply press **Ctrl+C** inside each opened PowerShell window, or close the windows.
@@ -166,7 +168,7 @@ Always run scripts from the project root using the project virtual environment:
 5. **Quick CLI Prediction Test:** `python backend/ml/src/predict.py`
 
 ### Step 6: How to Run Automated Backend Tests
-Run the complete 70-test backend verification suite:
+Run the complete 84-test backend verification suite:
 ```bash
 python -m pytest backend/tests/ -v --tb=short
 ```
@@ -186,7 +188,111 @@ npm run dev
 
 ---
 
-## 4. Important Project Rules for Developers
+## 4. Postman API Testing & Public Deployment Readiness Guide
+
+NEXORA’s FastAPI backend is fully configured for local and public API testing via Postman, cURL, and tunneling services (e.g. ngrok).
+
+### 4.1 System Endpoints Summary
+| Method | Endpoint | Description | Expected Status |
+| :--- | :--- | :--- | :--- |
+| `GET` | `/health` | Process liveness probe | `200 OK` |
+| `GET` | `/ready` | Model and dataset readiness probe | `200 OK` / `503 Unavailable` |
+| `GET` | `/api/v1/forecast/horizons` | Supported forecasting windows (7, 15, 30, 90 days) | `200 OK` |
+| `POST` | `/api/v1/forecast/predict` | Multi-horizon demand inference (Primary Endpoint) | `200 OK` |
+| `POST` | `/api/v1/forecast/` | Multi-horizon demand inference (Direct Route) | `200 OK` |
+
+### 4.2 Postman Request: Multi-Horizon Forecast (Automatic CSV Features)
+- **Method:** `POST`
+- **URL:** `http://localhost:8000/api/v1/forecast/predict` (or your public ngrok URL, e.g. `https://<subdomain>.ngrok-free.app/api/v1/forecast/predict`)
+- **Headers:**
+  - `Content-Type: application/json`
+  - *(When testing via ngrok free tier)* `ngrok-skip-browser-warning: 69420`
+- **Request Body (raw JSON):**
+```json
+{
+  "stock_code": "85123A"
+}
+```
+*Note: To request specific horizons, include `"horizons": [7, 15, 30, 90]`.*
+
+- **Expected Response (`200 OK`):**
+```json
+{
+  "stock_code": "85123A",
+  "horizons": [7, 15, 30, 90],
+  "predictions": {
+    "7": 771.5717,
+    "15": 3009.3201,
+    "30": 3062.395,
+    "90": 9427.142
+  },
+  "horizon_details": [
+    {
+      "horizon_days": 7,
+      "predicted_demand": 771.5717,
+      "model_name": "Linear Regression",
+      "wape": 55.65
+    },
+    {
+      "horizon_days": 15,
+      "predicted_demand": 3009.3201,
+      "model_name": "Random Forest",
+      "wape": 50.0
+    },
+    {
+      "horizon_days": 30,
+      "predicted_demand": 3062.395,
+      "model_name": "Random Forest",
+      "wape": 48.73
+    },
+    {
+      "horizon_days": 90,
+      "predicted_demand": 9427.142,
+      "model_name": "Random Forest",
+      "wape": 53.22
+    }
+  ],
+  "units": "units",
+  "model_version": "Phase 1 (Task 5 Model Training & Serialization)",
+  "observation_date": "2011-12-09",
+  "history_days": 374,
+  "is_auto_generated": true,
+  "status": "success",
+  "warnings": [
+    "Historical demand features automatically generated from 374 daily records up to observation date 2011-12-09 (UCI Online Retail II dataset)."
+  ]
+}
+```
+
+### 4.3 Postman Error Test Scenarios
+1. **Unknown SKU (HTTP 404):**
+   - **Body:** `{"stock_code": "NON_EXISTENT_SKU_99999"}`
+   - **Response (`404 Not Found`):**
+     ```json
+     {
+       "detail": "Product SKU 'NON_EXISTENT_SKU_99999' was not found in historical sales records. Ensure the SKU exists in the UCI Online Retail II catalog."
+     }
+     ```
+2. **Insufficient History SKU (HTTP 422):**
+   - **Body:** `{"stock_code": "21777"}`
+   - **Response (`422 Unprocessable Content`):**
+     ```json
+     {
+       "detail": "Insufficient historical sales data for SKU '21777' (6 calendar days available; minimum 29 days required to compute 28-day lag and rolling average features)."
+     }
+     ```
+3. **Backend Not Ready Probe (HTTP 503):**
+   - If models or historical datasets have not completed initialization, `GET /ready` and `POST /api/v1/forecast/predict` return HTTP 503 Service Unavailable with component-level diagnostic details.
+
+### 4.4 Deployment & ngrok Tunneling Readiness
+- **FastAPI / Uvicorn Port Binding:** By default, Uvicorn runs on `127.0.0.1:8000` (or `0.0.0.0:8000` when configured).
+- **Tunneling Compatibility:** Compatible with ngrok (`ngrok http 8000`). FastAPI CORS middleware permits all origins (`*`) and methods.
+- **Host Filtering:** No `TrustedHostMiddleware` restrictions are enforced, allowing public hostnames (e.g. `*.ngrok-free.app`) to pass directly to endpoints.
+- **Python Version:** Python 3.10+ required; certified and verified on Python 3.11.9 (64-bit).
+
+---
+
+## 5. Important Project Rules for Developers
 
 1. **Source of Truth:** Always consult [AGENTS.md](file:///c:/Users/grand/OneDrive/Desktop/SDC%20-1%20Project/LLM-Project1/AGENTS.md) before writing or modifying code.
 2. **Never Touch Raw Data:** Do not modify `backend/ml/data/raw/online_retail_II.csv`.
