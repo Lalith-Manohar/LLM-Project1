@@ -1,0 +1,14 @@
+$kind: http-example
+request:
+  url: ""
+  method: GET
+response:
+  statusCode: 422
+  statusText: Unprocessable Entity
+  body:
+    type: json
+    content: |-
+      {
+        "detail": "Insufficient historical sales data for SKU '21777' (6 calendar days available; minimum 29 days required to compute 28-day lag and rolling average features)."
+      }
+order: 1000

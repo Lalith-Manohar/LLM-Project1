@@ -1,0 +1,13 @@
+$kind: http-request
+name: 2. Readiness Probe (GET /ready)
+description: |-
+  Verifies that all 4 ML forecasting models (D7, D15, D30, D90) and the historical sales dataset (3,922 SKUs) are initialized and ready for inference.
+  Expected: HTTP 200 OK with status: 'ready'.
+url: "{{baseUrl}}/ready"
+method: GET
+headers:
+  - key: ngrok-skip-browser-warning
+    value: "69420"
+    description: Bypasses the ngrok free-tier browser warning interstitial page.
+examples: ./.resources/2. Readiness Probe (GET -ready).resources/examples
+order: 2000

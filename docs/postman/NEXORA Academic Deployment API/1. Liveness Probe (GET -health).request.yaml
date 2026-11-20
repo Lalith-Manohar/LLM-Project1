@@ -1,0 +1,13 @@
+$kind: http-request
+name: 1. Liveness Probe (GET /health)
+description: |-
+  Verifies that the deployed FastAPI process is active and responsive.
+  Expected: HTTP 200 OK with status: 'healthy'.
+url: "{{baseUrl}}/health"
+method: GET
+headers:
+  - key: ngrok-skip-browser-warning
+    value: "69420"
+    description: Bypasses the ngrok free-tier browser warning interstitial page.
+examples: ./.resources/1. Liveness Probe (GET -health).resources/examples
+order: 1000

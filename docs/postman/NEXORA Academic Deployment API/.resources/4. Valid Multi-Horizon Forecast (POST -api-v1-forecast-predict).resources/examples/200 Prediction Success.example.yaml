@@ -1,0 +1,53 @@
+$kind: http-example
+request:
+  url: ""
+  method: GET
+response:
+  statusCode: 200
+  statusText: OK
+  body:
+    type: json
+    content: |-
+      {
+        "stock_code": "85123A",
+        "horizons": [7, 15, 30, 90],
+        "predictions": {
+          "7": 771.5717,
+          "15": 3009.3201,
+          "30": 3062.395,
+          "90": 9427.142
+        },
+        "horizon_details": [
+          {
+            "horizon_days": 7,
+            "predicted_demand": 771.5717,
+            "model_name": "Linear Regression",
+            "wape": 55.65
+          },
+          {
+            "horizon_days": 15,
+            "predicted_demand": 3009.3201,
+            "model_name": "Random Forest",
+            "wape": 50.0
+          },
+          {
+            "horizon_days": 30,
+            "predicted_demand": 3062.395,
+            "model_name": "Random Forest",
+            "wape": 48.73
+          },
+          {
+            "horizon_days": 90,
+            "predicted_demand": 9427.142,
+            "model_name": "Random Forest",
+            "wape": 53.22
+          }
+        ],
+        "units": "units",
+        "model_version": "Phase 1 (Task 5 Model Training & Serialization)",
+        "observation_date": "2011-12-09",
+        "history_days": 374,
+        "is_auto_generated": true,
+        "status": "success"
+      }
+order: 1000

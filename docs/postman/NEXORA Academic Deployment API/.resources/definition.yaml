@@ -1,0 +1,8 @@
+$kind: collection
+description: |-
+  Postman Collection for NEXORA AI-Powered Retail Demand Forecasting API.
+  Configured for Academic Demonstration on 21 November 2026.
+  Deployed via FastAPI and exposed publicly through ngrok HTTPS forwarding tunnel.
+  Target Public Host: https://antonym-headband-harpist.ngrok-free.dev
+variables:
+  baseUrl: https://antonym-headband-harpist.ngrok-free.dev
