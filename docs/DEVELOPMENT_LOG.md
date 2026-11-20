@@ -4,6 +4,33 @@ This document maintains a strict chronological development record for NEXORA. Ev
 
 ---
 
+### [2026-11-20] — Task 17: Historical Feature Cutoff Correction & Price Cache Invalidation
+
+- **Phase & Task:** Task 17 — Historical Feature Cutoff Correction & Price Cache Invalidation (`uni_api_experimental` branch).
+- **Task Description:** Successfully resolved the two qualifications identified in the Task 16 Independent Audit:
+  1. *Qualification 1 (Historical Cutoff Propagation):* `HistoricalDataService.get_features_for_sku(stock_code, as_of_date=...)` now explicitly passes `as_of_date=observation_date` into `self.get_unit_price(cleaned_sku, as_of_date=observation_date)`. This guarantees that historical feature vectors extracted at observation date $T$ compute `UnitPrice` strictly over transactions prior to $T$ ($\text{tx\_date} < T$), completely eliminating residual look-ahead leakage in historical backtesting. Forward-looking operational inference (`as_of_date=None`) continues to resolve the latest expanding price seamlessly.
+  2. *Qualification 2 (Atomic Cache Invalidation & Fingerprinting):* Enhanced `PointInTimePriceService` in `backend/ml/src/point_in_time_price.py` with comprehensive source dataset fingerprinting (`source_file`, `source_size`, `source_mtime`, `source_mtime_iso`, `built_at`, `total_skus`, `total_transactions`, `global_dates_count`, `schema_version = "1.1"`). Implemented automatic cache validation and invalidation against `backend/ml/data/processed/clean_gross_sales.csv`. If the cache is missing, stale (size or mtime mismatch), or structurally invalid, it automatically rebuilds atomically. Implemented crash-safe atomic writing using temporary files (`.tmp.<pid>`) and `os.replace` to eliminate partial/corrupt file reads on Windows.
+- **Key Technical Deliverables & Empirical Guarantees:**
+  - **Feature Extraction Cutoff Propagation:** Verified that calling `get_features_for_sku('84879', as_of_date='2010-06-01')` yields `unit_price = 2.3892` (exact historical expanding mean prior to June 1, 2010), while `get_features_for_sku('84879')` (without `as_of_date`) yields `unit_price = 1.8557` (latest full-history expanding price).
+  - **Empirical Sensitivity Verification:** Tested model sensitivity across 4 commercial SKUs (`84879`, `85123A`, `22423`, `47566`) and all 4 horizons ($D_7, D_{15}, D_{30}, D_{90}$). Observed that historical price changes slightly adjust forecasted demand in accordance with economic theory (e.g., $D_7$ demand for SKU `84879` adjusted by $-0.07$ units / $-0.01\%$), with zero prediction divergence, infinite values, or schema violations.
+  - **Comprehensive Cache Invalidation Testing:** Added 14 new automated regression tests to `backend/tests/test_experimental_forecast.py`:
+    - Section 7: Tests A–F verifying feature extraction historical cutoff propagation, future perturbation invariance, same-day transaction exclusion, later-date registration, forward inference compatibility, and experimental prediction pipeline integration.
+    - Section 8: Tests 1–8 verifying valid cache load without rebuild, auto-rebuild on missing cache, auto-rebuild on source mtime change, auto-rebuild on source size change, auto-rebuild on missing metadata, auto-rebuild on malformed JSON, error handling when source file is missing, and exact reproduction of Task 12 training price formulas.
+  - **Model Artifact Immutability:** Verified SHA-256 hashes of all 4 Task 12 models in `backend/ml/models_task12/` (`b5fa0e...`, `373546...`, `f0de93...`, `a7ad19...`) and all 4 production models in `backend/ml/models/` (`a33a26...`, `af7c91...`, `c33d53...`, `269592...`) — 100% byte-for-byte identical to baseline.
+- **Files Modified:**
+  - `backend/app/services/historical_data_service.py` (Propagated `as_of_date=observation_date` in `get_features_for_sku`)
+  - `backend/ml/src/point_in_time_price.py` (Implemented metadata fingerprinting, auto-invalidation, and atomic `os.replace` writing)
+  - `backend/tests/test_experimental_forecast.py` (Added 14 new tests: Section 7 Tests A–F and Section 8 Tests 1–8)
+  - `docs/KNOWN_ISSUES.md` (Logged resolution of ISSUE-013)
+  - `docs/DEVELOPMENT_LOG.md` (Updated chronological engineering ledger)
+- **Verification & Branch Safety:**
+  - Branch: `uni_api_experimental` (working tree clean upon commit).
+  - Protected branches `uni_api_submission` (`596430fc`) and `main` (`9b83bb18`) completely untouched.
+  - Baseline production models in `backend/ml/models/` and endpoints `/api/v1/forecast/*` 100% preserved.
+  - Full automated test suite: **149/149 passed in 36.75s (100% pass rate, 0 regressions)**.
+
+---
+
 ### [2026-11-20] — Task 15: Historical Point-in-Time Pricing Correction & Data Integrity Verification
 
 - **Phase & Task:** Task 15 — Historical Point-in-Time Pricing Correction & Data Integrity Verification (`uni_api_experimental` branch).

@@ -286,6 +286,8 @@ class HistoricalDataService:
         sku_df = self._sku_records[cleaned_sku]
 
         if as_of_date is not None:
+            if isinstance(as_of_date, str):
+                as_of_date = datetime.date.fromisoformat(as_of_date)
             sku_df = sku_df[sku_df["date"] <= as_of_date]
 
         record_count = len(sku_df)
@@ -335,8 +337,11 @@ class HistoricalDataService:
             lag_60 = lag_28
             rolling_mean_60 = rolling_mean_28
 
-        # Unit price
-        unit_price = round(self.get_unit_price(cleaned_sku), 4)
+        # Unit price (cutoff-aware for historical backtesting, latest for forward inference)
+        if as_of_date is not None:
+            unit_price = round(self.get_unit_price(cleaned_sku, as_of_date=observation_date), 4)
+        else:
+            unit_price = round(self.get_unit_price(cleaned_sku, as_of_date=None), 4)
 
         calendar_dow = int(observation_date.weekday())  # 0=Monday, 6=Sunday
         calendar_month = int(observation_date.month)

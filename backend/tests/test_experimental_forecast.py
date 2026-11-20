@@ -10,6 +10,10 @@ Covers:
 
 import math
 import datetime
+import os
+import copy
+import bisect
+import tempfile
 from pathlib import Path
 import pytest
 import joblib
@@ -567,4 +571,346 @@ def test_point_in_time_pricing_fallback_prior_to_history():
     # Query before any global dates -> fallback to 2.10 (never 50.0)
     p_prior = service.get_price("TEST_NEW", as_of_date="2010-01-01")
     assert p_prior == 2.10
+
+
+# =====================================================================
+# SECTION 7: Task 17 Feature Cutoff Propagation & Prediction Integration
+# =====================================================================
+
+def test_feature_extraction_historical_cutoff_propagation():
+    """Test A: Verifies that get_features_for_sku passes observation cutoff into UnitPrice resolver."""
+    sku = "84879"
+    cutoff = datetime.date(2010, 6, 1)
+
+    features, ctx = historical_data_service.get_features_for_sku(sku, as_of_date=cutoff)
+
+    # Historical price as of 2010-06-01 is 2.3892; latest static price is 1.8568
+    assert features.unit_price == 2.3892, f"Expected historical price 2.3892, got {features.unit_price}"
+    assert features.unit_price != 1.8568, "Leaked latest static price into historical feature!"
+    assert ctx["observation_date"] == "2010-06-01"
+
+
+def test_feature_extraction_future_perturbation_invariance():
+    """Test B: Verifies that perturbing future transactions does not alter historical feature extraction."""
+    from ml.src.point_in_time_price import pit_price_service
+    pit_price_service.ensure_loaded()
+
+    sku = "85123A"
+    cutoff = datetime.date(2011, 6, 1)
+    cutoff_str = cutoff.isoformat()
+
+    features_base, _ = historical_data_service.get_features_for_sku(sku, as_of_date=cutoff)
+    orig_entry = copy.deepcopy(pit_price_service._skus_data[sku])
+
+    try:
+        # Perturb strictly future dates
+        entry = pit_price_service._skus_data[sku]
+        idx = bisect.bisect_left(entry["dates"], cutoff_str)
+        for i in range(idx, len(entry["dates"])):
+            entry["sums"][i] += 5000000.0
+            entry["counts"][i] += 10
+
+        features_pert, _ = historical_data_service.get_features_for_sku(sku, as_of_date=cutoff)
+        assert features_pert.unit_price == features_base.unit_price, f"Future leakage: {features_base.unit_price} != {features_pert.unit_price}"
+    finally:
+        pit_price_service._skus_data[sku] = orig_entry
+
+
+def test_feature_extraction_same_day_exclusion():
+    """Test C: Verifies that transactions occurring on observation date T are excluded from features at T."""
+    from ml.src.point_in_time_price import pit_price_service
+    pit_price_service.ensure_loaded()
+
+    sku = "85123A"
+    cutoff = datetime.date(2011, 6, 1)
+    cutoff_str = cutoff.isoformat()
+
+    features_base, _ = historical_data_service.get_features_for_sku(sku, as_of_date=cutoff)
+    orig_entry = copy.deepcopy(pit_price_service._skus_data[sku])
+
+    try:
+        # Invalidate/perturb strictly on date T
+        entry = pit_price_service._skus_data[sku]
+        idx = bisect.bisect_left(entry["dates"], cutoff_str)
+        if idx < len(entry["dates"]) and entry["dates"][idx] == cutoff_str:
+            entry["sums"][idx] += 999999.0
+            entry["counts"][idx] += 5
+        else:
+            entry["dates"].insert(idx, cutoff_str)
+            prev_s = entry["sums"][idx - 1] if idx > 0 else 0.0
+            prev_c = entry["counts"][idx - 1] if idx > 0 else 0
+            entry["sums"].insert(idx, prev_s + 999999.0)
+            entry["counts"].insert(idx, prev_c + 5)
+
+        features_pert, _ = historical_data_service.get_features_for_sku(sku, as_of_date=cutoff)
+        assert features_pert.unit_price == features_base.unit_price, "Same-day transaction contaminated features at date T!"
+    finally:
+        pit_price_service._skus_data[sku] = orig_entry
+
+
+def test_feature_extraction_later_date_registration():
+    """Test D: Verifies that perturbed transactions on date T become eligible when querying T+1 day."""
+    from ml.src.point_in_time_price import pit_price_service
+    pit_price_service.ensure_loaded()
+
+    sku = "85123A"
+    t = datetime.date(2011, 6, 1)
+    t_str = t.isoformat()
+    t_plus_1 = datetime.date(2011, 6, 2)
+
+    features_t, _ = historical_data_service.get_features_for_sku(sku, as_of_date=t)
+    features_t1_base, _ = historical_data_service.get_features_for_sku(sku, as_of_date=t_plus_1)
+    orig_entry = copy.deepcopy(pit_price_service._skus_data[sku])
+
+    try:
+        entry = pit_price_service._skus_data[sku]
+        idx = bisect.bisect_left(entry["dates"], t_str)
+        if idx < len(entry["dates"]) and entry["dates"][idx] == t_str:
+            entry["sums"][idx] += 999999.0
+            entry["counts"][idx] += 5
+            for k in range(idx + 1, len(entry["dates"])):
+                entry["sums"][k] += 999999.0
+                entry["counts"][k] += 5
+        else:
+            entry["dates"].insert(idx, t_str)
+            prev_s = entry["sums"][idx - 1] if idx > 0 else 0.0
+            prev_c = entry["counts"][idx - 1] if idx > 0 else 0
+            entry["sums"].insert(idx, prev_s + 999999.0)
+            entry["counts"].insert(idx, prev_c + 5)
+            for k in range(idx + 1, len(entry["dates"])):
+                entry["sums"][k] += 999999.0
+                entry["counts"][k] += 5
+
+        # Query at T: unchanged
+        features_at_t, _ = historical_data_service.get_features_for_sku(sku, as_of_date=t)
+        assert features_at_t.unit_price == features_t.unit_price
+
+        # Query at T+1: reflects the perturbation on T
+        features_at_t1, _ = historical_data_service.get_features_for_sku(sku, as_of_date=t_plus_1)
+        assert features_at_t1.unit_price > features_t1_base.unit_price
+    finally:
+        pit_price_service._skus_data[sku] = orig_entry
+
+
+def test_feature_extraction_forward_inference_compatibility():
+    """Test E: Verifies that as_of_date=None retains latest-price behavior for operational forward forecasting."""
+    from ml.src.point_in_time_price import pit_price_service
+    features, ctx = historical_data_service.get_features_for_sku("84879", as_of_date=None)
+    latest_expected = pit_price_service.get_price("84879", as_of_date=None)
+    assert features.unit_price == latest_expected == 1.8557, f"Expected latest price 1.8557, got {features.unit_price}"
+    assert ctx["observation_date"] == "2011-12-09"
+
+
+def test_experimental_prediction_service_receives_historical_price():
+    """Test F: Exercises experimental prediction service and proves it uses historical UnitPrice through feature extraction."""
+    sku = "84879"
+    cutoff = datetime.date(2010, 6, 1)
+
+    # 1. Feature extraction with historical cutoff (unit_price = 2.3892)
+    feat_hist, _ = historical_data_service.get_features_for_sku(sku, as_of_date=cutoff)
+    assert feat_hist.unit_price == 2.3892
+    res_hist = experimental_prediction_service.get_forecast(ForecastRequest(stock_code=sku, features=feat_hist))
+
+    # 2. Vector with uncutoff future price (unit_price = 1.8568)
+    feat_fut = feat_hist.model_copy(update={"unit_price": 1.8568})
+    res_fut = experimental_prediction_service.get_forecast(ForecastRequest(stock_code=sku, features=feat_fut))
+
+    # 3. Prove predictions differ, confirming the model received and evaluated the price feature
+    diff_d90 = abs(res_fut.predictions["90"] - res_hist.predictions["90"])
+    assert diff_d90 > 0.5, f"Prediction did not respond to price feature change: {diff_d90}"
+    assert res_hist.predictions["90"] > 0.0
+
+
+# =====================================================================
+# SECTION 8: Task 17 Cache Freshness & Invalidation Tests
+# =====================================================================
+
+def _create_synthetic_sales_csv(path: Path, rows: list) -> None:
+    """Helper to write synthetic clean gross sales CSV for deterministic cache tests."""
+    df = pd.DataFrame(rows, columns=["StockCode", "Quantity", "Price", "InvoiceDate", "Invoice"])
+    df.to_csv(path, index=False, encoding="latin1")
+
+
+def test_cache_invalidation_valid_cache_no_rebuild():
+    """1. Valid cache with unchanged source does not trigger rebuild."""
+    from ml.src.point_in_time_price import PointInTimePriceService
+    with tempfile.TemporaryDirectory() as tmpdir:
+        tmp_path = Path(tmpdir)
+        sales_csv = tmp_path / "clean_gross_sales.csv"
+        cache_json = tmp_path / "pit_sku_price_history.json"
+
+        _create_synthetic_sales_csv(sales_csv, [
+            ["SKU_A", 5, 10.0, "2010-01-01 10:00:00", "500001"],
+            ["SKU_A", 5, 20.0, "2010-01-02 10:00:00", "500002"],
+        ])
+
+        service = PointInTimePriceService(data_dir=tmp_path)
+        service.load_index(cache_path=cache_json, sales_path=sales_csv)
+        assert cache_json.is_file()
+        mtime_initial = cache_json.stat().st_mtime_ns
+
+        # Reload unchanged source
+        service2 = PointInTimePriceService(data_dir=tmp_path)
+        service2.load_index(cache_path=cache_json, sales_path=sales_csv)
+        mtime_after = cache_json.stat().st_mtime_ns
+        assert mtime_after == mtime_initial, "Cache was rebuilt despite unchanged source!"
+
+
+def test_cache_invalidation_missing_cache_rebuilds():
+    """2. Missing cache automatically triggers build from source."""
+    from ml.src.point_in_time_price import PointInTimePriceService
+    with tempfile.TemporaryDirectory() as tmpdir:
+        tmp_path = Path(tmpdir)
+        sales_csv = tmp_path / "clean_gross_sales.csv"
+        cache_json = tmp_path / "pit_sku_price_history.json"
+
+        _create_synthetic_sales_csv(sales_csv, [["SKU_B", 2, 5.0, "2010-02-01 12:00:00", "500003"]])
+
+        service = PointInTimePriceService(data_dir=tmp_path)
+        assert not cache_json.is_file()
+        service.load_index(cache_path=cache_json, sales_path=sales_csv)
+        assert cache_json.is_file()
+        assert service.is_loaded is True
+        assert service.get_price("SKU_B", as_of_date=None) == 5.0
+
+
+def test_cache_invalidation_changed_source_mtime_rebuilds():
+    """3. Changed source modification time triggers rebuild."""
+    from ml.src.point_in_time_price import PointInTimePriceService
+    with tempfile.TemporaryDirectory() as tmpdir:
+        tmp_path = Path(tmpdir)
+        sales_csv = tmp_path / "clean_gross_sales.csv"
+        cache_json = tmp_path / "pit_sku_price_history.json"
+
+        _create_synthetic_sales_csv(sales_csv, [["SKU_C", 1, 15.0, "2010-03-01 10:00:00", "500004"]])
+
+        service = PointInTimePriceService(data_dir=tmp_path)
+        service.load_index(cache_path=cache_json, sales_path=sales_csv)
+        old_mtime = service._cache_metadata["source_mtime"]
+
+        # Advance mtime of source CSV
+        new_time = old_mtime + 200.0
+        os.utime(sales_csv, (new_time, new_time))
+
+        service2 = PointInTimePriceService(data_dir=tmp_path)
+        service2.load_index(cache_path=cache_json, sales_path=sales_csv)
+        assert service2._cache_metadata["source_mtime"] == new_time, "Cache was not rebuilt when source mtime changed!"
+
+
+def test_cache_invalidation_changed_source_size_rebuilds():
+    """4. Changed source file size triggers rebuild."""
+    from ml.src.point_in_time_price import PointInTimePriceService
+    with tempfile.TemporaryDirectory() as tmpdir:
+        tmp_path = Path(tmpdir)
+        sales_csv = tmp_path / "clean_gross_sales.csv"
+        cache_json = tmp_path / "pit_sku_price_history.json"
+
+        _create_synthetic_sales_csv(sales_csv, [["SKU_D", 1, 10.0, "2010-04-01 10:00:00", "500005"]])
+
+        service = PointInTimePriceService(data_dir=tmp_path)
+        service.load_index(cache_path=cache_json, sales_path=sales_csv)
+        old_size = service._cache_metadata["source_size"]
+
+        # Append new transaction
+        with open(sales_csv, "a", encoding="latin1") as f:
+            f.write("SKU_D,2,20.0,2010-04-02 10:00:00,500006\n")
+
+        new_size = sales_csv.stat().st_size
+        assert new_size > old_size
+
+        service2 = PointInTimePriceService(data_dir=tmp_path)
+        service2.load_index(cache_path=cache_json, sales_path=sales_csv)
+        assert service2._cache_metadata["source_size"] == new_size
+        # Expanding mean: (10 + 20) / 2 = 15.0
+        assert service2.get_price("SKU_D", as_of_date=None) == 15.0
+
+
+def test_cache_invalidation_missing_metadata_rebuilds():
+    """5. Cache missing source metadata fingerprint triggers rebuild."""
+    import json
+    from ml.src.point_in_time_price import PointInTimePriceService
+    with tempfile.TemporaryDirectory() as tmpdir:
+        tmp_path = Path(tmpdir)
+        sales_csv = tmp_path / "clean_gross_sales.csv"
+        cache_json = tmp_path / "pit_sku_price_history.json"
+
+        _create_synthetic_sales_csv(sales_csv, [["SKU_E", 1, 8.0, "2010-05-01 10:00:00", "500007"]])
+
+        service = PointInTimePriceService(data_dir=tmp_path)
+        service.load_index(cache_path=cache_json, sales_path=sales_csv)
+
+        # Strip metadata from JSON file
+        with open(cache_json, "r", encoding="utf-8") as f:
+            data = json.load(f)
+        del data["metadata"]
+        with open(cache_json, "w", encoding="utf-8") as f:
+            json.dump(data, f)
+
+        service2 = PointInTimePriceService(data_dir=tmp_path)
+        service2.load_index(cache_path=cache_json, sales_path=sales_csv)
+        assert "source_size" in service2._cache_metadata, "Failed to restore metadata upon rebuild!"
+
+
+def test_cache_invalidation_malformed_json_recovery():
+    """6. Malformed JSON file is automatically recovered and rebuilt."""
+    from ml.src.point_in_time_price import PointInTimePriceService
+    with tempfile.TemporaryDirectory() as tmpdir:
+        tmp_path = Path(tmpdir)
+        sales_csv = tmp_path / "clean_gross_sales.csv"
+        cache_json = tmp_path / "pit_sku_price_history.json"
+
+        _create_synthetic_sales_csv(sales_csv, [["SKU_F", 1, 12.0, "2010-06-01 10:00:00", "500008"]])
+
+        # Write corrupt JSON
+        with open(cache_json, "w", encoding="utf-8") as f:
+            f.write("CORRUPTED_JSON_DATA_---{{{")
+
+        service = PointInTimePriceService(data_dir=tmp_path)
+        service.load_index(cache_path=cache_json, sales_path=sales_csv)
+        assert service.is_loaded is True
+        assert service.get_price("SKU_F", as_of_date=None) == 12.0
+
+
+def test_cache_invalidation_failed_rebuild_error():
+    """7. Missing cache with unavailable source dataset raises FileNotFoundError."""
+    from ml.src.point_in_time_price import PointInTimePriceService
+    with tempfile.TemporaryDirectory() as tmpdir:
+        tmp_path = Path(tmpdir)
+        sales_csv = tmp_path / "non_existent_sales.csv"
+        cache_json = tmp_path / "non_existent_cache.json"
+
+        service = PointInTimePriceService(data_dir=tmp_path)
+        with pytest.raises(FileNotFoundError):
+            service.load_index(cache_path=cache_json, sales_path=sales_csv)
+        assert service.is_loaded is False
+        assert service.load_error is not None
+
+
+def test_cache_invalidation_reproduces_task12_prices():
+    """8. Rebuilt cache exactly reproduces the Task 12 expanding arithmetic price formula."""
+    from ml.src.point_in_time_price import PointInTimePriceService
+    with tempfile.TemporaryDirectory() as tmpdir:
+        tmp_path = Path(tmpdir)
+        sales_csv = tmp_path / "clean_gross_sales.csv"
+        cache_json = tmp_path / "pit_sku_price_history.json"
+
+        _create_synthetic_sales_csv(sales_csv, [
+            ["SKU_G", 1, 10.0, "2010-07-01 10:00:00", "500009"],
+            ["SKU_G", 1, 20.0, "2010-07-02 10:00:00", "500010"],
+            ["SKU_G", 1, 30.0, "2010-07-03 10:00:00", "500011"],
+        ])
+
+        service = PointInTimePriceService(data_dir=tmp_path)
+        service.load_index(cache_path=cache_json, sales_path=sales_csv)
+
+        # Before any tx: prior 2.10
+        assert service.get_price("SKU_G", as_of_date="2010-07-01") == 2.10
+        # After tx 1: 10.0
+        assert service.get_price("SKU_G", as_of_date="2010-07-02") == 10.0
+        # After tx 2: (10 + 20) / 2 = 15.0
+        assert service.get_price("SKU_G", as_of_date="2010-07-03") == 15.0
+        # After tx 3: (10 + 20 + 30) / 3 = 20.0
+        assert service.get_price("SKU_G", as_of_date="2010-07-04") == 20.0
+        assert service.get_price("SKU_G", as_of_date=None) == 20.0
+
 

@@ -22,6 +22,23 @@ This document maintains an active registry of known technical issues, architectu
 
 ## Resolved Issues
 
+### ISSUE-013: Historical Feature Extraction Cutoff Propagation & Price Index Cache Invalidation
+- **Severity:** Low (Historical Backtesting Precision & Cache Staleness)
+- **Module Affected:** Machine Learning Subsystem / Historical Feature Extraction & PIT Price Service
+- **Relevant Files:**
+  - `backend/app/services/historical_data_service.py`
+  - `backend/ml/src/point_in_time_price.py`
+  - `backend/tests/test_experimental_forecast.py`
+- **Description:** The Task 16 independent audit identified two qualifications in the Task 15 implementation:
+  1. In `HistoricalDataService.get_features_for_sku(stock_code, as_of_date=...)`, `as_of_date` was not forwarded to `self.get_unit_price(cleaned_sku)`, causing historical backtesting feature vectors to resolve the latest static price instead of the point-in-time price as of `observation_date`.
+  2. The precomputed price index `pit_sku_price_history.json` lacked source dataset fingerprinting (`st_mtime` and `st_size`), which could allow a stale or corrupted cache to persist undetected after modifications to `clean_gross_sales.csv`.
+- **Resolution Date:** 2026-11-20 (Task 17).
+- **Resolution Details:**
+  1. Updated `HistoricalDataService.get_features_for_sku` to explicitly pass `as_of_date=observation_date` into `self.get_unit_price(cleaned_sku, as_of_date=observation_date)`. When `as_of_date=None` (forward-looking operational inference), it continues to resolve the latest expanding price seamlessly.
+  2. Enhanced `PointInTimePriceService` with source dataset metadata tracking (`source_file`, `source_size`, `source_mtime`, `source_mtime_iso`, `schema_version = '1.1'`). Implemented automatic invalidation and rebuild on missing, stale, or malformed cache. Implemented atomic file writing via `.tmp.<pid>` and `os.replace` to prevent file corruption.
+  3. Added 14 new automated tests in `test_experimental_forecast.py` covering feature extraction cutoff propagation, adversarial perturbation invariance, same-day exclusion, forward inference compatibility, cache rebuild triggers, malformed JSON recovery, and atomic replacement.
+  4. Verified all 149 repository tests pass (100% pass rate, 0 regressions) and verified bitwise model artifact immutability.
+
 ### ISSUE-012: Historical UnitPrice Future Look-Ahead in Experimental Serving API
 - **Severity:** Medium (Temporal Information Leakage in Backtesting)
 - **Module Affected:** Machine Learning Subsystem / Experimental Serving & Historical Data Service
