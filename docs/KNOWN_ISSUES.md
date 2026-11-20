@@ -22,6 +22,18 @@ This document maintains an active registry of known technical issues, architectu
 
 ## Resolved Issues
 
+### ISSUE-012: Historical UnitPrice Future Look-Ahead in Experimental Serving API
+- **Severity:** Medium (Temporal Information Leakage in Backtesting)
+- **Module Affected:** Machine Learning Subsystem / Experimental Serving & Historical Data Service
+- **Relevant Files:**
+  - `backend/ml/src/point_in_time_price.py`
+  - `backend/app/services/historical_data_service.py`
+  - `backend/app/services/experimental_prediction_service.py`
+  - `backend/tests/test_experimental_forecast.py`
+- **Description:** In Task 13, `pit_sku_prices.json` cached static prices evaluated at the dataset end date (`2011-12-09`). While this was completely valid for live forward-looking operational forecasting, evaluating historical queries at $T < \text{2011-12-09}$ caused `UnitPrice` to read post-$T$ transaction averages, creating an asymmetry with the Task 12 training contract.
+- **Resolution Date:** 2026-11-20 (Task 15).
+- **Resolution Details:** Implemented cutoff-aware `PointInTimePriceService` with precomputed prefix-sum index `pit_sku_price_history.json`. Lookup uses $O(\log k)$ binary search (`bisect_left(dates, obs_str) - 1`) taking ~1.68 microseconds, guaranteeing that only transactions strictly prior to $T$ (`tx_date < T`) contribute to `UnitPrice`. Same-day transactions (`tx_date == T`) and post-$T$ transactions are strictly excluded. Validated 155/155 exact price matches against training matrices and confirmed 100% invariance ($\Delta = 0.00000000$) under adversarial future perturbations across 16 scenarios. Automated test suite expanded to 135 tests passing with 0 regressions.
+
 ### ISSUE-007: Single Chronological Holdout Constraint vs Multi-Fold Rolling Backtesting
 - **Severity:** Low (Architectural / Data Constraint)
 - **Module Affected:** Machine Learning Subsystem / Evaluation

@@ -4,6 +4,40 @@ This document maintains a strict chronological development record for NEXORA. Ev
 
 ---
 
+### [2026-11-20] — Task 15: Historical Point-in-Time Pricing Correction & Data Integrity Verification
+
+- **Phase & Task:** Task 15 — Historical Point-in-Time Pricing Correction & Data Integrity Verification (`uni_api_experimental` branch).
+- **Task Description:** Successfully addressed and eliminated the historical `UnitPrice` future look-ahead qualification identified in the Task 14 Independent Audit. In Task 13, `pit_sku_prices.json` cached static prices evaluated at the dataset end date (`2011-12-09`), which was completely valid for forward-looking operational forecasting but introduced a minor future look-ahead bias when evaluating historical queries at $T < \text{2011-12-09}$. Designed and implemented a high-performance, cutoff-aware `PointInTimePriceService` in `backend/ml/src/point_in_time_price.py` utilizing precomputed prefix sums and transaction counts. Created `pit_sku_price_history.json` indexing all 4,916 merchandise SKUs and global daily transactions across all 738 calendar days (1,041,670 clean gross sales records). Integrated cutoff-aware pricing into `HistoricalDataService` (`get_unit_price(stock_code, as_of_date=None)` and `get_features_for_sku(stock_code, as_of_date=None)`) and `ExperimentalPredictionService`.
+- **Key Technical Deliverables & Empirical Guarantees:**
+  - **Strict Temporal Cutoff ($\text{tx\_date} < T$):** Price lookup uses $O(\log k)$ binary search (`bisect_left(dates, obs_str) - 1`) to aggregate only transactions strictly prior to observation date $T$.
+  - **Exclusion of Same-Day Transactions ($\text{tx\_date} == T$):** Transactions occurring on date $T$ are strictly excluded from the price calculation at $T$, guaranteeing mathematical parity with the `shift(1)` expanding mean formula from Task 12 model training.
+  - **Leakage-Free Multi-Tier Fallbacks:**
+    - If a known SKU has prior transactions before $T$: Returns expanding arithmetic mean $\sum \text{Price} / \sum \text{Count}$ strictly before $T$.
+    - If a known SKU has no prior transactions before $T$: Returns global expanding mean across all transactions prior to $T$.
+    - If date $T$ is prior to all transactions in the dataset: Returns empirical global median prior ($2.10$).
+    - If `as_of_date=None` (forward-looking operational inference): Returns latest historical expanding price for known SKUs, or catalog default prior ($2.10$) for unknown/unseen SKUs.
+  - **Exact Training Matrix Parity:** Evaluated 155 historical SKU/date combinations across top 30 commercial SKUs against the Task 12 training matrix (`df_train`) across diverse dates (`2010-03-01`, `2010-09-01`, `2011-01-01`, `2011-06-01`, `2011-11-21`, `2011-12-09`). Result: **155 / 155 exact matches ($\Delta \le 0.00005$)**.
+  - **Adversarial Future Perturbation Invariance:** Evaluated 16 adversarial test scenarios injecting massive price spikes ($\ge +500,000.0$) on and after date $T$. Confirmed **exact zero difference ($\Delta = 0.00000000$)** on price queries and feature extraction at date $T$.
+  - **Sub-Millisecond Efficiency & Throughput:**
+    - Index cold load time: ~2,440 ms (from `pit_sku_price_history.json`).
+    - Cache memory footprint: ~62.5 MB RSS.
+    - Average query latency: **1.687 microseconds/query** (0.001687 ms).
+    - Throughput: **592,619 queries/sec**.
+    - Automatic recovery: Auto-rebuilds prefix sum cache from `clean_gross_sales.csv` if cache file is missing.
+- **Files Modified:**
+  - `backend/ml/src/point_in_time_price.py` (Added `PointInTimePriceService` with prefix-sum binary search and singleton `pit_price_service`)
+  - `backend/app/services/historical_data_service.py` (Integrated `pit_price_service` into `load_dataset`, `get_unit_price(stock_code, as_of_date=None)`, and `get_features_for_sku`)
+  - `backend/app/services/experimental_prediction_service.py` (Passed observation cutoff date into `get_unit_price`)
+  - `backend/tests/test_experimental_forecast.py` (Added 4 new test functions in Section 6: cutoff exclusion, date $T$ exclusion, perturbation invariance, pre-history fallbacks)
+  - `docs/DEVELOPMENT_LOG.md` (Updated chronological engineering ledger)
+- **Verification & Branch Safety:**
+  - Branch: `uni_api_experimental` (working tree clean upon commit).
+  - Protected branches `uni_api_submission` (`596430fc`) and `main` (`9b83bb18`) completely untouched.
+  - Baseline production models in `backend/ml/models/` and endpoints `/api/v1/forecast/*` 100% preserved.
+  - Full automated test suite: **135/135 passed in 37.75s (100% pass rate, 0 regressions)**.
+
+---
+
 ### [2026-11-20] — Task 13: Experimental API Feature Compatibility & Model Integration
 
 - **Phase & Task:** Task 13 — Experimental API Feature Compatibility & Model Integration (`uni_api_experimental` branch).

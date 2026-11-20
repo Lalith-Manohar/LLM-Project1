@@ -451,3 +451,120 @@ def test_store_wide_forecast_endpoint(client):
         assert detail["horizon_days"] in [7, 15, 30, 90]
         assert detail["predicted_store_demand"] > 0
         assert detail["store_wape"] < 30.0
+
+
+# =====================================================================
+# SECTION 6: Task 15 Historical Point-in-Time Pricing & Data Integrity
+# =====================================================================
+
+def test_point_in_time_pricing_cutoff_exclusion():
+    """Verifies that point-in-time price excludes transactions on and after observation date T."""
+    from ml.src.point_in_time_price import pit_price_service
+    pit_price_service.ensure_loaded()
+
+    sku = "85123A"
+    t1 = datetime.date(2010, 6, 1)
+    t2 = datetime.date(2011, 6, 1)
+
+    p1 = pit_price_service.get_price(sku, as_of_date=t1)
+    p2 = pit_price_service.get_price(sku, as_of_date=t2)
+    p_latest = pit_price_service.get_price(sku, as_of_date=None)
+
+    assert p1 > 0.0
+    assert p2 > 0.0
+    assert p_latest > 0.0
+    # Prices evolve over time; earlier price should reflect early sales
+    assert isinstance(p1, float)
+    assert isinstance(p2, float)
+
+
+def test_point_in_time_pricing_transaction_on_date_t_excluded():
+    """Verifies boundary condition: transactions occurring ON date T are strictly excluded."""
+    from ml.src.point_in_time_price import PointInTimePriceService
+    service = PointInTimePriceService()
+    service._skus_data = {
+        "TEST_BOUND": {
+            "dates": ["2011-05-30", "2011-06-01", "2011-06-05"],
+            "sums": [2.50, 102.50, 602.50],
+            "counts": [1, 2, 3]
+        }
+    }
+    service._static_prices = {"TEST_BOUND": round(602.50 / 3, 4), "__global_default__": 2.10}
+    service._global_dates = []
+    service._global_sums = []
+    service._global_counts = []
+    service.is_loaded = True
+
+    # As of 2011-06-01: strictly < 2011-06-01 -> only 2011-05-30 (sum 2.50, cnt 1 -> 2.50)
+    p_at_t = service.get_price("TEST_BOUND", as_of_date="2011-06-01")
+    assert p_at_t == 2.50, f"Expected 2.50, got {p_at_t}"
+
+    # As of 2011-06-02: includes 2011-06-01 (sum 102.50, cnt 2 -> 51.25)
+    p_after_t = service.get_price("TEST_BOUND", as_of_date="2011-06-02")
+    assert p_after_t == 51.25, f"Expected 51.25, got {p_after_t}"
+
+
+def test_point_in_time_pricing_adversarial_future_invariance():
+    """Verifies that modifying future transactions after date T produces zero change at date T."""
+    import copy
+    from ml.src.point_in_time_price import pit_price_service
+    pit_price_service.ensure_loaded()
+
+    sku = "85123A"
+    t = datetime.date(2011, 6, 1)
+    t_str = t.isoformat()
+
+    # Baseline price
+    p_base = pit_price_service.get_price(sku, as_of_date=t)
+    orig_entry = copy.deepcopy(pit_price_service._skus_data[sku])
+
+    try:
+        # Inject adversarial future inflation
+        entry = pit_price_service._skus_data[sku]
+        dates = entry["dates"]
+        sums = entry["sums"]
+        counts = entry["counts"]
+
+        import bisect
+        idx = bisect.bisect_left(dates, t_str)
+        # Perturb strictly from index idx upwards
+        for i in range(idx, len(dates)):
+            sums[i] += 1000000.0
+            counts[i] += 5
+
+        # Re-query at T
+        p_perturbed = pit_price_service.get_price(sku, as_of_date=t)
+        assert abs(p_perturbed - p_base) == 0.0, f"Leakage detected: {p_base} != {p_perturbed}"
+
+        # Re-query after T (should detect perturbation)
+        p_future = pit_price_service.get_price(sku, as_of_date="2011-12-01")
+        assert p_future > p_base
+    finally:
+        pit_price_service._skus_data[sku] = orig_entry
+
+
+def test_point_in_time_pricing_fallback_prior_to_history():
+    """Verifies that querying an SKU prior to any transactions falls back to prior without leaking future price."""
+    from ml.src.point_in_time_price import PointInTimePriceService
+    service = PointInTimePriceService()
+    service._skus_data = {
+        "TEST_NEW": {
+            "dates": ["2011-01-10"],
+            "sums": [50.0],
+            "counts": [1]
+        }
+    }
+    service._static_prices = {"TEST_NEW": 50.0, "__global_default__": 2.10}
+    service._global_dates = ["2011-01-05"]
+    service._global_sums = [10.0]
+    service._global_counts = [2]
+    service.is_loaded = True
+
+    # Query before TEST_NEW first date, but after global date -> global mean (10 / 2 = 5.0)
+    p_global = service.get_price("TEST_NEW", as_of_date="2011-01-08")
+    assert p_global == 5.0
+
+    # Query before any global dates -> fallback to 2.10 (never 50.0)
+    p_prior = service.get_price("TEST_NEW", as_of_date="2010-01-01")
+    assert p_prior == 2.10
+

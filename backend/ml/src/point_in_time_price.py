@@ -11,6 +11,9 @@ Eliminates temporal leakage in price features:
 """
 
 import datetime
+import json
+import bisect
+import threading
 from pathlib import Path
 from typing import Optional, Tuple, Dict, Any, Union
 import numpy as np
@@ -107,3 +110,238 @@ def enrich_daily_with_pit_price(
         final_prices = {}
 
     return df_merged, final_prices
+
+
+class PointInTimePriceService:
+    """Cutoff-aware historical point-in-time unit price service.
+    
+    Guarantees:
+    - For observation date T, only transactions with transaction_date < T are included.
+    - Transactions on date T and dates > T are strictly excluded.
+    - SKUs without prior transactions before T receive the expanding global mean prior to T.
+    - Observation dates before any transactions exist receive the empirical global median prior ($2.10).
+    - O(log k) binary search lookup using precomputed prefix sums and transaction counts.
+    - Thread-safe, cached in memory on startup, loads from pit_sku_price_history.json.
+    """
+
+    def __init__(self, data_dir: Optional[Union[str, Path]] = None):
+        if data_dir is not None:
+            self.data_dir = Path(data_dir)
+        else:
+            self.data_dir = Path(__file__).resolve().parent.parent / "data" / "processed"
+        self.history_cache_path = self.data_dir / "pit_sku_price_history.json"
+        self.static_cache_path = self.data_dir / "pit_sku_prices.json"
+        self.sales_path = self.data_dir / "clean_gross_sales.csv"
+
+        self.is_loaded: bool = False
+        self.load_error: Optional[str] = None
+        self._lock = threading.Lock()
+        self._skus_data: Dict[str, Dict[str, list]] = {}
+        self._global_dates: list = []
+        self._global_sums: list = []
+        self._global_counts: list = []
+        self._static_prices: Dict[str, float] = {}
+
+    def build_and_save_index(
+        self,
+        sales_path: Optional[Union[str, Path]] = None,
+        cache_path: Optional[Union[str, Path]] = None
+    ) -> Dict[str, Any]:
+        """Builds prefix sum price history index from clean gross sales and saves to cache."""
+        target_sales = Path(sales_path) if sales_path else self.sales_path
+        target_cache = Path(cache_path) if cache_path else self.history_cache_path
+
+        if not target_sales.is_file():
+            raise FileNotFoundError(f"Source sales dataset not found: {target_sales}")
+
+        print(f"[PIT Price Service] Building price history index from {target_sales.name}...")
+        df_sales = pd.read_csv(
+            target_sales,
+            dtype={"StockCode": str},
+            usecols=["StockCode", "Price", "InvoiceDate"],
+            encoding="latin1",
+            low_memory=False
+        )
+        df_sales["StockCode"] = df_sales["StockCode"].astype(str).str.strip()
+        df_sales["date"] = pd.to_datetime(df_sales["InvoiceDate"], errors="coerce").dt.date
+        df_sales = df_sales.dropna(subset=["date", "Price"])
+
+        # Global daily stats
+        global_daily = df_sales.groupby("date")["Price"].agg(["sum", "count"]).sort_index()
+        g_dates = [d.isoformat() for d in global_daily.index]
+        g_cum_sum = np.cumsum(global_daily["sum"].values).tolist()
+        g_cum_count = np.cumsum(global_daily["count"].values).tolist()
+
+        # SKU daily stats
+        sku_daily = df_sales.groupby(["StockCode", "date"])["Price"].agg(["sum", "count"]).reset_index()
+
+        index_data = {
+            "global": {
+                "dates": g_dates,
+                "sums": g_cum_sum,
+                "counts": g_cum_count
+            },
+            "skus": {}
+        }
+
+        static_prices = {}
+        for sku, group in sku_daily.groupby("StockCode"):
+            group = group.sort_values("date")
+            d_list = [d.isoformat() for d in group["date"]]
+            c_sum = np.cumsum(group["sum"].values).tolist()
+            c_cnt = np.cumsum(group["count"].values).tolist()
+            index_data["skus"][sku] = {
+                "dates": d_list,
+                "sums": c_sum,
+                "counts": c_cnt
+            }
+            if len(c_cnt) > 0 and c_cnt[-1] > 0:
+                static_prices[sku] = round(float(c_sum[-1] / c_cnt[-1]), 4)
+
+        static_prices["__global_default__"] = 2.10
+
+        target_cache.parent.mkdir(parents=True, exist_ok=True)
+        with open(target_cache, "w", encoding="utf-8") as f:
+            json.dump(index_data, f)
+
+        # Also persist/update static prices cache for compatibility
+        if self.static_cache_path.parent.is_dir():
+            with open(self.static_cache_path, "w", encoding="utf-8") as sf:
+                json.dump(static_prices, sf)
+
+        print(f"[PIT Price Service] Built and cached {len(index_data['skus']):,} SKU price histories.")
+        return index_data
+
+    def load_index(
+        self,
+        cache_path: Optional[Union[str, Path]] = None,
+        sales_path: Optional[Union[str, Path]] = None
+    ) -> None:
+        """Loads price history index from cache or builds it if missing."""
+        with self._lock:
+            self.is_loaded = False
+            self.load_error = None
+            target_cache = Path(cache_path) if cache_path else self.history_cache_path
+            target_sales = Path(sales_path) if sales_path else self.sales_path
+
+            try:
+                if not target_cache.is_file():
+                    if target_sales.is_file():
+                        self.build_and_save_index(target_sales, target_cache)
+                    elif self.static_cache_path.is_file():
+                        # Fallback to static cache if history index and sales are both unavailable
+                        print("[PIT Price Service WARNING] History cache missing; falling back to static cache.")
+                        with open(self.static_cache_path, "r", encoding="utf-8") as sf:
+                            self._static_prices = json.load(sf)
+                        self.is_loaded = True
+                        return
+                    else:
+                        raise FileNotFoundError(f"Neither price history cache nor sales dataset found at {target_cache}")
+
+                with open(target_cache, "r", encoding="utf-8") as f:
+                    data = json.load(f)
+
+                self._global_dates = data.get("global", {}).get("dates", [])
+                self._global_sums = data.get("global", {}).get("sums", [])
+                self._global_counts = data.get("global", {}).get("counts", [])
+                self._skus_data = data.get("skus", {})
+
+                # Extract latest static prices for fast live lookup
+                static_map = {}
+                for sku, entry in self._skus_data.items():
+                    cnts = entry.get("counts", [])
+                    sums = entry.get("sums", [])
+                    if cnts and cnts[-1] > 0:
+                        static_map[sku] = round(float(sums[-1] / cnts[-1]), 4)
+                static_map["__global_default__"] = 2.10
+                self._static_prices = static_map
+
+                self.is_loaded = True
+                self.load_error = None
+                print(f"[PIT Price Service] Loaded {len(self._skus_data):,} SKU price histories into memory.")
+            except Exception as e:
+                self.is_loaded = False
+                self.load_error = str(e)
+                print(f"[PIT Price Service ERROR] Failed to load price history index: {e}")
+
+    def ensure_loaded(self) -> None:
+        """Ensures the price index is loaded."""
+        if not self.is_loaded:
+            self.load_index()
+
+    def get_price(
+        self,
+        stock_code: str,
+        as_of_date: Optional[Union[datetime.date, str]] = None
+    ) -> float:
+        """Retrieves cutoff-aware historical unit price for an SKU as of observation date T.
+        
+        Parameters
+        ----------
+        stock_code : str
+            Unique merchandise SKU identifier.
+        as_of_date : Optional[Union[datetime.date, str]], default=None
+            Observation cutoff date T. If None, returns the latest historical price.
+            Transactions occurring at date >= T are strictly excluded.
+            
+        Returns
+        -------
+        float
+            Empirical historical unit price matching training definitions.
+        """
+        self.ensure_loaded()
+        cleaned_sku = stock_code.strip()
+
+        # Format observation date string
+        obs_date_str: Optional[str] = None
+        if as_of_date is not None:
+            if hasattr(as_of_date, "isoformat"):
+                obs_date_str = as_of_date.isoformat()
+            else:
+                obs_date_str = str(as_of_date)
+
+        # 1. Look up SKU-specific transaction prefix sums
+        if cleaned_sku in self._skus_data:
+            entry = self._skus_data[cleaned_sku]
+            dates = entry["dates"]
+            sums = entry["sums"]
+            counts = entry["counts"]
+
+            if obs_date_str is None:
+                # Latest historical price prior to end of data
+                if counts and counts[-1] > 0:
+                    return round(float(sums[-1] / counts[-1]), 4)
+            else:
+                # bisect_left finds first index with date >= obs_date_str
+                # subtracting 1 gives last date strictly < obs_date_str (tx_date < T)
+                idx = bisect.bisect_left(dates, obs_date_str) - 1
+                if idx >= 0 and counts[idx] > 0:
+                    return round(float(sums[idx] / counts[idx]), 4)
+
+        # 2. Look up global expanding mean strictly prior to obs_date_str (historical backtesting only)
+        if obs_date_str is not None and self._global_dates and self._global_counts:
+            idx_g = bisect.bisect_left(self._global_dates, obs_date_str) - 1
+            if idx_g >= 0 and self._global_counts[idx_g] > 0:
+                return round(float(self._global_sums[idx_g] / self._global_counts[idx_g]), 4)
+
+        # 3. Fallback:
+        # When obs_date_str is specified, never leak future SKU prices from static cache.
+        # Fall back strictly to the empirical global median prior ($2.10).
+        # When obs_date_str is None (live forward forecasting), use latest static price or default.
+        if obs_date_str is None:
+            return float(self._static_prices.get(cleaned_sku, self._static_prices.get("__global_default__", 2.10)))
+        return float(self._static_prices.get("__global_default__", 2.10))
+
+    def get_status(self) -> Dict[str, Any]:
+        """Returns structured subsystem status for readiness and diagnostics."""
+        return {
+            "ready": self.is_loaded,
+            "total_skus": len(self._skus_data),
+            "global_dates_count": len(self._global_dates),
+            "cache_file": self.history_cache_path.name if self.history_cache_path.is_file() else None,
+            "error": self.load_error
+        }
+
+
+# Global singleton instance
+pit_price_service = PointInTimePriceService()

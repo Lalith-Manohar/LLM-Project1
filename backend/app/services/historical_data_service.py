@@ -10,7 +10,7 @@ parity to the training pipeline.
 import threading
 import datetime
 from pathlib import Path
-from typing import Dict, Any, Optional, Tuple, List
+from typing import Dict, Any, Optional, Tuple, List, Union
 import pandas as pd
 import numpy as np
 
@@ -164,39 +164,17 @@ class HistoricalDataService:
                 self.global_max_date = df["date"].max()
                 self.loaded_file = str(resolved_path.name)
 
-                # Load point-in-time unit prices if available, or generate from clean gross sales
-                price_path = resolved_path.parent / "pit_sku_prices.json"
-                if price_path.is_file():
-                    try:
-                        import json
-                        with open(price_path, "r", encoding="utf-8") as pf:
-                            self._price_map = json.load(pf)
-                        print(f"[NEXORA HistoricalDataService] Loaded {len(self._price_map):,} point-in-time SKU prices.")
-                    except Exception as pe:
-                        print(f"[NEXORA HistoricalDataService WARNING] Failed to load PIT prices: {pe}")
-                        self._price_map = {}
-                else:
-                    try:
-                        sales_path = resolved_path.parent / "clean_gross_sales.csv"
-                        if sales_path.is_file():
-                            from ml.src.point_in_time_price import build_point_in_time_price_feature
-                            print(f"[NEXORA HistoricalDataService] Precomputing point-in-time prices from {sales_path.name}...")
-                            sales_df = pd.read_csv(sales_path, dtype={"StockCode": str}, usecols=["StockCode", "Price", "InvoiceDate"], low_memory=False)
-                            sales_df["StockCode"] = sales_df["StockCode"].astype(str).str.strip()
-                            unique_pairs = df[["StockCode", "date"]].drop_duplicates().copy()
-                            unique_pairs["date"] = pd.to_datetime(unique_pairs["date"]).dt.date
-                            _, final_prices = build_point_in_time_price_feature(unique_pairs, sales_df)
-                            final_prices["__global_default__"] = 2.10
-                            import json
-                            with open(price_path, "w", encoding="utf-8") as pf:
-                                json.dump(final_prices, pf)
-                            self._price_map = final_prices
-                            print(f"[NEXORA HistoricalDataService] Generated and cached {len(self._price_map):,} PIT prices.")
-                        else:
-                            self._price_map = {}
-                    except Exception as ge:
-                        print(f"[NEXORA HistoricalDataService WARNING] Could not auto-generate PIT prices: {ge}")
-                        self._price_map = {}
+                # Load point-in-time unit prices and cutoff-aware history index
+                from ml.src.point_in_time_price import pit_price_service
+                price_history_path = resolved_path.parent / "pit_sku_price_history.json"
+                sales_path = resolved_path.parent / "clean_gross_sales.csv"
+                try:
+                    pit_price_service.load_index(cache_path=price_history_path, sales_path=sales_path)
+                    self._price_map = pit_price_service._static_prices
+                    print(f"[NEXORA HistoricalDataService] Initialized cutoff-aware PIT price service ({len(pit_price_service._skus_data):,} SKUs).")
+                except Exception as pe:
+                    print(f"[NEXORA HistoricalDataService WARNING] Failed to initialize PIT price service: {pe}")
+                    self._price_map = {}
 
                 self._is_loaded = True
                 self._load_error = None
@@ -239,12 +217,20 @@ class HistoricalDataService:
         cleaned_sku = stock_code.strip()
         return cleaned_sku in self._sku_records
 
-    def get_unit_price(self, stock_code: str) -> float:
-        """Retrieves point-in-time historical unit price for an SKU, falling back to catalog default."""
+    def get_unit_price(
+        self,
+        stock_code: str,
+        as_of_date: Optional[Union[datetime.date, str]] = None
+    ) -> float:
+        """Retrieves cutoff-aware historical unit price for an SKU as of observation date T.
+        
+        Guarantees that only transactions strictly before as_of_date contribute to the price,
+        matching the exact Task 12 training contract.
+        """
         self.ensure_loaded()
         cleaned_sku = stock_code.strip()
-        default_price = float(self._price_map.get("__global_default__", 2.10))
-        return float(self._price_map.get(cleaned_sku, default_price))
+        from ml.src.point_in_time_price import pit_price_service
+        return pit_price_service.get_price(cleaned_sku, as_of_date=as_of_date)
 
     def get_features_for_sku(
         self,

@@ -240,7 +240,7 @@ class ExperimentalPredictionService:
         if features.unit_price is not None:
             price = float(features.unit_price)
         else:
-            price = historical_data_service.get_unit_price(sku)
+            price = historical_data_service.get_unit_price(sku, as_of_date=obs_date_obj)
 
         if features.has_60d_history is not None:
             has_60d = float(features.has_60d_history)
