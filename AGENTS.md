@@ -77,7 +77,7 @@ All agents must strictly adhere to the approved technologies. **Do not introduce
 | **Database** | MySQL 8.x (InnoDB Engine) | SQLAlchemy 2.x, PyMySQL, Alembic migrations |
 | **Authentication** | JWT (Stateless) | Passlib (bcrypt password hashing) |
 | **Testing** | Pytest, HTTPX | Swagger UI (`/docs`), Postman |
-| **Development** | Git, GitHub | Google Antigravity |
+| **Development** | Git, GitHub | Google Antigravity,Claude Code CLI,ChatGPT CLI |
 
 ---
 
