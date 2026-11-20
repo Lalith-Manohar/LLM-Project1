@@ -43,6 +43,7 @@ class HistoricalDataService:
     def __init__(self, data_path: Optional[str] = None):
         self._data_path = Path(data_path) if data_path else None
         self._sku_records: Dict[str, pd.DataFrame] = {}
+        self._price_map: Dict[str, float] = {}
         self._is_loaded: bool = False
         self._load_error: Optional[str] = None
         self._lock = threading.Lock()
@@ -162,6 +163,41 @@ class HistoricalDataService:
                 self.global_min_date = df["date"].min()
                 self.global_max_date = df["date"].max()
                 self.loaded_file = str(resolved_path.name)
+
+                # Load point-in-time unit prices if available, or generate from clean gross sales
+                price_path = resolved_path.parent / "pit_sku_prices.json"
+                if price_path.is_file():
+                    try:
+                        import json
+                        with open(price_path, "r", encoding="utf-8") as pf:
+                            self._price_map = json.load(pf)
+                        print(f"[NEXORA HistoricalDataService] Loaded {len(self._price_map):,} point-in-time SKU prices.")
+                    except Exception as pe:
+                        print(f"[NEXORA HistoricalDataService WARNING] Failed to load PIT prices: {pe}")
+                        self._price_map = {}
+                else:
+                    try:
+                        sales_path = resolved_path.parent / "clean_gross_sales.csv"
+                        if sales_path.is_file():
+                            from ml.src.point_in_time_price import build_point_in_time_price_feature
+                            print(f"[NEXORA HistoricalDataService] Precomputing point-in-time prices from {sales_path.name}...")
+                            sales_df = pd.read_csv(sales_path, dtype={"StockCode": str}, usecols=["StockCode", "Price", "InvoiceDate"], low_memory=False)
+                            sales_df["StockCode"] = sales_df["StockCode"].astype(str).str.strip()
+                            unique_pairs = df[["StockCode", "date"]].drop_duplicates().copy()
+                            unique_pairs["date"] = pd.to_datetime(unique_pairs["date"]).dt.date
+                            _, final_prices = build_point_in_time_price_feature(unique_pairs, sales_df)
+                            final_prices["__global_default__"] = 2.10
+                            import json
+                            with open(price_path, "w", encoding="utf-8") as pf:
+                                json.dump(final_prices, pf)
+                            self._price_map = final_prices
+                            print(f"[NEXORA HistoricalDataService] Generated and cached {len(self._price_map):,} PIT prices.")
+                        else:
+                            self._price_map = {}
+                    except Exception as ge:
+                        print(f"[NEXORA HistoricalDataService WARNING] Could not auto-generate PIT prices: {ge}")
+                        self._price_map = {}
+
                 self._is_loaded = True
                 self._load_error = None
 
@@ -203,11 +239,23 @@ class HistoricalDataService:
         cleaned_sku = stock_code.strip()
         return cleaned_sku in self._sku_records
 
-    def get_features_for_sku(self, stock_code: str) -> Tuple[HistoricalFeatures, Dict[str, Any]]:
-        """Dynamically calculates the 9 lag, rolling, and calendar features for an SKU.
+    def get_unit_price(self, stock_code: str) -> float:
+        """Retrieves point-in-time historical unit price for an SKU, falling back to catalog default."""
+        self.ensure_loaded()
+        cleaned_sku = stock_code.strip()
+        default_price = float(self._price_map.get("__global_default__", 2.10))
+        return float(self._price_map.get(cleaned_sku, default_price))
+
+    def get_features_for_sku(
+        self,
+        stock_code: str,
+        as_of_date: Optional[datetime.date] = None
+    ) -> Tuple[HistoricalFeatures, Dict[str, Any]]:
+        """Dynamically calculates lag, rolling, calendar, and extended features for an SKU.
         
         Features are calculated relative to the latest available historical observation date
-        for that SKU, matching the exact definitions from model training:
+        (or up to the specified `as_of_date`) for that SKU, matching the exact definitions
+        from model training:
         - DayOfWeek, Month, DayOfMonth: Calendar dynamics from observation date t.
         - Lag1: Actual daily demand at t - 1.
         - Lag7: Actual daily demand at t - 7.
@@ -215,9 +263,21 @@ class HistoricalDataService:
         - Lag28: Actual daily demand at t - 28.
         - RollingMean7: Mean daily demand over t - 7 through t - 1 (shifted by 1 day).
         - RollingMean28: Mean daily demand over t - 28 through t - 1 (shifted by 1 day).
+        
+        Extended features (Task 12 experimental):
+        - Lag60: Actual daily demand at t - 60 (falls back to Lag28 if history < 61 days).
+        - RollingMean14: Mean daily demand over t - 14 through t - 1.
+        - RollingMean60: Mean daily demand over t - 60 through t - 1 (falls back to RollingMean28 if history < 61 days).
+        - RollingStd7: Sample standard deviation over t - 7 through t - 1.
+        - RollingStd28: Sample standard deviation over t - 28 through t - 1.
+        - ZeroFraction28: Proportion of zero-demand days over t - 28 through t - 1.
+        - MomentumRatio: RollingMean7 / (RollingMean28 + 1.0).
+        - UnitPrice: Point-in-time SKU unit price.
+        - Has60dHistory: Indicator flag (1.0 if history >= 61 days, else 0.0).
 
         Args:
             stock_code: Unique product SKU.
+            as_of_date: Optional cutoff date. If omitted, uses latest available record.
 
         Returns:
             Tuple[HistoricalFeatures, Dict[str, Any]]:
@@ -238,6 +298,10 @@ class HistoricalDataService:
             )
 
         sku_df = self._sku_records[cleaned_sku]
+
+        if as_of_date is not None:
+            sku_df = sku_df[sku_df["date"] <= as_of_date]
+
         record_count = len(sku_df)
 
         # Minimum history required to compute Lag28 and RollingMean28: 29 continuous days (t - 28 to t)
@@ -262,7 +326,31 @@ class HistoricalDataService:
         lag_14 = float(demands[-15])
         lag_28 = float(demands[-29])
         rolling_mean_7 = round(float(demands[-8:-1].mean()), 4)
+        rolling_mean_14 = round(float(demands[-15:-1].mean()), 4)
         rolling_mean_28 = round(float(demands[-29:-1].mean()), 4)
+
+        # Extended statistics
+        std_7 = np.std(demands[-8:-1], ddof=1)
+        rolling_std_7 = round(float(np.nan_to_num(std_7, nan=0.0)), 4)
+
+        std_28 = np.std(demands[-29:-1], ddof=1)
+        rolling_std_28 = round(float(np.nan_to_num(std_28, nan=0.0)), 4)
+
+        zero_fraction_28 = round(float((demands[-29:-1] == 0).astype(float).mean()), 4)
+        momentum_ratio = round(float(rolling_mean_7 / (rolling_mean_28 + 1.0)), 4)
+
+        # 60-day coverage restoration logic
+        if record_count >= 61:
+            has_60d_history = 1.0
+            lag_60 = float(demands[-61])
+            rolling_mean_60 = round(float(demands[-61:-1].mean()), 4)
+        else:
+            has_60d_history = 0.0
+            lag_60 = lag_28
+            rolling_mean_60 = rolling_mean_28
+
+        # Unit price
+        unit_price = round(self.get_unit_price(cleaned_sku), 4)
 
         calendar_dow = int(observation_date.weekday())  # 0=Monday, 6=Sunday
         calendar_month = int(observation_date.month)
@@ -277,7 +365,16 @@ class HistoricalDataService:
             lag_14=lag_14,
             lag_28=lag_28,
             rolling_mean_7=rolling_mean_7,
-            rolling_mean_28=rolling_mean_28
+            rolling_mean_28=rolling_mean_28,
+            lag_60=lag_60,
+            rolling_mean_14=rolling_mean_14,
+            rolling_mean_60=rolling_mean_60,
+            rolling_std_7=rolling_std_7,
+            rolling_std_28=rolling_std_28,
+            zero_fraction_28=zero_fraction_28,
+            momentum_ratio=momentum_ratio,
+            unit_price=unit_price,
+            has_60d_history=has_60d_history
         )
 
         context_metadata = {

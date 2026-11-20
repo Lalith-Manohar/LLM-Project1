@@ -4,6 +4,45 @@ This document maintains a strict chronological development record for NEXORA. Ev
 
 ---
 
+### [2026-11-20] — Task 13: Experimental API Feature Compatibility & Model Integration
+
+- **Phase & Task:** Task 13 — Experimental API Feature Compatibility & Model Integration (`uni_api_experimental` branch).
+- **Task Description:** Successfully integrated the Task 12 experimental demand forecasting models (`demand_model_{7,15,30,90}d.joblib` in `backend/ml/models_task12/`) into the FastAPI backend inference pipeline via an isolated, non-invasive parallel service architecture. Established a strictly leakage-free 20-column feature contract (`StockCode`, `date`, `DayOfWeek`, `Month`, `DayOfMonth`, `Lag1`, `Lag7`, `Lag14`, `Lag28`, `Lag60`, `RollingMean7`, `RollingMean14`, `RollingMean28`, `RollingMean60`, `RollingStd7`, `RollingStd28`, `ZeroFraction28`, `MomentumRatio`, `UnitPrice`, `Has60dHistory`). Extended `HistoricalFeatures` schema and `HistoricalDataService` to compute all 9 extended numerical features dynamically from the 2-year Online Retail II dataset, complete with 60-day coverage restoration fallback (falling back to 28-day statistics for history between 29 and 60 days) and point-in-time pricing (`pit_sku_prices.json` caching 4,916 SKU median prices). Developed `ExperimentalPredictionService` and mounted dedicated REST endpoints under `/api/v1/experimental/`. Verified bitwise mathematical parity against direct model artifact inference, confirmed zero regression on baseline production endpoints, and established a 131-test automated regression suite.
+- **Key Technical Deliverables & Benchmark Results:**
+  - **Isolated Experimental Service:** Created `app/services/experimental_prediction_service.py` with multi-horizon inference, thread safety, unpickling support for `ChronologicalTargetEncoder` and `ResidualRegressor`, and non-negative prediction clipping $\max(0, \hat{y})$.
+  - **Parallel REST Endpoints (`/api/v1/experimental/`):**
+    - `GET /api/v1/experimental/ready` (Component readiness probe for experimental models and historical data)
+    - `GET /api/v1/experimental/forecast/horizons` (Supported horizons and active candidate model definitions)
+    - `GET /api/v1/experimental/forecast/model-metrics` (Task 12 CV pooled WAPE and holdout evaluation benchmarks)
+    - `GET /api/v1/experimental/forecast/model-info` (Runtime model registry architecture and 20-column contract)
+    - `POST /api/v1/experimental/forecast/predict` (Multi-horizon demand inference with auto or manual features)
+    - `POST /api/v1/experimental/forecast` (Root alias matching production convention)
+  - **Root Readiness Backward Compatibility:** Updated `/ready` and `/api/v1/ready` to include `experimental_models` status while preserving non-blocking backward compatibility with production monitors.
+  - **Exact Mathematical Parity:** Verified 100% bitwise parity (down to 4 decimal places) between direct model artifact inference and API-generated predictions across multiple commercial SKUs (`85123A`, `22423`, `47566`, `84879`) and all four horizons ($D_7, D_{15}, D_{30}, D_{90}$).
+  - **Inference Latency & Efficiency:**
+    - Model startup load time: 5,773 ms (loads and verifies all 4 estimators).
+    - 4-Horizon combined inference latency: mean = **15.07 ms**, p50 = 14.93 ms, p95 = 17.91 ms (including automated feature extraction from 2-year daily panel).
+    - 1-Horizon ($D_7$) inference latency: mean = **4.53 ms**, p50 = 4.44 ms.
+    - Memory footprint: 252.10 MB RSS.
+- **Files Created:**
+  - `backend/app/services/experimental_prediction_service.py` (Dedicated Task 12 prediction service)
+  - `backend/app/api/routes/experimental_forecast.py` (Dedicated experimental API route handlers)
+  - `backend/ml/data/processed/pit_sku_prices.json` (Point-in-time median price index for 4,916 SKUs)
+- **Files Modified:**
+  - `backend/app/schemas/forecast.py` (Added 9 optional extended features, flat request fields, and experimental readiness component)
+  - `backend/app/services/historical_data_service.py` (Added PIT price lookup, dynamic extended feature calculations, coverage fallback)
+  - `backend/app/api/routes/__init__.py` (Registered experimental router)
+  - `backend/app/main.py` (Lifespan startup initialization, non-blocking experimental readiness probe)
+  - `backend/tests/test_experimental_forecast.py` (Expanded from 3 to 26 unit tests covering feature engineering, service lifecycle, API endpoints, parity, and regression)
+  - `docs/DEVELOPMENT_LOG.md` (Updated chronological engineering ledger)
+- **Verification & Branch Safety:**
+  - Branch: `uni_api_experimental` (working tree clean upon commit).
+  - Protected branches `uni_api_submission` (`596430fc`) and `main` (`9b83bb18`) completely untouched.
+  - Baseline production models in `backend/ml/models/` and endpoints `/api/v1/forecast/*` 100% preserved and verified.
+  - Complete backend test suite: **131/131 passed in 38.02s (100% pass rate)**.
+
+---
+
 ### [2026-11-20] — Task 12: Comprehensive ML Model Selection, Hyperparameter Optimization & Chronological Cross-Validation
 
 - **Phase & Task:** Task 12 — Comprehensive ML Model Selection, Hyperparameter Optimization & Chronological Cross-Validation (`uni_api_experimental` branch).
