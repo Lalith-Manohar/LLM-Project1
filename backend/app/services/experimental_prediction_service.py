@@ -29,6 +29,7 @@ try:
 except ImportError:
     pass
 
+from app.core.config import settings
 from app.schemas.forecast import (
     ForecastRequest,
     ForecastResponse,
@@ -45,7 +46,7 @@ class ExperimentalPredictionService:
         if models_dir:
             self.models_dir = Path(models_dir)
         else:
-            self.models_dir = BACKEND_DIR / "ml" / "models_task12"
+            self.models_dir = Path(getattr(settings, "EXPERIMENTAL_MODELS_DIR", str(BACKEND_DIR / "ml" / "models_task12")))
 
         self.models: Dict[int, Any] = {}
         self.metadata: Dict[str, Any] = {}

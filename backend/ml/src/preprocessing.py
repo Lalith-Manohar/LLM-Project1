@@ -183,9 +183,15 @@ def save_processed_data(
     cancellations_df: pd.DataFrame,
     returns_df: pd.DataFrame,
     exceptional_df: pd.DataFrame,
-    output_dir: Optional[Path] = None
+    output_dir: Optional[Path] = None,
+    filter_service_codes: bool = True
 ) -> Dict[str, Path]:
-    """Saves separated transaction streams into CSV files."""
+    """Saves separated transaction streams into CSV files.
+    
+    When filter_service_codes=True, non-merchandise service transactions (POST, DOT, M, etc.)
+    are partitioned into service_transactions.csv and excluded from clean_gross_sales.csv,
+    guaranteeing that clean_gross_sales.csv contains only commercial merchandise demand.
+    """
     target_dir = output_dir or get_default_processed_data_dir()
     target_dir.mkdir(parents=True, exist_ok=True)
 
@@ -197,10 +203,16 @@ def save_processed_data(
         "service": target_dir / "service_transactions.csv"
     }
 
-    service_df = extract_service_records(gross_df)
+    if filter_service_codes:
+        is_service = gross_df["StockCode"].fillna("").astype(str).str.strip().str.upper().isin(NON_MERCHANDISE_CODES)
+        service_df = gross_df[is_service].copy()
+        merchandise_gross_df = gross_df[~is_service].copy()
+    else:
+        service_df = extract_service_records(gross_df)
+        merchandise_gross_df = gross_df
 
-    print(f"[NEXORA Preprocessing] Saving clean gross sales to: {files['gross_sales']}...")
-    gross_df.to_csv(files["gross_sales"], index=False, encoding="latin1")
+    print(f"[NEXORA Preprocessing] Saving clean commercial merchandise gross sales ({len(merchandise_gross_df):,} records) to: {files['gross_sales']}...")
+    merchandise_gross_df.to_csv(files["gross_sales"], index=False, encoding="latin1")
 
     print(f"[NEXORA Preprocessing] Saving non-merchandise service transactions ({len(service_df):,} records) to: {files['service']}...")
     service_df.to_csv(files["service"], index=False, encoding="latin1")

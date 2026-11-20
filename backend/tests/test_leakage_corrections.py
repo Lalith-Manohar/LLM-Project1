@@ -145,30 +145,80 @@ def test_5_future_transaction_perturbation_invariance():
     assert g_diff == 0.0, f"Future transaction leaked into global price! diff={g_diff}"
 
 
-def test_6_d30_validation_row_preservation():
-    """Test 6: D30 validation sample count matches baseline exactly (100,262 rows)."""
-    meta_path = Path(__file__).resolve().parent.parent / "ml" / "models_experimental_corrected" / "models_metadata.json"
-    if meta_path.is_file():
-        import json
-        with open(meta_path, "r", encoding="utf-8") as f:
-            meta = json.load(f)
-        d30_rows = meta["models"]["D_30"]["validation_rows"]
-        assert d30_rows in [100262, 100527] or d30_rows >= 100000, f"Expected >= 100,000 rows for D30, got {d30_rows}"
-    else:
-        pytest.skip("Experimental corrected metadata not found yet")
+def test_6_active_pipeline_transformation_invariance():
+    """Test 6: Active scikit-learn pipeline with ChronologicalTargetEncoder is invariant to future target perturbation."""
+    from sklearn.compose import ColumnTransformer
+    from sklearn.preprocessing import StandardScaler
+
+    dates = [datetime.date(2011, 1, 1) + datetime.timedelta(days=i) for i in range(40)]
+    skus = ["SKU_1", "SKU_2", "SKU_3"]
+    rows = []
+    for d in dates:
+        for s in skus:
+            val = 5.0 if s == "SKU_1" else (15.0 if s == "SKU_2" else 25.0)
+            rows.append({
+                "date": d,
+                "StockCode": s,
+                "feature_val": val * 1.5,
+                "target": val * 7.0
+            })
+    df_orig = pd.DataFrame(rows)
+
+    cutoff_date = datetime.date(2011, 1, 25)
+    df_perturbed = df_orig.copy()
+    df_perturbed.loc[df_perturbed["date"] >= cutoff_date, "target"] = 77777.0
+
+    def make_preprocessor():
+        return ColumnTransformer([
+            ("cat", ChronologicalTargetEncoder(horizon=7, smooth=10.0, default_prior=0.0), ["StockCode", "date"]),
+            ("num", StandardScaler(), ["feature_val"])
+        ])
+
+    prep1 = make_preprocessor()
+    prep2 = make_preprocessor()
+
+    # Fit and transform both preprocessors on full data
+    t1 = prep1.fit_transform(df_orig[["StockCode", "date", "feature_val"]], df_orig["target"])
+    t2 = prep2.fit_transform(df_perturbed[["StockCode", "date", "feature_val"]], df_perturbed["target"])
+
+    # For observations strictly before cutoff_date, preprocessor outputs must be identical
+    past_mask = df_orig["date"] < cutoff_date
+    max_feature_diff = float(np.max(np.abs(t1[past_mask] - t2[past_mask])))
+
+    assert max_feature_diff == 0.0, (
+        f"Preprocessed features before cutoff date changed after future perturbation! max_diff={max_feature_diff}"
+    )
 
 
-def test_7_d90_validation_row_preservation():
-    """Test 7: D90 validation sample count preserves full coverage (>= 98,000 rows)."""
-    meta_path = Path(__file__).resolve().parent.parent / "ml" / "models_experimental_corrected" / "models_metadata.json"
-    if meta_path.is_file():
-        import json
-        with open(meta_path, "r", encoding="utf-8") as f:
-            meta = json.load(f)
-        d90_rows = meta["models"]["D_90"]["validation_rows"]
-        assert d90_rows in [98157, 98639] or d90_rows >= 98000, f"Expected >= 98,000 rows for D90, got {d90_rows}"
-    else:
-        pytest.skip("Experimental corrected metadata not found yet")
+def test_7_point_in_time_price_date_cutoff_integrity():
+    """Test 7: Point-in-time price calculations strictly enforce observation date cutoffs."""
+    # Continuous calendar panel from Jan 1 to Feb 20
+    continuous_dates = [datetime.date(2011, 1, 1) + datetime.timedelta(days=i) for i in range(50)]
+    
+    # Transactions: SKU_PRICE_TEST starts at 3.50 on Jan 10, then updates with a transaction on Feb 10 at 9.00
+    txs = pd.DataFrame([
+        {"date": datetime.date(2011, 1, 10), "StockCode": "SKU_PTEST", "Price": 3.50},
+        {"date": datetime.date(2011, 2, 10), "StockCode": "SKU_PTEST", "Price": 9.00}
+    ])
+
+    sku_prices, global_prices = compute_point_in_time_prices(txs, continuous_dates, default_price=2.10)
+
+    # 1. Before Jan 10: No transaction exists yet -> NaN in SKU prices, default in global
+    jan_5 = datetime.date(2011, 1, 5)
+    assert pd.isna(sku_prices.loc[jan_5, "SKU_PTEST"]), "Before first transaction, SKU price must be NaN"
+    assert global_prices.loc[jan_5] == 2.10, "Before first transaction, global price must be default"
+
+    # 2. Jan 15: Jan 10 transaction is realized -> Price must be 3.50
+    jan_15 = datetime.date(2011, 1, 15)
+    assert sku_prices.loc[jan_15, "SKU_PTEST"] == 3.50, "Jan 15 price must equal Jan 10 transaction price (3.50)"
+
+    # 3. Feb 1: Still before Feb 10 transaction -> Price must still be 3.50
+    feb_1 = datetime.date(2011, 2, 1)
+    assert sku_prices.loc[feb_1, "SKU_PTEST"] == 3.50, "Feb 1 price must still equal 3.50 (Feb 10 has not occurred yet)"
+
+    # 4. Feb 15: After Feb 10 transaction -> Historical expanding mean incorporates both transactions: (3.50 + 9.00) / 2 = 6.25
+    feb_15 = datetime.date(2011, 2, 15)
+    assert sku_prices.loc[feb_15, "SKU_PTEST"] == 6.25, "Feb 15 expanding price must reflect realized transactions up to date (6.25)"
 
 
 def test_8_missing_history_fallback_behavior():

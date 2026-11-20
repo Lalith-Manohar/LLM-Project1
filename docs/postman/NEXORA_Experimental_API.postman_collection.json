@@ -643,7 +643,7 @@
         ],
         "body": {
           "mode": "raw",
-          "raw": "{\n  \"stock_code\": \"21777\"\n}",
+          "raw": "{\n  \"stock_code\": \"20877\"\n}",
           "options": {
             "raw": {
               "language": "json"
@@ -663,7 +663,7 @@
             "predict"
           ]
         },
-        "description": "Submits SKU '21777' which has fewer than 29 calendar days of history to verify validation error handling.\nExpected: HTTP 422 Unprocessable Content."
+        "description": "Submits SKU '20877' which has fewer than 29 calendar days of history to verify validation error handling.\nExpected: HTTP 422 Unprocessable Content."
       },
       "response": [
         {
@@ -671,7 +671,7 @@
           "status": "Unprocessable Entity",
           "code": 422,
           "_postman_previewlanguage": "json",
-          "body": "{\n  \"detail\": \"Insufficient historical sales data for SKU '21777' (6 calendar days available; minimum 29 days required to compute 28-day lag and rolling average features).\"\n}"
+          "body": "{\n  \"detail\": \"Insufficient historical sales data for SKU '20877' (9 calendar days available; minimum 29 days required to compute 28-day lag and rolling average features).\"\n}"
         }
       ]
     },

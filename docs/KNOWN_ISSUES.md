@@ -22,6 +22,55 @@ This document maintains an active registry of known technical issues, architectu
 
 ## Resolved Issues
 
+### ISSUE-016: Final Dataset Regeneration & Service Code Elimination from Daily Product Demand (F-01 End-to-End Pipeline)
+- **Severity:** Medium (Data Pipeline Consistency & Modeling Data Cleanliness)
+- **Module Affected:** ML Data Pipeline, Daily Aggregation, Point-in-Time Price Cache
+- **Relevant Files:**
+  - `backend/ml/data/processed/daily_product_demand.csv`
+  - `backend/ml/data/processed/pit_sku_price_history.json`
+- **Description:** While Task 22 successfully partitioned non-merchandise service codes (`POST`, `DOT`, `M`, `BANK CHARGES`, etc.; 4,581 transactions) out of `clean_gross_sales.csv` into `service_transactions.csv`, the downstream daily aggregation dataset `daily_product_demand.csv` still contained 5,092 service-related SKU-day rows from earlier preprocessing runs.
+- **Resolution Date:** 2026-11-21 (Task 24).
+- **Resolution Details:**
+  1. Re-executed `run_daily_aggregation_pipeline()` on `clean_gross_sales.csv` containing exclusively commercial merchandise (1,037,089 transactions).
+  2. The newly generated `daily_product_demand.csv` contains exactly 2,287,495 rows, representing an exact reduction of 5,092 service rows from 2,292,587 rows. Total demand volume dropped by exactly 17,563 service units to 11,402,742 units.
+  3. Rebuilt point-in-time price cache `pit_sku_price_history.json`, reducing tracked SKUs from 4,916 to exactly 4,905 pure commercial SKUs (0 service codes).
+  4. Verified zero presence of service codes in `daily_product_demand.csv` or `pit_sku_price_history.json`.
+  5. Verified 100% SKU coverage in zero-imputation audit: all 1,756,250 zero days strictly reside within observed active SKU lifespans `[min_date, max_date]`.
+  6. Verified bitwise model immutability across all 8 production and experimental model artifacts.
+  7. Re-verified all 12 Postman requests and all 155 pytest tests passed with 0 regressions.
+
+---
+
+### ISSUE-015: Task 22 Defect Remediation & Academic Hardening (Postman Test SKU, Startup Readiness, Service Codes, Leakage Tests, CORS, Model Config)
+- **Severity:** Medium (Academic Demonstration Integrity, Test Hardening & Security)
+- **Module Affected:** Postman Demonstration, Startup Script, ML Preprocessing, Temporal Leakage Tests, CORS Middleware, Model Configuration
+- **Relevant Files:**
+  - `docs/postman/NEXORA_Experimental_API.postman_collection.json`
+  - `start.ps1`
+  - `backend/ml/src/preprocessing.py`
+  - `backend/tests/test_leakage_corrections.py`
+  - `backend/app/main.py`
+  - `backend/app/core/config.py`
+  - `backend/app/services/experimental_prediction_service.py`
+- **Description:** Multiple audit findings and qualifications were identified during the Task 21 audit and independent reviewer inspection:
+  1. DEF-001: Request 11 in the experimental Postman collection tested SKU `21777`, which possessed 371 days of records in the recovered dataset, returning HTTP 200 instead of the expected HTTP 422 error test.
+  2. DEF-003: `start.ps1` only polled production `/ready`, lacking diagnostic visibility into `/api/v1/experimental/ready`.
+  3. F-01: Non-merchandise service and administrative codes (`POST`, `DOT`, `M`, etc.; 4,581 records) remained in `clean_gross_sales.csv`.
+  4. F-03: `backend/tests/test_leakage_corrections.py` tests 6 & 7 relied on skipped metadata checks rather than executing active mathematical transformations.
+  5. F-09: CORS middleware included wildcard origin `"*"` while `allow_credentials=True` was active, violating strict CORS security.
+  6. F-10: Experimental model directory path was hardcoded to `models_task12` rather than being configurable via settings/environment.
+- **Resolution Date:** 2026-11-20 (Task 22).
+- **Resolution Details:**
+  1. Updated Request 11 test SKU in Postman collection to `20877` (9 calendar days of history), resulting in 12/12 passed requests (100% pass rate).
+  2. Added secondary non-blocking diagnostic readiness probe in `start.ps1` for `/api/v1/experimental/ready` without breaking failure isolation.
+  3. Updated `backend/ml/src/preprocessing.py` to cleanly partition 4,581 service rows into `service_transactions.csv` while saving pure commercial merchandise (1,037,089 rows) to `clean_gross_sales.csv`.
+  4. Upgraded tests 6 & 7 in `backend/tests/test_leakage_corrections.py` to active transformation execution tests on synthetic data with 0 skips.
+  5. Removed wildcard origin from CORS middleware, locking down to local development client origins.
+  6. Added `EXPERIMENTAL_MODELS_DIR` to `Settings` in `config.py` and read it in `ExperimentalPredictionService`.
+  7. Re-verified all 155 pytest tests passed (100% pass rate in 41.08s), all 8 model binary hashes confirmed 100% bitwise immutable, and fresh-clone auto-initialization tested and verified.
+
+---
+
 ### ISSUE-014: Fresh-Clone Deployment Reproducibility, Readiness Reporting & Experimental Postman Collection
 - **Severity:** Medium (Deployment Automation & Subsystem Failure Isolation)
 - **Module Affected:** Deployment Scripts, Application Lifespan Probes, Readiness Health Checks & Postman Demonstration

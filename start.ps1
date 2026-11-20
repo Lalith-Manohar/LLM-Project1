@@ -355,6 +355,19 @@ if (-not $BackendReady) {
 
 Write-Host "      Backend is fully READY (4 ML models verified, historical sales data indexed)." -ForegroundColor Green
 
+# Secondary diagnostic probe: Experimental subsystem readiness
+$ExpReadyUrl = "http://127.0.0.1:8000/api/v1/experimental/ready"
+try {
+    $expResp = Invoke-RestMethod -Uri $ExpReadyUrl -Method Get -TimeoutSec 2 -ErrorAction Stop
+    if ($expResp -and $expResp.status -eq "ready") {
+        Write-Host "      Experimental subsystem is READY (Task 12 models loaded, price service verified)." -ForegroundColor Green
+    } else {
+        Write-Host "      [INFO] Experimental subsystem reports degraded/unready status: $($expResp.status)" -ForegroundColor Yellow
+    }
+} catch {
+    Write-Host "      [INFO] Experimental subsystem did not report readiness." -ForegroundColor Gray
+}
+
 # -------------------------------------------------------------
 # STEP 5: Launch React/Vite Frontend Client
 # -------------------------------------------------------------

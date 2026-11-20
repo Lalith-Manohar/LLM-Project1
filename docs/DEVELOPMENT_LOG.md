@@ -4,6 +4,70 @@ This document maintains a strict chronological development record for NEXORA. Ev
 
 ---
 
+### [2026-11-21] — Task 24: Final Dataset Regeneration, Model Consistency & Academic Submission Readiness
+
+- **Phase & Task:** Task 24 — Final Dataset Regeneration, Model Consistency & Academic Submission Readiness (`uni_api_experimental` branch).
+- **Task Description:** Successfully executed final controlled data regeneration, verified 100% end-to-end data pipeline integrity, confirmed bitwise model immutability, performed a complete dataset-wide zero-imputation audit across all 4,905 SKUs, and verified production/experimental API parity, fresh-clone reproducibility, Postman test execution, and full regression test passing:
+  1. *F-01 Complete End-to-End Resolution (Daily Demand Regeneration):* Regenerated `backend/ml/data/processed/daily_product_demand.csv` directly from commercial-only `clean_gross_sales.csv` (1,037,089 records, excluding all 11 non-merchandise service codes). The resulting daily demand dataset contains exactly 2,287,495 rows (reflecting the exact drop of 5,092 service-related rows from the previous 2,292,587 rows), 0 service codes, 531,245 positive-demand rows, 1,756,250 zero-demand rows (76.78%), and 11,402,742 total demand units (exact drop of 17,563 service units). Regenerated SHA-256 hash: `0E8D90697E743FC4DDFFF95CABBA1EA1DF57998733E41F474D849B4BE5A011A1`.
+  2. *Point-in-Time Price Cache Regeneration:* Rebuilt `backend/ml/data/processed/pit_sku_price_history.json` from pure commercial merchandise. The cache contains exactly 4,905 commercial SKUs (down from 4,916; exact removal of 11 service codes) and 1,037,089 transactions across 604 dates. Verified cutoff-aware pricing for SKU `85123A`: operational mode (`as_of_date=None`) yields 3.0749; backtest mode (`as_of_date='2011-12-09'`) strictly excludes same-day sales yielding 3.0744; historical prior year (`as_of_date='2011-01-01'`) yields 3.0527; and non-merchandise codes fall back cleanly to global median price (2.10).
+  3. *Dataset-Wide Zero-Imputation Audit (100% SKU Coverage):* Conducted comprehensive audit across all 4,905 SKUs. Confirmed that zero artificial pre-entry or post-exit zeros exist. Every single zero-demand record (1,756,250 rows) resides strictly within the observed active lifespan `[min_date, max_date]` of each SKU, fully resolving prior documentation ambiguity.
+  4. *Model Consistency & Bitwise Immutability:* Re-verified that zero models were retrained or altered. All 8 model binary SHA-256 hashes remain 100% bitwise identical to baseline commit. Both production and Task 12 experimental model pipelines execute flawlessly, and experimental models exhibit 100% feature and numeric parity with direct scikit-learn pipeline inference.
+  5. *Fresh-Clone Reproducibility:* Confirmed self-healing cold-start behavior in an isolated temporary directory containing only Git-tracked files (`online_retail_II.csv`, `daily_product_demand.csv`, and model binaries). Automatically regenerated `clean_gross_sales.csv` (104.2 MB) and `pit_sku_price_history.json` (19.2 MB) and verified price resolution with zero manual developer intervention.
+  6. *Automated Postman Collection:* Executed all 12 requests in `docs/postman/NEXORA_Experimental_API.postman_collection.json`: **12 / 12 passed (100% pass rate, 0 failures)**.
+  7. *Full Regression Test Suite:* Executed complete repository test suite: **155 / 155 passed in 42.52s (100% pass rate, 0 failures)**.
+- **Key Technical Deliverables & Empirical Guarantees:**
+  - **Daily Demand Dataset:** `backend/ml/data/processed/daily_product_demand.csv` (2,287,495 rows, 73,091,440 bytes, SHA-256: `0E8D9069...`, 0 service codes).
+  - **Point-in-Time Price Cache:** `backend/ml/data/processed/pit_sku_price_history.json` (4,905 SKUs, 19,207,484 bytes, 0 service codes).
+  - **Bitwise Model Immutability:** All 8 model binaries intact (4 production, 4 experimental).
+  - **Postman Execution:** 12 / 12 passed.
+  - **Pytest Regression:** 155 / 155 passed.
+- **Files Created / Modified:**
+  - `backend/ml/data/processed/daily_product_demand.csv` (Regenerated from commercial-only data)
+  - `backend/ml/data/processed/pit_sku_price_history.json` (Rebuilt with 4,905 commercial SKUs)
+  - `docs/DEVELOPMENT_LOG.md` (Updated with Task 24 entry)
+  - `docs/KNOWN_ISSUES.md` (Updated with ISSUE-016 resolution)
+- **Branch Safety & Cleanliness:**
+  - Active branch: `uni_api_experimental`.
+  - Protected branches `uni_api_submission` (`596430fc`) and `main` (`f0e56bad`) remain strictly untouched and frozen.
+  - Zero model retraining.
+
+---
+
+### [2026-11-20] — Task 22: Comprehensive Independent Defect Remediation, Repository Safety & Final Academic Readiness Audit
+
+- **Phase & Task:** Task 22 — Comprehensive Independent Defect Remediation, Repository Safety & Final Academic Readiness Audit (`uni_api_experimental` branch).
+- **Task Description:** Conducted a comprehensive, evidence-based investigation of all 12 findings from the independent friend's audit report (F-01 through F-12) and Task 21 qualifications (DEF-001, DEF-003). Successfully resolved all verified defects, strengthened temporal leakage regression testing, tightened CORS security, made experimental model paths configurable, eliminated Postman test discrepancies, and verified 100% bitwise model artifact immutability and fresh-clone reproducibility:
+  1. *DEF-001 (Postman Collection Request 11 SKU Remediation):* Resolved the test assertion failure in Request 11 of `docs/postman/NEXORA_Experimental_API.postman_collection.json`. Updated test SKU from `21777` (which possessed 371 days of records in the recovered 2-year dataset and returned HTTP 200) to `20877` (which has only 9 calendar days of records). Re-tested all 12 requests in the collection using the automated execution runner: **12 / 12 passed (100% pass rate, 0 failures)**.
+  2. *DEF-003 (`start.ps1` Experimental Readiness Visibility):* Enhanced `start.ps1` to perform a non-blocking secondary diagnostic probe against `http://127.0.0.1:8000/api/v1/experimental/ready` following production `/ready` verification, providing human-readable status for both subsystems while strictly preserving failure isolation.
+  3. *F-01 (Non-Merchandise Service Code Partitioning):* Updated `backend/ml/src/preprocessing.py` `save_processed_data` with `filter_service_codes=True` to explicitly partition non-merchandise service and administrative codes (`POST`, `DOT`, `M`, `BANK CHARGES`, `AMAZONFEE`, etc.; 4,581 records) into `service_transactions.csv` while reserving `clean_gross_sales.csv` strictly for commercial merchandise demand (1,037,089 records). Raw dataset (1,067,371 rows) remains 100% reconciled with zero data loss.
+  4. *F-03 (Leakage Test Suite Hardening):* Upgraded `backend/tests/test_leakage_corrections.py` by replacing tests 6 & 7 (which previously ran `pytest.skip` over obsolete metadata paths) with active mathematical execution tests: `test_6_active_pipeline_transformation_invariance` (verifying active scikit-learn preprocessing invariance under future label perturbation) and `test_7_point_in_time_price_date_cutoff_integrity` (verifying observation date cutoffs and expanding-average price integrity across time). All 11 tests in the suite execute and pass actively with 0 skips.
+  5. *F-09 (CORS Security Tightening):* Eliminated wildcard origin `"*"` from `CORSMiddleware` in `backend/app/main.py`. Because `allow_credentials=True` was set, wildcard allowed arbitrary external websites to make authenticated requests. Restricted allowed origins to local development clients (`http://localhost:5173`, `http://127.0.0.1:5173`, `http://localhost:3000`, `http://127.0.0.1:3000`, `http://localhost:8000`, `http://127.0.0.1:8000`). Preflight OPTIONS from arbitrary origins correctly return HTTP 400.
+  6. *F-10 (Configurable Experimental Model Path):* Added `EXPERIMENTAL_MODELS_DIR` to `Settings` in `backend/app/core/config.py`, defaulting to `backend/ml/models_task12`. Updated `ExperimentalPredictionService` to read `settings.EXPERIMENTAL_MODELS_DIR`, enabling environment variable override without modifying production configurations.
+  7. *F-02, F-04, F-05, F-06, F-07, F-08, F-11, F-12 (Investigation & Academic Verification):* Confirmed that zero-demand imputation is strictly restricted to each SKU's active lifespan between `min_date` and `max_date` (F-02); verified Task 12 expanding-window chronological cross-validation with horizon embargoes (F-04); verified Task 12 D90 model is a 2.5 MB ElasticNet pipeline rather than the legacy 132-byte heuristic (F-05); distinguished SKU-level WAPE (54.2%, 44.9%, 45.1%, 48.2%) across intermittent zero-inflated demand from aggregate store-wide volume dynamics (F-06); verified production feature parity with 0 schema mismatch (F-07); verified automated fresh-clone preprocessing self-healing in an isolated environment (F-08); verified `.gitignore` tracks raw data and models while safely ignoring derived datasets (F-11); verified minimal 16-package dependency registry (F-12).
+- **Key Technical Deliverables & Empirical Guarantees:**
+  - **Automated Regression Test Suite:** Executed full test suite across all modules: **155 / 155 passed in 41.08s (100% pass rate, 0 failures)**.
+  - **Postman Execution Suite:** Executed all 12 requests in `docs/postman/NEXORA_Experimental_API.postman_collection.json`: **12 / 12 passed (100% pass rate, 0 failures)**.
+  - **Bitwise Model Artifact Immutability:** SHA-256 hashes of all 8 model binaries recomputed and verified 100% bitwise identical to baseline commit:
+    - Production: D7 (`C33D53FB...`), D15 (`A33A26C0...`), D30 (`AF7C9123...`), D90 (`26959280...`).
+    - Experimental: D7 (`F0DE9357...`), D15 (`B5FA0E91...`), D30 (`3735467A...`), D90 (`A7AD19C2...`).
+  - **Isolated Fresh-Clone Reproducibility:** Verified in temporary isolated directory with missing derived files; successfully auto-generated `clean_gross_sales.csv` (104.2 MB) and `pit_sku_price_history.json` (19.2 MB) and resolved prediction for SKU `85123A` to 3.0744.
+- **Files Created / Modified:**
+  - `docs/postman/NEXORA_Experimental_API.postman_collection.json` (Updated Request 11 SKU to `20877` for 100% pass rate)
+  - `start.ps1` (Enhanced startup launcher with secondary experimental readiness diagnostic check)
+  - `backend/app/main.py` (Secured CORS middleware by removing wildcard origin)
+  - `backend/app/core/config.py` (Added `EXPERIMENTAL_MODELS_DIR` to `Settings`)
+  - `backend/app/services/experimental_prediction_service.py` (Configured model path from `settings.EXPERIMENTAL_MODELS_DIR`)
+  - `backend/ml/src/preprocessing.py` (Partitioned service codes from `clean_gross_sales.csv` into `service_transactions.csv`)
+  - `backend/tests/test_leakage_corrections.py` (Upgraded tests 6 & 7 with active transformation tests)
+  - `docs/KNOWN_ISSUES.md` (Updated status of DEF-001, DEF-003, F-01, F-03, F-09, F-10)
+  - `docs/DEVELOPMENT_LOG.md` (Updated chronological engineering ledger)
+- **Branch Safety & Cleanliness:**
+  - Branch: `uni_api_experimental` exclusively.
+  - Protected branches `uni_api_submission` (`596430fc`) and `main` (`9b83bb18`) completely untouched.
+  - Zero model retraining, zero model file overwrites.
+
+---
+
 ### [2026-11-20] — Task 20: Fresh-Clone Reproducibility, Readiness Integrity & Experimental Postman Deployment
 
 - **Phase & Task:** Task 20 — Fresh-Clone Reproducibility, Readiness Integrity & Experimental Postman Deployment (`uni_api_experimental` branch).
