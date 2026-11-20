@@ -22,6 +22,33 @@ This document maintains an active registry of known technical issues, architectu
 
 ## Resolved Issues
 
+### ISSUE-014: Fresh-Clone Deployment Reproducibility, Readiness Reporting & Experimental Postman Collection
+- **Severity:** Medium (Deployment Automation & Subsystem Failure Isolation)
+- **Module Affected:** Deployment Scripts, Application Lifespan Probes, Readiness Health Checks & Postman Demonstration
+- **Relevant Files:**
+  - `backend/ml/src/point_in_time_price.py`
+  - `backend/app/schemas/forecast.py`
+  - `backend/app/services/historical_data_service.py`
+  - `backend/app/services/experimental_prediction_service.py`
+  - `backend/app/api/routes/experimental_forecast.py`
+  - `backend/app/main.py`
+  - `start.ps1`
+  - `docs/postman/NEXORA_Experimental_API.postman_collection.json`
+  - `docs/postman/EXPERIMENTAL_DEMONSTRATION_GUIDE.md`
+  - `backend/tests/test_experimental_forecast.py`
+- **Description:** The Task 19 independent deployment audit identified three qualifications preventing zero-intervention setup on a clean clone:
+  1. `clean_gross_sales.csv` and `pit_sku_price_history.json` are git-ignored; on a pristine clone, `PointInTimePriceService.load_index()` failed with `FileNotFoundError` without manual preprocessing.
+  2. The application readiness probe lacked distinct visibility into the point-in-time price service, reporting misleading readiness states or risking failure cascading across baseline production services.
+  3. No dedicated Postman collection existed for the experimental forecasting endpoints (`/api/v1/experimental/*`).
+- **Resolution Date:** 2026-11-20 (Task 20).
+- **Resolution Details:**
+  1. Implemented fresh-clone self-healing in `PointInTimePriceService.load_index()`: if `clean_gross_sales.csv` is missing, it automatically derives it from `online_retail_II.csv` via `run_preprocessing_pipeline` in ~5s, then builds `pit_sku_price_history.json` atomically in ~1s.
+  2. Disentangled historical demand readiness (`is_demand_data_ready()`) from price service readiness (`is_price_service_ready()`). If the price service is down, baseline production (`/ready` and `/api/v1/forecast/predict`) continues to operate flawlessly with HTTP 200 (complete failure isolation), while experimental readiness (`/api/v1/experimental/ready`) accurately returns HTTP 503.
+  3. Enhanced `start.ps1` with automated preflight checks for experimental assets, automatic preprocessing invocation on clean clones, and updated access point documentation.
+  4. Authoring of `docs/postman/NEXORA_Experimental_API.postman_collection.json` with 12 distinct requests covering lifecycle probes, metadata transparency, multi-horizon predictions, edge-case error validation (404/422), and production baseline comparison, complete with automated Postman test assertion scripts.
+  5. Created comprehensive companion guide in `docs/postman/EXPERIMENTAL_DEMONSTRATION_GUIDE.md`.
+  6. Added 6 new automated regression tests in Section 9 of `test_experimental_forecast.py`. All 155 repository tests executed and passed (100% pass rate). Recomputed SHA-256 hashes of all 8 model binaries, confirming 100% bitwise immutability.
+
 ### ISSUE-013: Historical Feature Extraction Cutoff Propagation & Price Index Cache Invalidation
 - **Severity:** Low (Historical Backtesting Precision & Cache Staleness)
 - **Module Affected:** Machine Learning Subsystem / Historical Feature Extraction & PIT Price Service

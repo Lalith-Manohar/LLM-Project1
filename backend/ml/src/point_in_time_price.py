@@ -300,6 +300,14 @@ class PointInTimePriceService:
                         rebuild_reason = f"Cache JSON read/parsing error: {parse_err}"
 
                 if needs_rebuild:
+                    # Fresh-clone self-healing: if target_sales is missing, check if raw dataset is available to run preprocessing
+                    if not target_sales.is_file():
+                        raw_csv = self.data_dir.parent / "raw" / "online_retail_II.csv"
+                        if raw_csv.is_file():
+                            print(f"[PIT Price Service] Target sales dataset missing at {target_sales.name}. Auto-running preprocessing from {raw_csv.name}...")
+                            from ml.src.preprocessing import run_preprocessing_pipeline
+                            run_preprocessing_pipeline(raw_csv_path=str(raw_csv), output_dir=self.data_dir)
+
                     if target_sales.is_file():
                         print(f"[PIT Price Service] Rebuilding price history index ({rebuild_reason})...")
                         cached_data = self.build_and_save_index(target_sales, target_cache)
@@ -343,6 +351,8 @@ class PointInTimePriceService:
     def ensure_loaded(self) -> None:
         """Ensures the price index is loaded."""
         if not self.is_loaded:
+            if self.load_error is not None:
+                raise RuntimeError(f"Point-in-time price service is unavailable: {self.load_error}")
             self.load_index()
 
     def get_price(

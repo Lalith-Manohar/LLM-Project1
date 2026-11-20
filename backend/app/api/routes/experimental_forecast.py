@@ -115,7 +115,7 @@ def predict_experimental_demand(request: ForecastRequest) -> ForecastResponse:
     if not experimental_prediction_service.is_ready():
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail=f"Experimental forecasting models are not ready: {experimental_prediction_service.load_error or 'Service uninitialized'}"
+            detail=f"Experimental forecasting models are not ready: {experimental_prediction_service.get_status().get('error') or experimental_prediction_service.load_error or 'Service uninitialized'}"
         )
     if request.features is None and not historical_data_service.is_ready():
         raise HTTPException(

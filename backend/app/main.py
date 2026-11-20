@@ -36,6 +36,13 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         print(f"[NEXORA Startup WARNING] Task 12 experimental ML model initialization failed: {e}")
 
+    # 4. Independent point-in-time price service initialization
+    try:
+        from ml.src.point_in_time_price import pit_price_service
+        pit_price_service.ensure_loaded()
+    except Exception as e:
+        print(f"[NEXORA Startup WARNING] Point-in-time price service initialization failed: {e}")
+
     yield
     print("[NEXORA Shutdown] Application shutting down cleanly.")
 
@@ -112,7 +119,7 @@ def readiness_check(response: Response) -> ReadinessResponse:
     models_status = prediction_service.get_status()
     data_status = historical_data_service.get_status()
     exp_status = experimental_prediction_service.get_status()
-    exp_component = ComponentReadiness(**exp_status) if exp_status.get("ready") else None
+    exp_component = ComponentReadiness(**exp_status) if (exp_status.get("models_count", 0) > 0 or exp_status.get("ready")) else None
 
     is_ready = bool(models_status["ready"] and data_status["ready"])
     

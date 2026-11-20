@@ -157,17 +157,37 @@ class ExperimentalPredictionService:
             )
 
     def is_ready(self) -> bool:
-        """Returns True if and only if all 4 Task 12 models are loaded and verified in memory."""
-        return bool(self.is_loaded and len(self.models) == len(self.supported_horizons) and self.load_error is None)
+        """Returns True if and only if all 4 Task 12 models are loaded and verified in memory,
+        and the point-in-time price service is available."""
+        models_ready = bool(self.is_loaded and len(self.models) == len(self.supported_horizons) and self.load_error is None)
+        price_ready = False
+        try:
+            from app.services.historical_data_service import historical_data_service
+            price_ready = historical_data_service.is_price_service_ready()
+        except Exception:
+            pass
+        return models_ready and price_ready
 
     def get_status(self) -> Dict[str, Any]:
         """Returns structured subsystem status for readiness and diagnostic probes."""
+        price_ready = False
+        try:
+            from app.services.historical_data_service import historical_data_service
+            price_ready = historical_data_service.is_price_service_ready()
+        except Exception:
+            pass
+        models_ready = bool(self.is_loaded and len(self.models) == len(self.supported_horizons) and self.load_error is None)
+        err = self.load_error
+        if models_ready and not price_ready:
+            err = "Point-in-time price service is not ready"
+
         return {
             "ready": self.is_ready(),
             "models_count": len(self.models),
             "loaded_horizons": sorted(list(self.models.keys())),
             "models_dir": str(self.models_dir.name),
-            "error": self.load_error
+            "price_service_ready": price_ready,
+            "error": err
         }
 
     def ensure_loaded(self) -> None:
@@ -240,7 +260,10 @@ class ExperimentalPredictionService:
         if features.unit_price is not None:
             price = float(features.unit_price)
         else:
-            price = historical_data_service.get_unit_price(sku, as_of_date=obs_date_obj)
+            try:
+                price = historical_data_service.get_unit_price(sku, as_of_date=obs_date_obj)
+            except Exception as e:
+                raise RuntimeError(f"Point-in-time price service is unavailable: {e}") from e
 
         if features.has_60d_history is not None:
             has_60d = float(features.has_60d_history)

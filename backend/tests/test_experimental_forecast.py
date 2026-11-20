@@ -914,3 +914,185 @@ def test_cache_invalidation_reproduces_task12_prices():
         assert service.get_price("SKU_G", as_of_date=None) == 20.0
 
 
+# =====================================================================
+# SECTION 9: Task 20 Readiness Integrity, Failure Isolation & Fresh-Clone Tests
+# =====================================================================
+
+def test_readiness_distinguishes_demand_from_price_service():
+    """1. HistoricalDataService exposes distinct demand and price service readiness."""
+    assert historical_data_service.is_demand_data_ready() is True
+    assert historical_data_service.is_price_service_ready() is True
+    status = historical_data_service.get_status()
+    assert "demand_data_ready" in status
+    assert "price_service_ready" in status
+    assert status["demand_data_ready"] is True
+    assert status["price_service_ready"] is True
+    assert "price_service" in status
+    assert status["price_service"]["ready"] is True
+
+
+def test_experimental_readiness_requires_price_service(client):
+    """2. When price service is down, experimental readiness returns 503 while production returns 200."""
+    from ml.src.point_in_time_price import pit_price_service
+    orig_loaded = pit_price_service.is_loaded
+    orig_error = pit_price_service.load_error
+
+    try:
+        pit_price_service.is_loaded = False
+        pit_price_service.load_error = "Simulated price service outage"
+
+        # Check service methods
+        assert historical_data_service.is_price_service_ready() is False
+        assert historical_data_service.is_ready() is True  # Demand data still ready
+        assert experimental_prediction_service.is_ready() is False
+
+        # Check endpoints
+        # Production readiness (/ready) must stay HTTP 200 with status="ready"
+        r_prod_ready = client.get("/ready")
+        assert r_prod_ready.status_code == 200
+        data_prod = r_prod_ready.json()
+        assert data_prod["status"] == "ready"
+        assert data_prod["models"]["ready"] is True
+        assert data_prod["historical_data"]["ready"] is True
+        if data_prod.get("experimental_models"):
+            assert data_prod["experimental_models"]["ready"] is False
+
+        # Production prediction must succeed with HTTP 200
+        r_prod_pred = client.post("/api/v1/forecast/predict", json={"stock_code": "85123A"})
+        assert r_prod_pred.status_code == 200
+        assert r_prod_pred.json()["status"] == "success"
+
+        # Experimental readiness (/api/v1/experimental/ready) must report HTTP 503
+        r_exp_ready = client.get("/api/v1/experimental/ready")
+        assert r_exp_ready.status_code == 503
+        data_exp = r_exp_ready.json()
+        assert data_exp["status"] == "not_ready"
+        assert data_exp["experimental_models"]["ready"] is False
+
+        # Experimental prediction must return HTTP 503
+        r_exp_pred = client.post("/api/v1/experimental/forecast/predict", json={"stock_code": "85123A"})
+        assert r_exp_pred.status_code == 503
+
+    finally:
+        pit_price_service.is_loaded = orig_loaded
+        pit_price_service.load_error = orig_error
+
+
+def test_feature_extraction_fallback_when_price_service_down():
+    """3. When price service fails, feature extraction does not crash; unit_price is None, and production prediction succeeds."""
+    from ml.src.point_in_time_price import pit_price_service
+    from app.services.prediction_service import prediction_service
+
+    orig_loaded = pit_price_service.is_loaded
+    orig_error = pit_price_service.load_error
+
+    try:
+        pit_price_service.is_loaded = False
+        pit_price_service.load_error = "Simulated price outage"
+
+        features, ctx = historical_data_service.get_features_for_sku("85123A")
+        assert features.unit_price is None, "Expected unit_price to be None when price service is down"
+        assert features.lag_1 > 0
+        assert features.rolling_mean_7 > 0
+
+        # Production forecast succeeds with None unit_price
+        req = ForecastRequest(stock_code="85123A")
+        resp = prediction_service.get_forecast(req)
+        assert resp.status == "success"
+        assert "7" in resp.predictions
+    finally:
+        pit_price_service.is_loaded = orig_loaded
+        pit_price_service.load_error = orig_error
+
+
+def test_experimental_models_unavailable_failure_isolation(client):
+    """4. When experimental models fail, experimental ready returns 503 but production ready returns 200."""
+    orig_models = experimental_prediction_service.models
+    orig_loaded = experimental_prediction_service.is_loaded
+    orig_error = experimental_prediction_service.load_error
+
+    try:
+        experimental_prediction_service.models = {}
+        experimental_prediction_service.is_loaded = False
+        experimental_prediction_service.load_error = "Simulated missing experimental models"
+
+        assert experimental_prediction_service.is_ready() is False
+
+        # Production /ready remains 200
+        r_prod = client.get("/ready")
+        assert r_prod.status_code == 200
+
+        # Experimental /api/v1/experimental/ready returns 503
+        r_exp = client.get("/api/v1/experimental/ready")
+        assert r_exp.status_code == 503
+
+        # Experimental predict returns 503
+        r_pred = client.post("/api/v1/experimental/forecast/predict", json={"stock_code": "85123A"})
+        assert r_pred.status_code == 503
+    finally:
+        experimental_prediction_service.models = orig_models
+        experimental_prediction_service.is_loaded = orig_loaded
+        experimental_prediction_service.load_error = orig_error
+
+
+def test_production_models_unavailable_causes_production_503(client):
+    """5. When production models are unavailable, /ready returns 503."""
+    from app.services.prediction_service import prediction_service
+    orig_models = prediction_service.models
+    orig_loaded = prediction_service.is_loaded
+    orig_error = prediction_service.load_error
+
+    try:
+        prediction_service.models = {}
+        prediction_service.is_loaded = False
+        prediction_service.load_error = "Simulated missing production models"
+
+        r_ready = client.get("/ready")
+        assert r_ready.status_code == 503
+    finally:
+        prediction_service.models = orig_models
+        prediction_service.is_loaded = orig_loaded
+        prediction_service.load_error = orig_error
+
+
+def test_fresh_clone_self_healing_preprocessing():
+    """6. In a clean environment with only raw CSV, PointInTimePriceService auto-runs preprocessing."""
+    from ml.src.point_in_time_price import PointInTimePriceService
+    with tempfile.TemporaryDirectory() as tmpdir:
+        tmp_path = Path(tmpdir)
+        raw_dir = tmp_path / "raw"
+        raw_dir.mkdir(parents=True)
+        raw_csv = raw_dir / "online_retail_II.csv"
+
+        # Create minimal synthetic raw retail dataset
+        raw_df = pd.DataFrame({
+            "Invoice": ["500001", "500002", "C500003"],
+            "StockCode": ["TEST1", "TEST1", "TEST1"],
+            "Description": ["Item 1", "Item 1", "Item 1"],
+            "Quantity": [10, 20, -5],
+            "InvoiceDate": ["2010-01-01 10:00:00", "2010-01-02 11:00:00", "2010-01-03 12:00:00"],
+            "Price": [2.5, 3.0, 2.5],
+            "Customer ID": [12345.0, 12345.0, 12345.0],
+            "Country": ["United Kingdom", "United Kingdom", "United Kingdom"]
+        })
+        raw_df.to_csv(raw_csv, index=False)
+
+        proc_dir = tmp_path / "processed"
+        proc_dir.mkdir(parents=True)
+        sales_csv = proc_dir / "clean_gross_sales.csv"
+        cache_json = proc_dir / "pit_sku_price_history.json"
+
+        assert not sales_csv.is_file()
+        assert not cache_json.is_file()
+
+        service = PointInTimePriceService(data_dir=proc_dir)
+        service.load_index(cache_path=cache_json, sales_path=sales_csv)
+
+        assert sales_csv.is_file(), "clean_gross_sales.csv was not auto-generated from raw CSV!"
+        assert cache_json.is_file(), "pit_sku_price_history.json was not built!"
+        assert service.is_loaded is True
+        # TEST1 has two valid sales: (2.5 + 3.0) / 2 = 2.75
+        assert service.get_price("TEST1", as_of_date=None) == 2.75
+
+
+

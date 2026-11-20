@@ -117,6 +117,23 @@ if ($MissingAssets.Count -gt 0) {
 }
 Write-Host "      All 6 essential datasets and trained models verified." -ForegroundColor Green
 
+$ExperimentalAssets = @(
+    "backend\ml\models_task12\models_metadata.json",
+    "backend\ml\models_task12\demand_model_7d.joblib",
+    "backend\ml\models_task12\demand_model_15d.joblib",
+    "backend\ml\models_task12\demand_model_30d.joblib",
+    "backend\ml\models_task12\demand_model_90d.joblib"
+)
+$FoundExp = 0
+foreach ($expRel in $ExperimentalAssets) {
+    if (Test-Path (Join-Path $ProjectRoot $expRel)) { $FoundExp++ }
+}
+if ($FoundExp -eq $ExperimentalAssets.Count) {
+    Write-Host "      Task 12 experimental models verified (all 4 horizons present)." -ForegroundColor Green
+} else {
+    Write-Host "      [INFO] Task 12 experimental models not fully present ($FoundExp/$($ExperimentalAssets.Count)). Experimental endpoints will report 503." -ForegroundColor Gray
+}
+
 # -------------------------------------------------------------
 # STEP 2: Automatically Prepare Python Virtual Environment
 # -------------------------------------------------------------
@@ -191,6 +208,27 @@ if ($NeedsBackendInstall) {
     Write-Host "      Backend dependencies installed and verified." -ForegroundColor Green
 } else {
     Write-Host "      Backend dependencies already satisfied." -ForegroundColor Green
+}
+
+# -------------------------------------------------------------
+# STEP 2C: Auto-initialize Derived Datasets & Price Index (Fresh Clone)
+# -------------------------------------------------------------
+$CleanSalesCsv = Join-Path $ProjectRoot "backend\ml\data\processed\clean_gross_sales.csv"
+$RawSalesCsv = Join-Path $ProjectRoot "backend\ml\data\raw\online_retail_II.csv"
+
+if (-not (Test-Path $CleanSalesCsv) -and (Test-Path $RawSalesCsv)) {
+    Write-Host "      Derived sales dataset (clean_gross_sales.csv) missing. Running preprocessing..." -ForegroundColor Yellow
+    Push-Location (Join-Path $ProjectRoot "backend")
+    try {
+        & $VenvPython -m ml.src.preprocessing
+        if ($LASTEXITCODE -eq 0 -and (Test-Path $CleanSalesCsv)) {
+            Write-Host "      Derived sales dataset generated successfully." -ForegroundColor Green
+        } else {
+            Write-Host "      [WARNING] Preprocessing did not complete cleanly." -ForegroundColor Yellow
+        }
+    } finally {
+        Pop-Location
+    }
 }
 
 # -------------------------------------------------------------
@@ -334,11 +372,13 @@ Write-Host "         NEXORA Development Services Launched!            " -Foregro
 Write-Host "==========================================================" -ForegroundColor Green
 Write-Host ""
 Write-Host "Access Points:" -ForegroundColor White
-Write-Host "  - Frontend Client:       http://localhost:5173" -ForegroundColor Yellow
-Write-Host "  - Backend API:           http://localhost:8000" -ForegroundColor Yellow
-Write-Host "  - Swagger Documentation:  http://localhost:8000/docs" -ForegroundColor Yellow
-Write-Host "  - Liveness Health Probe: http://localhost:8000/health" -ForegroundColor Yellow
-Write-Host "  - Readiness Health Probe: http://localhost:8000/ready" -ForegroundColor Yellow
+Write-Host "  - Frontend Client:            http://localhost:5173" -ForegroundColor Yellow
+Write-Host "  - Backend API:                http://localhost:8000" -ForegroundColor Yellow
+Write-Host "  - Swagger Documentation:       http://localhost:8000/docs" -ForegroundColor Yellow
+Write-Host "  - Liveness Health Probe:      http://localhost:8000/health" -ForegroundColor Yellow
+Write-Host "  - Readiness Health Probe:     http://localhost:8000/ready" -ForegroundColor Yellow
+Write-Host "  - Experimental Readiness:     http://localhost:8000/api/v1/experimental/ready" -ForegroundColor Yellow
+Write-Host "  - Experimental Forecast API:  http://localhost:8000/api/v1/experimental/forecast/predict" -ForegroundColor Yellow
 Write-Host ""
 Write-Host "Server Management:" -ForegroundColor White
 Write-Host "  - Both servers are running in separate PowerShell windows with real-time logs." -ForegroundColor Gray

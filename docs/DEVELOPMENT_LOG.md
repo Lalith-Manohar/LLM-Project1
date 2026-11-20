@@ -4,6 +4,39 @@ This document maintains a strict chronological development record for NEXORA. Ev
 
 ---
 
+### [2026-11-20] — Task 20: Fresh-Clone Reproducibility, Readiness Integrity & Experimental Postman Deployment
+
+- **Phase & Task:** Task 20 — Fresh-Clone Reproducibility, Readiness Integrity & Experimental Postman Deployment (`uni_api_experimental` branch).
+- **Task Description:** Successfully resolved all three deployment qualifications identified in the Task 19 Independent Deployment Audit, preparing the experimental branch for pristine reproducibility and complete demonstration readiness:
+  1. *Qualification 1 (Fresh-Clone Auto-Initialization):* Resolved missing-derived-dataset barrier on clean clones. Because `backend/ml/data/processed/clean_gross_sales.csv` and `pit_sku_price_history.json` are git-ignored, a clean clone previously crashed with `FileNotFoundError` upon starting the price service. Implemented fresh-clone self-healing inside `PointInTimePriceService.load_index()`: if `clean_gross_sales.csv` is missing, it automatically detects raw source dataset `online_retail_II.csv`, executes `run_preprocessing_pipeline` (~5s), and builds `pit_sku_price_history.json` atomically (~1s) without requiring manual developer intervention.
+  2. *Qualification 2 (Readiness Integrity & Failure Isolation):* Disentangled historical daily demand data readiness from point-in-time price service readiness in `HistoricalDataService`. Added explicit diagnostic methods `is_demand_data_ready() -> bool` and `is_price_service_ready() -> bool`. Updated `ExperimentalPredictionService.is_ready()` to require both models and price service readiness. In `HistoricalDataService.get_features_for_sku()`, guarded price resolution so that price service outages gracefully set `unit_price = None` instead of raising unhandled exceptions. Crucially, baseline production services (`/ready` and `/api/v1/forecast/predict`) remain 100% operational with HTTP 200 regardless of experimental pricing status (complete failure isolation), while `/api/v1/experimental/ready` and `/api/v1/experimental/forecast/predict` return HTTP 503 if the price service is down.
+  3. *Qualification 3 (Experimental Postman Demonstration Collection):* Created complete 12-request Postman collection at `docs/postman/NEXORA_Experimental_API.postman_collection.json` containing test scripts (`pm.test`), request descriptions, sample bodies, and reference responses for all experimental endpoints, lifecycle health probes, edge cases (404/422), and production comparison. Authored comprehensive presentation guide at `docs/postman/EXPERIMENTAL_DEMONSTRATION_GUIDE.md`.
+  4. *Startup Script Enhancements (`start.ps1`):* Added preflight checks verifying Task 12 experimental model binaries and metadata, added STEP 2C to auto-generate `clean_gross_sales.csv` on fresh clones if missing, and updated service access point summaries.
+- **Key Technical Deliverables & Empirical Guarantees:**
+  - **Automated Regression Test Suite:** Added 6 new automated tests in Section 9 of `backend/tests/test_experimental_forecast.py` validating distinct readiness probes, failure isolation of production when price service is down, graceful `unit_price = None` feature fallback, failure isolation when experimental models are unavailable, production model failure responses, and fresh-clone self-healing preprocessing. Entire repository test suite passed: **155 / 155 passed in 39.96s (100% pass rate, 0 failures)**.
+  - **Bitwise Model Artifact Immutability:** SHA-256 hashes of all 8 model binaries recomputed and verified to be 100% bitwise identical to starting hashes:
+    - Production: D7 (`f0de93...`), D15 (`b5fa0e...`), D30 (`373546...`), D90 (`a7ad19...`).
+    - Experimental: D7 (`c33d53...`), D15 (`a33a26...`), D30 (`af7c91...`), D90 (`269592...`).
+- **Files Created / Modified:**
+  - `backend/ml/src/point_in_time_price.py` (Added fresh-clone auto-preprocessing derivation from raw dataset, guarded `ensure_loaded`)
+  - `backend/app/schemas/forecast.py` (Enhanced `ComponentReadiness` with `ConfigDict(extra="ignore")` and diagnostic fields)
+  - `backend/app/services/historical_data_service.py` (Added `is_demand_data_ready()`, `is_price_service_ready()`, updated `get_status()`, guarded price lookup in `get_features_for_sku`)
+  - `backend/app/services/experimental_prediction_service.py` (Updated `is_ready()`, `get_status()`, guarded price lookup in `get_forecast`)
+  - `backend/app/api/routes/experimental_forecast.py` (Refined error detail reporting for readiness checks)
+  - `backend/app/main.py` (Added price service initialization in `lifespan`, updated `readiness_check` component inspection)
+  - `start.ps1` (Added experimental asset verification, STEP 2C auto-preprocessing, and experimental access point documentation)
+  - `docs/postman/NEXORA_Experimental_API.postman_collection.json` (Created 12-request Postman test suite)
+  - `docs/postman/EXPERIMENTAL_DEMONSTRATION_GUIDE.md` (Created Postman usage guide and benchmark comparison)
+  - `backend/tests/test_experimental_forecast.py` (Added Section 9 tests: 6 new tests)
+  - `docs/KNOWN_ISSUES.md` (Logged resolution of ISSUE-014)
+  - `docs/DEVELOPMENT_LOG.md` (Updated chronological engineering ledger)
+- **Verification & Branch Safety:**
+  - Branch: `uni_api_experimental` exclusively.
+  - Protected branches `uni_api_submission` (`596430fc`) and `main` (`9b83bb18`) completely untouched.
+  - Existing baseline production models, routes, and tests 100% preserved.
+
+---
+
 ### [2026-11-20] — Task 17: Historical Feature Cutoff Correction & Price Cache Invalidation
 
 - **Phase & Task:** Task 17 — Historical Feature Cutoff Correction & Price Cache Invalidation (`uni_api_experimental` branch).

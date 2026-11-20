@@ -190,17 +190,45 @@ class HistoricalDataService:
                     raise
                 raise DatasetUnavailableError(f"Failed to load or parse historical sales data: {e}") from e
 
-    def is_ready(self) -> bool:
-        """Returns True if and only if historical data is fully loaded and indexed."""
+    def is_demand_data_ready(self) -> bool:
+        """Returns True if and only if daily demand data is fully loaded and indexed."""
         return bool(self._is_loaded and self.total_skus > 0 and self._load_error is None)
+
+    def is_price_service_ready(self) -> bool:
+        """Returns True if and only if the point-in-time price index is loaded and ready."""
+        try:
+            from ml.src.point_in_time_price import pit_price_service
+            if not pit_price_service.is_loaded and pit_price_service.load_error is None:
+                try:
+                    pit_price_service.ensure_loaded()
+                except Exception:
+                    pass
+            return bool(pit_price_service.is_loaded and pit_price_service.load_error is None)
+        except Exception:
+            return False
+
+    def is_ready(self) -> bool:
+        """Returns True if and only if historical demand data is fully loaded and indexed."""
+        return self.is_demand_data_ready()
 
     def get_status(self) -> Dict[str, Any]:
         """Returns structured subsystem status for readiness and diagnostic probes."""
+        price_ready = self.is_price_service_ready()
+        price_status = None
+        try:
+            from ml.src.point_in_time_price import pit_price_service
+            price_status = pit_price_service.get_status()
+        except Exception as e:
+            price_status = {"ready": False, "error": str(e)}
+
         return {
             "ready": self.is_ready(),
+            "demand_data_ready": self.is_demand_data_ready(),
+            "price_service_ready": price_ready,
             "total_skus": self.total_skus,
             "total_records": self.total_records,
             "dataset_file": self.loaded_file,
+            "price_service": price_status,
             "error": self._load_error
         }
 
@@ -338,10 +366,16 @@ class HistoricalDataService:
             rolling_mean_60 = rolling_mean_28
 
         # Unit price (cutoff-aware for historical backtesting, latest for forward inference)
-        if as_of_date is not None:
-            unit_price = round(self.get_unit_price(cleaned_sku, as_of_date=observation_date), 4)
-        else:
-            unit_price = round(self.get_unit_price(cleaned_sku, as_of_date=None), 4)
+        unit_price: Optional[float] = None
+        if self.is_price_service_ready():
+            try:
+                if as_of_date is not None:
+                    unit_price = round(self.get_unit_price(cleaned_sku, as_of_date=observation_date), 4)
+                else:
+                    unit_price = round(self.get_unit_price(cleaned_sku, as_of_date=None), 4)
+            except Exception:
+                # Graceful fallback: unit_price remains None to maintain failure isolation for production
+                unit_price = None
 
         calendar_dow = int(observation_date.weekday())  # 0=Monday, 6=Sunday
         calendar_month = int(observation_date.month)

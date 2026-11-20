@@ -372,12 +372,18 @@ class ModelInfoResponse(BaseModel):
 
 class ComponentReadiness(BaseModel):
     """Readiness status for an individual subsystem."""
+    model_config = ConfigDict(extra="ignore")
+
     ready: bool
     models_count: Optional[int] = None
     loaded_horizons: Optional[List[int]] = None
     total_skus: Optional[int] = None
     total_records: Optional[int] = None
     dataset_file: Optional[str] = None
+    demand_data_ready: Optional[bool] = None
+    price_service_ready: Optional[bool] = None
+    models_dir: Optional[str] = None
+    price_service: Optional[Dict[str, Any]] = None
     error: Optional[str] = None
 
 
