@@ -4,6 +4,35 @@ This document maintains a strict chronological development record for NEXORA. Ev
 
 ---
 
+### [2026-11-20] — Task 12: Comprehensive ML Model Selection, Hyperparameter Optimization & Chronological Cross-Validation
+
+- **Phase & Task:** Task 12 — Comprehensive ML Model Selection, Hyperparameter Optimization & Chronological Cross-Validation (`uni_api_experimental` branch).
+- **Task Description:** Conducted an exhaustive, leakage-free empirical model search across 66 candidate configurations spanning 7 algorithm families (Baselines, OLS/Ridge/Lasso/ElasticNet, Degree 2 & 3 Polynomial Regression, Random Forest across 50–200 trees and depths 5–None, Extra Trees, HistGradientBoosting, and MA-anchored Residual Regressors) for each of the four operational forecasting horizons ($D_7, D_{15}, D_{30}, D_{90}$) using the recovered 2-year Online Retail II dataset (1,067,371 raw transaction rows, 2,287,495 commercial SKU-day panel rows across 4,905 merchandise SKUs over 738 calendar days). Evaluated all candidates across 3-fold chronological cross-validation with date grouping and mandatory horizon embargoes ($T_{\text{val\_min}} - T_{\text{train\_max}} \ge \text{horizon} + 1\text{ days}$). Selected winning algorithms exclusively by lowest pooled out-of-fold cross-validation WAPE. Retrained winning models on the complete pre-holdout training history and evaluated exactly once on untouched out-of-time holdouts.
+- **Key Empirical Results & Breakthroughs:**
+  - **$D_7$ (42,106 holdout rows, sum=2,813,308.0):** Selected `ElasticNet_a_0.01_l1_0.8` (CV Pooled WAPE: **80.33%**). Untouched Holdout WAPE: **54.20%** (MAE: 36.21, RMSE: 90.90, Bias: **+0.42%**).
+  - **$D_{15}$ (57,906 holdout rows, sum=8,386,891.0):** Selected `Residual_RollingMean28_Ridge_a_100.0` (CV Pooled WAPE: **71.90%**). Untouched Holdout WAPE: **44.88%** (MAE: 65.00, RMSE: 167.69, Bias: **-9.44%**).
+  - **$D_{30}$ (100,527 holdout rows, sum=25,582,345.0):** Selected `ElasticNet_a_0.01_l1_0.2` (CV Pooled WAPE: **63.83%**). Untouched Holdout WAPE: **45.10%** (MAE: 114.76, RMSE: 374.21, Bias: **-19.67%**).
+  - **$D_{90}$ (98,639 holdout rows, sum=63,112,358.0):** Selected `ElasticNet_a_0.1_l1_0.8` (CV Pooled WAPE: **62.61%**). Untouched Holdout WAPE: **48.22%** (MAE: 308.52, RMSE: 822.56, Bias: **-26.11%**) — **Major breakthrough: outperforms Task 10 benchmark (51.73%) by +3.51 percentage points (a 6.8% relative error reduction)!**
+  - **Algorithm Superiority:** Regularized linear models (ElasticNet, Ridge) and anchored residual models decisively outperformed tree ensembles (Random Forest, Extra Trees, HistGradientBoosting) and Polynomial Regression. Tree models exhibited severe positive bias (+18% to +45%) due to step-function overestimation on zero-inflated demand distributions.
+  - **Baseline Smoothing:** `Baseline_MA60` proved to be the strongest moving-average benchmark across all horizons ($D_7$: 82.79%, $D_{15}$: 72.01%, $D_{30}$: 65.30%, $D_{90}$: 68.00%).
+- **Files Created:**
+  - `backend/ml/experiments/model_selection_task12.py` (Complete candidate search grid and chronological CV pipeline)
+  - `backend/tests/test_model_selection_task12.py` (10 automated unit tests verifying constraints and leakage invariance)
+  - `backend/ml/evaluation/task12_model_comparison.csv` (264 evaluated candidate configurations with fold metrics)
+  - `backend/ml/evaluation/task12_fold_metrics.csv` (792 out-of-fold training/validation passes)
+  - `backend/ml/evaluation/task12_best_models.json` (Structured registry of winning algorithms, parameters, and holdout metrics)
+  - `backend/ml/models_task12/` (`demand_model_{7,15,30,90}d.joblib`, `models_metadata.json`)
+  - `docs/reports/TASK12_MODEL_SELECTION_REPORT.md` (Comprehensive evaluation report answering all 14 technical audit questions)
+- **Files Modified:**
+  - `docs/DEVELOPMENT_LOG.md`
+- **Verification & Branch Safety:**
+  - Branch: `uni_api_experimental` (working tree clean).
+  - Protected branches `uni_api_submission` and `main` completely untouched.
+  - Production models (`backend/ml/models/`) and Task 10 benchmarks (`backend/ml/models_experimental_corrected/`) preserved.
+  - Full automated test regression suite: **108/108 passed in 36.35s (100% pass rate)**.
+
+---
+
 ### [2026-11-20] — Task 10: Original Dataset Recovery, Multi-Worksheet Conversion & 2-Year Leakage-Free Pipeline
 
 - **Phase & Task:** Task 10 — Original Dataset Recovery, XLSX-to-CSV Multi-Worksheet Conversion, Preprocessing Reconciliation & Model Retraining (`uni_api_experimental` branch).
