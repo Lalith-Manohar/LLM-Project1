@@ -162,9 +162,52 @@ All steps are fully automated and runnable via PowerShell on Windows:
 # 2. Run the Store-Wide (Macro) Forecasting Pipeline (8.87% to 13.38% WAPE)
 python backend/ml/experiments/store_wide_forecasting.py
 
-# 3. Run the SKU-Level ML Optimization Pipeline (54.47%, 46.34%, 45.37%, 51.35% WAPE)
+# 3. Run the Corrected SKU-Level ML Optimization Pipeline (56.15%, 45.78%, 44.29%, 51.81% WAPE)
 python backend/ml/experiments/sku_level_optimization.py
 
-# 4. Run the complete automated test suite (87 tests, 100% pass)
+# 4. Run the complete automated test suite (98 tests, 100% pass)
 pytest backend/tests/
 ```
+
+---
+
+## 7. Task 8: Temporal Leakage Corrections & Validation Coverage Restoration
+
+### 7.1 Methodological Weaknesses Identified in Task 7
+Following the Task 7 independent audit, three methodological weaknesses were identified and corrected:
+1. **Shuffled KFold Target Encoding Leakage:** `TargetEncoder(cv=5)` shuffled observations across time, allowing future target observations to influence earlier training rows.
+2. **Global Full-Dataset SKU Median Price:** `UnitPrice` was computed as the global median price across all 2 years, introducing future price signals into early training and validation rows.
+3. **Validation Coverage Dropping:** Requiring non-null 60-day features (`Lag60`, `RollingMean60`) excluded 3,343 rows in $D_{30}$ and 2,329 rows in $D_{90}$.
+
+### 7.2 Implemented Corrections (Verified Leak-Free)
+1. **Strictly Chronological Target Encoding (`ChronologicalTargetEncoder`):**
+   - Implements a point-in-time expanding-window estimator enforcing a strict horizon-aware embargo ($t \le T - h - 1$).
+   - Future target perturbations produce **exact 0.0 difference** on earlier encodings.
+   - Out-of-sample / inference rows map to frozen cumulative statistics learned from training data, falling back to global training prior for unseen SKUs.
+2. **Point-in-Time Historical Unit Price (`enrich_daily_with_pit_price`):**
+   - For every forecast origin $T$, computes SKU price strictly from transactions occurring at $\text{tx\_date} < T$.
+   - Future transaction perturbations produce **exact 0.0 difference** on earlier price features.
+3. **Full Validation Coverage Restoration:**
+   - Imputed `Lag60` with `Lag28` and `RollingMean60` with `RollingMean28` when history $< 60$ days, coupled with `Has60dHistory` indicator.
+   - Restored 100% of validation rows matching the exact production baseline:
+     - **$D_7$:** 42,091 rows (Target Sum: 2,830,959.0)
+     - **$D_{15}$:** 57,840 rows (Target Sum: 8,435,173.0)
+     - **$D_{30}$:** 100,262 rows (Target Sum: 25,725,416.0)
+     - **$D_{90}$:** 98,157 rows (Target Sum: 63,329,462.0)
+4. **Date-Grouped TimeSeriesSplit (`DateGroupedTimeSeriesSplit`):**
+   - Groups all SKUs from the same calendar date into the same fold.
+   - Enforces horizon-specific embargo gaps ($\ge 8$d for $D_7$, $\ge 16$d for $D_{15}$, $\ge 31$d for $D_{30}$, $\ge 91$d for $D_{90}$).
+
+### 7.3 Final Verified SKU-Level Metrics on Full Restored Validation Sets
+
+| Horizon | Production Model | Production WAPE | Corrected Experimental Model | Corrected WAPE | WAPE Improvement | Production Bias | Corrected Bias | Validation Rows | Validation Target Sum |
+| :---: | :--- | :---: | :--- | :---: | :---: | :---: | :---: | :---: | :---: |
+| **$D_7$** | Ridge Regression | 55.65% | ChronologicalTargetEncoder + Ridge | **56.15%** | -0.50 pp | -2.76% | +7.78% | 42,091 | 2,830,959.0 |
+| **$D_{15}$** | Random Forest | 50.00% | ResidualRegressor(MA28, h=15) + Ridge | **45.78%** | **+4.22 pp** | -8.57% | -4.59% | 57,840 | 8,435,173.0 |
+| **$D_{30}$** | Random Forest | 48.73% | ResidualRegressor(MA28, h=30) + Ridge | **44.29%** | **+4.44 pp** | -13.58% | -18.62% | 100,262 | 25,725,416.0 |
+| **$D_{90}$** | Random Forest | 53.22% | ResidualRegressor(MA60, h=90, Pure MA) | **51.81%** | **+1.41 pp** | -25.14% | -27.08% | 98,157 | 63,329,462.0 |
+
+- Corrected models saved separately in: `backend/ml/models_experimental_corrected/`
+- Production models in `backend/ml/models/` remain 100% hash-identical to baseline commit `596430fc6c53dd526b48b9d25d666611d71938a1`.
+- Complete test suite: **98 passed in 26.39s (100% pass rate)**.
+

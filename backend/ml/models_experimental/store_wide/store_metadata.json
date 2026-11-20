@@ -1,7 +1,7 @@
 {
   "project": "NEXORA Store-Wide Demand Forecasting",
   "description": "Macro-level aggregate store demand forecasting across all SKUs",
-  "timestamp": "2026-11-20T06:37:29.559601+00:00",
+  "timestamp": "2026-11-20T07:34:58.473079+00:00",
   "total_store_calendar_days": 374,
   "total_store_volume": 5588377,
   "models": {

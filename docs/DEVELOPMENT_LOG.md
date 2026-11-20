@@ -4,6 +4,34 @@ This document maintains a strict chronological development record for NEXORA. Ev
 
 ---
 
+### [2026-11-20] — Task 8: Temporal Leakage Corrections & Validation Coverage Restoration
+
+- **Phase & Task:** Task 8 — Temporal Leakage Corrections & Validation Coverage Restoration (`uni_api_experimental` branch).
+- **Task Description:** Successfully resolved the three methodological weaknesses identified in the Task 7 independent audit. Implemented strictly chronological point-in-time target encoding enforcing a horizon-aware embargo ($t \le T - h - 1$). Implemented point-in-time historical unit prices derived strictly from historical transactions ($\text{tx\_date} < T$). Restored 100% of validation sample coverage across $D_{30}$ and $D_{90}$ without row loss or data mutations. Implemented date-grouped cross-validation (`DateGroupedTimeSeriesSplit`) with horizon embargo gaps ($\ge 8$d, $\ge 16$d, $\ge 31$d, $\ge 91$d). Validated future perturbation invariance with exact 0.0 difference. Re-evaluated all 4 horizons and verified 100% reproducibility of store-wide macro forecasting.
+- **Key Empirical Results on Restored Validation Datasets:**
+  - $D_7$ (42,091 rows, sum=2,830,959.0): Corrected WAPE: **56.15%** (vs 55.65% baseline, -0.50 pp)
+  - $D_{15}$ (57,840 rows, sum=8,435,173.0): Corrected WAPE: **45.78%** (vs 50.00% baseline, **+4.22 pp improvement**)
+  - $D_{30}$ (100,262 rows, sum=25,725,416.0): Corrected WAPE: **44.29%** (vs 48.73% baseline, **+4.44 pp improvement**) — *Full 100,262 validation rows restored!*
+  - $D_{90}$ (98,157 rows, sum=63,329,462.0): Corrected WAPE: **51.81%** (vs 53.22% baseline, **+1.41 pp improvement**) — *Full 98,157 validation rows restored!*
+  - Store-Wide Macro Reproducibility: $D_7$: 8.87%, $D_{15}$: 12.66%, $D_{30}$: 13.38%, $D_{90}$: 29.00% (100% reproduced).
+- **Files Created:**
+  - `backend/ml/src/chronological_encoder.py` (Point-in-time expanding window target encoder with horizon embargo)
+  - `backend/ml/src/point_in_time_price.py` (Point-in-time historical unit price generator)
+  - `backend/ml/src/time_series_split.py` (Date-grouped expanding window CV splitter with horizon embargo gaps)
+  - `backend/tests/test_leakage_corrections.py` (11 automated verification tests)
+  - `backend/ml/models_experimental_corrected/` (4 corrected model artifacts and `models_metadata.json`)
+- **Files Modified:**
+  - `backend/ml/experiments/sku_level_optimization.py` (Integrated chronological encoder, PIT price, coverage restoration, and CV)
+  - `docs/EXPERIMENTAL_OPTIMIZATION_REPORT.md` (Updated with complete Task 8 section and comparison tables)
+  - `docs/DEVELOPMENT_LOG.md`
+- **Verification & Branch Safety:**
+  - Work conducted exclusively on `uni_api_experimental`.
+  - Protected branches `uni_api_submission` and `main` 100% untouched.
+  - Production model directory `backend/ml/models/` 100% untouched; SHA-256 hashes verified identical to baseline commit `596430fc6c53dd526b48b9d25d666611d71938a1`.
+  - Automated test suite: **98/98 tests passed (100% pass rate)**.
+
+---
+
 ### [2026-11-20] — Experimental Branch ML Optimization & WAPE Gap Resolution
 
 - **Phase & Task:** Task 10 — Experimental Branch Creation & ML Optimization (`uni_api_experimental` branch).

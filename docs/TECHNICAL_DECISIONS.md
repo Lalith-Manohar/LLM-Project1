@@ -245,3 +245,35 @@ This document formally records all major technical and architectural decisions f
   - Training deeper random forests with 500+ trees (rejected: slow training, memory bloat, and persistent bias during seasonal regime shifts).
   - Pure moving average without residual adjustments (rejected: misses short-term momentum and price elasticity).
 - **Impact on Other Modules:** Serialized in `backend/ml/models_experimental/` for Phase 2 operational CRUD and predictive purchasing.
+
+---
+
+### TD-017: Chronological Expanding-Window Target Encoding with Horizon Embargo
+- **Date:** 2026-11-20
+- **Topic:** Temporal target leakage elimination in categorical feature encoding.
+- **Context:** Scikit-learn's `TargetEncoder(cv=5)` defaults to `KFold(shuffle=True)`, allowing future targets to contaminate earlier training encodings.
+- **Decision:** Implement `ChronologicalTargetEncoder` which calculates target statistics strictly from historically realized dates $t \le T - (h + 1)$ for any forecast date $T$.
+- **Reasoning:**
+  1. Guarantees 0.0 future perturbation leakage: modifying future targets has zero impact on earlier encodings.
+  2. Applies empirical Bayes smoothing with global historical prior for tail SKUs.
+  3. Out-of-sample / inference rows map to frozen cumulative statistics learned from the full training set.
+- **Alternatives Considered:**
+  - OneHotEncoder top-50 (rejected: 99.3%+ volume lumped into catch-all infrequent bucket).
+  - Shuffled TargetEncoder (rejected: temporal target leakage).
+- **Impact on Other Modules:** Cleanly integrated into experimental pipeline in `backend/ml/src/chronological_encoder.py`.
+
+---
+
+### TD-018: Point-in-Time Historical Unit Price Aggregation & Coverage Restoration
+- **Date:** 2026-11-20
+- **Topic:** Point-in-time price signals and validation sample preservation.
+- **Context:** Global median SKU prices introduced future pricing signals, and dropping rows with missing 60-day features discarded 3,343 rows in $D_{30}$ and 2,329 rows in $D_{90}$.
+- **Decision:**
+  1. Implement `enrich_daily_with_pit_price`, computing SKU price strictly from transactions occurring at $\text{tx\_date} < T$, with expanding global fallback.
+  2. Restore validation coverage by imputing missing `Lag60` and `RollingMean60` with 28-day equivalents and adding `Has60dHistory` indicator.
+  3. Implement `DateGroupedTimeSeriesSplit` ensuring all SKUs on a given date stay in the same fold and enforcing horizon embargo gaps ($\ge h + 1$).
+- **Reasoning:** Preserves 100% of validation rows matching the exact production baseline (42,091 on $D_7$, 57,840 on $D_{15}$, 100,262 on $D_{30}$, 98,157 on $D_{90}$) without row loss or target leakage.
+- **Alternatives Considered:**
+  - Forward-filling full dataset prices without cutoff (rejected: leaks future price regimes into early rows).
+  - Dropping rows with $< 60$ days of history (rejected: causes unequal validation comparisons).
+- **Impact on Other Modules:** Standardized feature preparation pipeline across all experimental models.

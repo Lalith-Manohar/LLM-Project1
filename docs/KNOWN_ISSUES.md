@@ -35,6 +35,41 @@ This document maintains an active registry of known technical issues, architectu
 
 ## Resolved Issues
 
+### ISSUE-008: Temporal Target Leakage in Shuffled KFold TargetEncoder
+- **Severity:** High (Methodological Data Leakage)
+- **Module Affected:** Machine Learning Subsystem / Feature Engineering
+- **Relevant Files:**
+  - `backend/ml/experiments/sku_level_optimization.py`
+  - `backend/ml/src/chronological_encoder.py`
+- **Description:** Scikit-learn's `TargetEncoder(cv=5)` defaults to `KFold(shuffle=True)`. In cross-validation folds on time-series panels, future observations contaminated earlier training row encodings.
+- **Resolution Date:** 2026-11-20 (Task 8).
+- **Resolution Details:** Implemented `ChronologicalTargetEncoder` which enforces expanding-window target statistics strictly from historical dates $t \le T - (h + 1)$ with horizon embargo. Verified through unit testing that future target perturbations produce exactly 0.0 difference on earlier encodings.
+
+---
+
+### ISSUE-009: Global Price Signal Leakage in UnitPrice Feature
+- **Severity:** Medium (Temporal Information Leakage)
+- **Module Affected:** Machine Learning Subsystem / Feature Engineering
+- **Relevant Files:**
+  - `backend/ml/experiments/sku_level_optimization.py`
+  - `backend/ml/src/point_in_time_price.py`
+- **Description:** In Task 6, SKU median unit price was computed globally across the entire 2-year dataset without filtering by forecast origin date $T$.
+- **Resolution Date:** 2026-11-20 (Task 8).
+- **Resolution Details:** Implemented `enrich_daily_with_pit_price`, which computes expanding historical transaction price statistics strictly from dates $\text{tx\_date} < T$, with expanding global fallback for SKUs without prior sales. Verified that future transaction perturbations produce exactly 0.0 difference on earlier price features.
+
+---
+
+### ISSUE-010: Validation Row Dropping on 60-Day Features
+- **Severity:** Medium (Validation Coverage Inconsistency)
+- **Module Affected:** Machine Learning Subsystem / Evaluation
+- **Relevant Files:**
+  - `backend/ml/experiments/sku_level_optimization.py`
+- **Description:** Adding `Lag60` and `RollingMean60` with a strict `complete_mask` excluded 3,343 rows for $D_{30}$ and 2,329 rows for $D_{90}$ where SKUs had $< 60$ days of history.
+- **Resolution Date:** 2026-11-20 (Task 8).
+- **Resolution Details:** Imputed missing 60-day features with 28-day equivalents (`Lag28`, `RollingMean28`) and added a missing history indicator `Has60dHistory`. Restored 100% of validation rows matching the exact production baseline (100,262 rows for $D_{30}$, 98,157 rows for $D_{90}$).
+
+---
+
 ### ISSUE-001: Prediction API Request Schema Mismatch with Blueprint
 - **Severity:** Medium
 - **Module Affected:** Module 7 (Predictive Planner) / Backend API
