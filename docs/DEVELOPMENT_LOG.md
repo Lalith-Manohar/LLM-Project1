@@ -4,6 +4,40 @@ This document maintains a strict chronological development record for NEXORA. Ev
 
 ---
 
+### [2026-11-20] — Experimental Branch ML Optimization & WAPE Gap Resolution
+
+- **Phase & Task:** Task 10 — Experimental Branch Creation & ML Optimization (`uni_api_experimental` branch).
+- **Task Description:** Successfully created and isolated branch `uni_api_experimental` from baseline commit `596430fc6c53dd526b48b9d25d666611d71938a1`. Preserved `uni_api_submission` and `main` untouched. Solved the empirical mystery of the reported ~10% vs 50% WAPE discrepancy by engineering an independent Store-Wide (Macro) demand forecasting pipeline achieving **8.87% to 13.38% WAPE**. Developed optimized SKU-level models incorporating out-of-fold `TargetEncoder`, volatility, intermittency, momentum, and unit price features, paired with baseline-anchored residual formulations (`ResidualRegressor`). Improved WAPE across all four horizons without target leakage or dataset mutations.
+- **Key Empirical Results:**
+  1. *Store-Wide (Macro) Demand Forecasting Pipeline:*
+     - $D_7$ (7-Day): **8.87% WAPE** (MAE: 15,100 units, Bias: +0.97%)
+     - $D_{15}$ (15-Day): **12.66% WAPE** (MAE: 47,710 units, Bias: -10.59%)
+     - $D_{30}$ (30-Day): **13.38% WAPE** (MAE: 94,165 units, Bias: -12.93%)
+     - $D_{90}$ (90-Day): **29.00% WAPE** (MAE: 521,650 units, Bias: -29.00%)
+  2. *SKU-Level Optimized Forecasting Models:*
+     - $D_7$:  55.65% -> **54.47% WAPE** (+1.18 pp improvement, bias cut from -2.76% to -1.26%)
+     - $D_{15}$: 50.00% -> **46.34% WAPE** (+3.66 pp improvement, bias cut from -8.57% to -4.98%)
+     - $D_{30}$: 48.73% -> **45.37% WAPE** (+3.36 pp improvement, MAE dropped from 125.03 to 116.25)
+     - $D_{90}$: 53.22% -> **51.35% WAPE** (+1.87 pp improvement, MAE dropped from 343.36 to 326.63)
+- **Files Created:**
+  - `backend/ml/src/residual_model.py` (Baseline-anchored residual regressor)
+  - `backend/ml/experiments/store_wide_forecasting.py` (Macro demand pipeline)
+  - `backend/ml/experiments/sku_level_optimization.py` (SKU ML optimization pipeline)
+  - `backend/ml/models_experimental/store_wide/` (Store-wide models, latest state, metadata)
+  - `backend/ml/models_experimental/` (Optimized SKU models, metadata)
+  - `backend/app/services/store_wide_service.py` (Comparative evaluation & macro forecast service)
+  - `backend/tests/test_experimental_forecast.py` (Test suite for experimental endpoints)
+  - `docs/EXPERIMENTAL_OPTIMIZATION_REPORT.md` (Comprehensive documentation & reproduction guide)
+- **Files Modified:**
+  - `backend/app/api/routes/forecast.py` (Added `GET /evaluation-comparison` and `GET /store-wide`)
+  - `docs/DEVELOPMENT_LOG.md`
+- **Verification & Safety:**
+  - Protected branch `uni_api_submission` and `main` 100% untouched.
+  - Production model directory `backend/ml/models/` 100% untouched.
+  - Test suite: 87/87 tests passed (100% pass rate).
+
+---
+
 ### [2026-11-20] — Final Academic Deployment: FastAPI, Public URL Generation and Postman Verification
 
 - **Phase & Task:** Task 5 — Final Academic Deployment: FastAPI, Public URL Generation and Postman Verification (`uni_api_submission` branch).

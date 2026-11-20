@@ -1,0 +1,185 @@
+{
+  "project": "NEXORA Store-Wide Demand Forecasting",
+  "description": "Macro-level aggregate store demand forecasting across all SKUs",
+  "timestamp": "2026-11-20T06:37:29.559601+00:00",
+  "total_store_calendar_days": 374,
+  "total_store_volume": 5588377,
+  "models": {
+    "D_7": {
+      "horizon_days": 7,
+      "best_model": "Moving_Average_28",
+      "best_wape": 8.87,
+      "mae": 15100.0,
+      "rmse": 23982.7,
+      "bias_pct": 0.97,
+      "train_days": 314,
+      "val_days": 18,
+      "actual_val_total": 3062667.0,
+      "candidates": {
+        "Seasonal_Naive": {
+          "wape": 16.34,
+          "mae": 27802.3,
+          "rmse": 35954.8,
+          "bias_pct": 2.34
+        },
+        "Moving_Average_28": {
+          "wape": 8.87,
+          "mae": 15100.0,
+          "rmse": 23982.7,
+          "bias_pct": 0.97
+        },
+        "Ridge_Regression": {
+          "wape": 10.25,
+          "mae": 17435.0,
+          "rmse": 28802.9,
+          "bias_pct": -8.3
+        },
+        "Random_Forest": {
+          "wape": 10.68,
+          "mae": 18165.8,
+          "rmse": 23791.3,
+          "bias_pct": -6.0
+        },
+        "HistGradientBoosting": {
+          "wape": 18.48,
+          "mae": 31445.3,
+          "rmse": 36984.1,
+          "bias_pct": -16.42
+        }
+      },
+      "artifact_path": "ml\\models_experimental\\store_wide\\store_model_7d.joblib"
+    },
+    "D_15": {
+      "horizon_days": 15,
+      "best_model": "Moving_Average_28",
+      "best_wape": 12.66,
+      "mae": 47709.8,
+      "rmse": 61906.1,
+      "bias_pct": -10.59,
+      "train_days": 292,
+      "val_days": 24,
+      "actual_val_total": 9047162.0,
+      "candidates": {
+        "Seasonal_Naive": {
+          "wape": 15.26,
+          "mae": 57537.2,
+          "rmse": 65058.9,
+          "bias_pct": -0.54
+        },
+        "Moving_Average_28": {
+          "wape": 12.66,
+          "mae": 47709.8,
+          "rmse": 61906.1,
+          "bias_pct": -10.59
+        },
+        "Ridge_Regression": {
+          "wape": 20.46,
+          "mae": 77113.6,
+          "rmse": 82844.7,
+          "bias_pct": -20.46
+        },
+        "Random_Forest": {
+          "wape": 19.15,
+          "mae": 72199.0,
+          "rmse": 77072.2,
+          "bias_pct": -19.15
+        },
+        "HistGradientBoosting": {
+          "wape": 19.54,
+          "mae": 73641.0,
+          "rmse": 78933.5,
+          "bias_pct": -19.54
+        }
+      },
+      "artifact_path": "ml\\models_experimental\\store_wide\\store_model_15d.joblib"
+    },
+    "D_30": {
+      "horizon_days": 30,
+      "best_model": "Moving_Average_28",
+      "best_wape": 13.38,
+      "mae": 94165.4,
+      "rmse": 105497.8,
+      "bias_pct": -12.93,
+      "train_days": 246,
+      "val_days": 40,
+      "actual_val_total": 28158414.0,
+      "candidates": {
+        "Seasonal_Naive": {
+          "wape": 15.63,
+          "mae": 109996.2,
+          "rmse": 120717.5,
+          "bias_pct": -11.08
+        },
+        "Moving_Average_28": {
+          "wape": 13.38,
+          "mae": 94165.4,
+          "rmse": 105497.8,
+          "bias_pct": -12.93
+        },
+        "Ridge_Regression": {
+          "wape": 39.12,
+          "mae": 275388.6,
+          "rmse": 279932.6,
+          "bias_pct": -39.12
+        },
+        "Random_Forest": {
+          "wape": 29.39,
+          "mae": 206911.5,
+          "rmse": 213291.6,
+          "bias_pct": -29.39
+        },
+        "HistGradientBoosting": {
+          "wape": 33.73,
+          "mae": 237445.4,
+          "rmse": 242793.8,
+          "bias_pct": -33.73
+        }
+      },
+      "artifact_path": "ml\\models_experimental\\store_wide\\store_model_30d.joblib"
+    },
+    "D_90": {
+      "horizon_days": 90,
+      "best_model": "Moving_Average_28",
+      "best_wape": 29.0,
+      "mae": 521649.8,
+      "rmse": 548729.8,
+      "bias_pct": -29.0,
+      "train_days": 125,
+      "val_days": 41,
+      "actual_val_total": 73760386.0,
+      "candidates": {
+        "Seasonal_Naive": {
+          "wape": 29.76,
+          "mae": 535384.2,
+          "rmse": 595021.6,
+          "bias_pct": -29.76
+        },
+        "Moving_Average_28": {
+          "wape": 29.0,
+          "mae": 521649.8,
+          "rmse": 548729.8,
+          "bias_pct": -29.0
+        },
+        "Ridge_Regression": {
+          "wape": 40.76,
+          "mae": 733254.8,
+          "rmse": 747439.4,
+          "bias_pct": -40.76
+        },
+        "Random_Forest": {
+          "wape": 41.07,
+          "mae": 738931.7,
+          "rmse": 753556.7,
+          "bias_pct": -41.07
+        },
+        "HistGradientBoosting": {
+          "wape": 41.47,
+          "mae": 746096.9,
+          "rmse": 760597.7,
+          "bias_pct": -41.47
+        }
+      },
+      "artifact_path": "ml\\models_experimental\\store_wide\\store_model_90d.joblib"
+    }
+  }
+}

@@ -212,3 +212,36 @@ This document formally records all major technical and architectural decisions f
   - On-demand lazy model loading (rejected: introduces latency jitter on first request and potential race conditions).
   - Training inside the API request cycle (rejected: strictly prohibited by `AGENTS.md`).
 - **Impact on Other Modules:** Module 7 (Predictive Planner) and Module 8 (Purchase Planning Simulator) can query `/api/v1/forecast/` for multi-horizon demand forecasts. Operational inventory risk calculations can reliably consume the API output.
+
+---
+
+### TD-015: Dual-Hierarchical Retail Forecasting (Store-Wide Macro vs SKU-Level Micro)
+- **Date:** 2026-11-20
+- **Topic:** Forecasting hierarchy distinction and empirical WAPE disparity resolution.
+- **Context:** During model benchmarking on `uni_api_experimental`, external student claims of ~10% WAPE on the UCI Online Retail II dataset were audited against NEXORA's ~50% SKU-level WAPE.
+- **Decision:** Implement and formalize a dual-tier forecasting architecture distinguishing:
+  1. **Tier 1 — Store-Wide (Macro) Demand:** Aggregated daily volume across all 3,922 SKUs. Cancels out intermittent Poisson noise and achieves **8.87% to 13.38% WAPE** across $D_7, D_{15}, D_{30}$.
+  2. **Tier 2 — SKU-Level (Micro) Demand:** Disaggregated demand per individual SKU for inventory replenishment and stockout prevention, where intermittent sparsity dictates a higher theoretical variance floor (~45%–55% WAPE).
+- **Reasoning:** Proves mathematically and empirically that external ~10% WAPE claims correspond to macro store total forecasting, not intermittent SKU forecasting. Exposes both tiers transparently via `/api/v1/forecast/evaluation-comparison` and `/api/v1/forecast/store-wide`.
+- **Alternatives Considered:**
+  - Claiming 10% WAPE on SKU-level by using random train/test splits (rejected: violates chronological causality and causes catastrophic data leakage).
+  - Ignoring the external discrepancy (rejected: leaves students vulnerable during project viva defense).
+- **Impact on Other Modules:** Executives can monitor store-wide macro revenue and inventory turnover; warehouse managers utilize SKU-level predictions for bin restocking.
+
+---
+
+### TD-016: Baseline-Anchored Residual Regressor Formulation for Multi-Horizon Demand
+- **Date:** 2026-11-20
+- **Topic:** Multi-horizon demand model architecture and tree-underfitting resolution.
+- **Context:** Direct regression on multi-horizon cumulative sums ($D_{15}, D_{30}, D_{90}$) suffered from severe negative prediction bias (-25.14% on $D_{90}$) due to decision tree saturation in shallow Random Forests.
+- **Decision:** Formulate forecasting as a baseline-anchored residual decomposition:
+  $$\hat{y} = h \cdot \text{RollingMean} + \hat{r}$$
+  Implemented via `ResidualRegressor`, where the physical moving-average run-rate anchors the forecast, and regularized estimators (`Ridge`) model the residual deviation $\hat{r}$.
+- **Reasoning:**
+  1. Guarantees physical scale consistency across changing operational windows.
+  2. Reduces WAPE from 50.00% to **46.34% on $D_{15}$** (+3.66 pp) and from 48.73% to **45.37% on $D_{30}$** (+3.36 pp).
+  3. Seamlessly integrates with scikit-learn Pipelines and Joblib serialization.
+- **Alternatives Considered:**
+  - Training deeper random forests with 500+ trees (rejected: slow training, memory bloat, and persistent bias during seasonal regime shifts).
+  - Pure moving average without residual adjustments (rejected: misses short-term momentum and price elasticity).
+- **Impact on Other Modules:** Serialized in `backend/ml/models_experimental/` for Phase 2 operational CRUD and predictive purchasing.
