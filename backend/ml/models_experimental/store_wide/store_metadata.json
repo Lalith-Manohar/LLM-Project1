@@ -1,9 +1,9 @@
 {
   "project": "NEXORA Store-Wide Demand Forecasting",
   "description": "Macro-level aggregate store demand forecasting across all SKUs",
-  "timestamp": "2026-11-20T07:34:58.473079+00:00",
-  "total_store_calendar_days": 374,
-  "total_store_volume": 5588377,
+  "timestamp": "2026-11-20T09:07:32.022113+00:00",
+  "total_store_calendar_days": 739,
+  "total_store_volume": 11420305,
   "models": {
     "D_7": {
       "horizon_days": 7,
@@ -12,7 +12,7 @@
       "mae": 15100.0,
       "rmse": 23982.7,
       "bias_pct": 0.97,
-      "train_days": 314,
+      "train_days": 679,
       "val_days": 18,
       "actual_val_total": 3062667.0,
       "candidates": {
@@ -29,34 +29,34 @@
           "bias_pct": 0.97
         },
         "Ridge_Regression": {
-          "wape": 10.25,
-          "mae": 17435.0,
-          "rmse": 28802.9,
-          "bias_pct": -8.3
+          "wape": 14.99,
+          "mae": 25504.5,
+          "rmse": 36830.0,
+          "bias_pct": -14.98
         },
         "Random_Forest": {
-          "wape": 10.68,
-          "mae": 18165.8,
-          "rmse": 23791.3,
-          "bias_pct": -6.0
+          "wape": 21.42,
+          "mae": 36450.2,
+          "rmse": 39077.3,
+          "bias_pct": 18.33
         },
         "HistGradientBoosting": {
-          "wape": 18.48,
-          "mae": 31445.3,
-          "rmse": 36984.1,
-          "bias_pct": -16.42
+          "wape": 10.69,
+          "mae": 18193.9,
+          "rmse": 22551.1,
+          "bias_pct": 7.6
         }
       },
       "artifact_path": "ml\\models_experimental\\store_wide\\store_model_7d.joblib"
     },
     "D_15": {
       "horizon_days": 15,
-      "best_model": "Moving_Average_28",
-      "best_wape": 12.66,
-      "mae": 47709.8,
-      "rmse": 61906.1,
-      "bias_pct": -10.59,
-      "train_days": 292,
+      "best_model": "Random_Forest",
+      "best_wape": 12.15,
+      "mae": 45795.7,
+      "rmse": 52122.6,
+      "bias_pct": 5.79,
+      "train_days": 657,
       "val_days": 24,
       "actual_val_total": 9047162.0,
       "candidates": {
@@ -73,34 +73,34 @@
           "bias_pct": -10.59
         },
         "Ridge_Regression": {
-          "wape": 20.46,
-          "mae": 77113.6,
-          "rmse": 82844.7,
-          "bias_pct": -20.46
+          "wape": 20.32,
+          "mae": 76606.6,
+          "rmse": 83361.8,
+          "bias_pct": -20.32
         },
         "Random_Forest": {
-          "wape": 19.15,
-          "mae": 72199.0,
-          "rmse": 77072.2,
-          "bias_pct": -19.15
+          "wape": 12.15,
+          "mae": 45795.7,
+          "rmse": 52122.6,
+          "bias_pct": 5.79
         },
         "HistGradientBoosting": {
-          "wape": 19.54,
-          "mae": 73641.0,
-          "rmse": 78933.5,
-          "bias_pct": -19.54
+          "wape": 16.88,
+          "mae": 63631.9,
+          "rmse": 69642.6,
+          "bias_pct": 7.97
         }
       },
       "artifact_path": "ml\\models_experimental\\store_wide\\store_model_15d.joblib"
     },
     "D_30": {
       "horizon_days": 30,
-      "best_model": "Moving_Average_28",
-      "best_wape": 13.38,
-      "mae": 94165.4,
-      "rmse": 105497.8,
-      "bias_pct": -12.93,
-      "train_days": 246,
+      "best_model": "HistGradientBoosting",
+      "best_wape": 7.56,
+      "mae": 53221.7,
+      "rmse": 67592.0,
+      "bias_pct": 6.0,
+      "train_days": 611,
       "val_days": 40,
       "actual_val_total": 28158414.0,
       "candidates": {
@@ -117,34 +117,34 @@
           "bias_pct": -12.93
         },
         "Ridge_Regression": {
-          "wape": 39.12,
-          "mae": 275388.6,
-          "rmse": 279932.6,
-          "bias_pct": -39.12
+          "wape": 27.38,
+          "mae": 192741.9,
+          "rmse": 199805.7,
+          "bias_pct": -27.38
         },
         "Random_Forest": {
-          "wape": 29.39,
-          "mae": 206911.5,
-          "rmse": 213291.6,
-          "bias_pct": -29.39
+          "wape": 8.18,
+          "mae": 57580.4,
+          "rmse": 78546.2,
+          "bias_pct": 5.53
         },
         "HistGradientBoosting": {
-          "wape": 33.73,
-          "mae": 237445.4,
-          "rmse": 242793.8,
-          "bias_pct": -33.73
+          "wape": 7.56,
+          "mae": 53221.7,
+          "rmse": 67592.0,
+          "bias_pct": 6.0
         }
       },
       "artifact_path": "ml\\models_experimental\\store_wide\\store_model_30d.joblib"
     },
     "D_90": {
       "horizon_days": 90,
-      "best_model": "Moving_Average_28",
-      "best_wape": 29.0,
-      "mae": 521649.8,
-      "rmse": 548729.8,
-      "bias_pct": -29.0,
-      "train_days": 125,
+      "best_model": "HistGradientBoosting",
+      "best_wape": 5.61,
+      "mae": 101012.7,
+      "rmse": 111002.6,
+      "bias_pct": 5.32,
+      "train_days": 490,
       "val_days": 41,
       "actual_val_total": 73760386.0,
       "candidates": {
@@ -161,22 +161,22 @@
           "bias_pct": -29.0
         },
         "Ridge_Regression": {
-          "wape": 40.76,
-          "mae": 733254.8,
-          "rmse": 747439.4,
-          "bias_pct": -40.76
+          "wape": 15.66,
+          "mae": 281778.8,
+          "rmse": 295936.8,
+          "bias_pct": -15.66
         },
         "Random_Forest": {
-          "wape": 41.07,
-          "mae": 738931.7,
-          "rmse": 753556.7,
-          "bias_pct": -41.07
+          "wape": 5.77,
+          "mae": 103759.5,
+          "rmse": 120646.0,
+          "bias_pct": 4.36
         },
         "HistGradientBoosting": {
-          "wape": 41.47,
-          "mae": 746096.9,
-          "rmse": 760597.7,
-          "bias_pct": -41.47
+          "wape": 5.61,
+          "mae": 101012.7,
+          "rmse": 111002.6,
+          "bias_pct": 5.32
         }
       },
       "artifact_path": "ml\\models_experimental\\store_wide\\store_model_90d.joblib"

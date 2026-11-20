@@ -81,12 +81,7 @@ def enrich_daily_with_pit_price(
         low_memory=False
     )
     df_sales["StockCode"] = df_sales["StockCode"].astype(str).str.strip()
-    df_sales["date"] = pd.to_datetime(df_sales["InvoiceDate"], format="%d-%m-%y %H:%M", errors="coerce").dt.date
-    fallback_mask = df_sales["date"].isna()
-    if fallback_mask.any():
-        df_sales.loc[fallback_mask, "date"] = pd.to_datetime(
-            df_sales.loc[fallback_mask, "InvoiceDate"], errors="coerce", dayfirst=True
-        ).dt.date
+    df_sales["date"] = pd.to_datetime(df_sales["InvoiceDate"], errors="coerce").dt.date
 
     # Drop any remaining unparseable dates
     df_sales = df_sales.dropna(subset=["date", "Price"])

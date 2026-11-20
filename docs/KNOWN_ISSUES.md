@@ -20,20 +20,32 @@ This document maintains an active registry of known technical issues, architectu
 
 ---
 
+## Resolved Issues
+
 ### ISSUE-007: Single Chronological Holdout Constraint vs Multi-Fold Rolling Backtesting
 - **Severity:** Low (Architectural / Data Constraint)
 - **Module Affected:** Machine Learning Subsystem / Evaluation
 - **Relevant Files:**
-  - `backend/ml/src/evaluate.py`
-  - `backend/ml/src/train.py`
-- **Description:** The project documentation describes rolling-origin backtesting. However, the UCI Online Retail II dataset contains only 12 continuous calendar months (December 2010 to December 2011). For a 90-day horizon ($D_{90}$), enforcing the required 90-day purge/embargo gap ($t_{\text{train}} + 90 < \text{val\_start}$) and reserving 40+ days for evaluation leaves only 5 months of training data. Rolling-origin evaluation across 3+ folds with expanding windows is physically impossible for $D_{90}$ without severely compromising training size or violating temporal boundaries.
-- **Current Status:** Open (Accepted operational limitation).
-- **Proposed Resolution:** Documented accurately that Phase 1 uses a single out-of-time chronological holdout per horizon with strict purge/embargo gaps. In future expansions with multi-year datasets, multi-fold rolling backtesting can be implemented.
-- **Target Resolution Phase:** Post-Phase 1 / Future Enhancement.
+  - `backend/ml/src/time_series_split.py`
+  - `backend/ml/experiments/sku_level_optimization.py`
+- **Description:** Previous 1-year data limitation restricted $D_{90}$ rolling cross-validation due to narrow date spans (125 dates).
+- **Resolution Date:** 2026-11-20 (Task 10).
+- **Resolution Details:** Resolved by recovering the full 2-year dataset from `online_retail_II.xlsx` (738 calendar days). Expanded training date span to 500+ dates, allowing 3-fold chronological expanding-window splits with 91-day embargoes and full ~112-day validation spans per fold.
 
 ---
 
-## Resolved Issues
+### ISSUE-011: Raw Dataset Truncation Omitting Year 2009-2010
+- **Severity:** High (Data Loss / Truncation)
+- **Module Affected:** Machine Learning Subsystem / Data Loading & Preprocessing
+- **Relevant Files:**
+  - `backend/ml/data/raw/online_retail_II.csv`
+  - `backend/ml/src/convert_xlsx_to_csv.py`
+  - `docs/DATASET_CONVERSION_REPORT.md`
+- **Description:** The raw CSV previously contained only 541,910 rows covering 2010–2011 because the initial export from `online_retail_II.xlsx` defaulted to reading only the active second worksheet (`Year 2010-2011`). The entire first year (`Year 2009-2010`, 525,461 rows) was omitted.
+- **Resolution Date:** 2026-11-20 (Task 10).
+- **Resolution Details:** Implemented `convert_xlsx_to_csv.py`, parsing both worksheets, standardizing date timestamps to ISO format, preserving the 1-year backup (`online_retail_II_2010_2011_backup.csv`), and generating unified `online_retail_II.csv` totaling exactly 1,067,371 rows with 100% zero-record-loss reconciliation.
+
+---
 
 ### ISSUE-008: Temporal Target Leakage in Shuffled KFold TargetEncoder
 - **Severity:** High (Methodological Data Leakage)

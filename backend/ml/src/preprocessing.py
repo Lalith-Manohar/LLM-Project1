@@ -11,10 +11,20 @@ It validates that no records are lost during partitioning (Reconciliation Check)
 and exports clean CSV files and a comprehensive markdown report to backend/ml/data/processed/.
 """
 
+import sys
 from pathlib import Path
 from typing import Dict, Optional, Any
 import pandas as pd
 import numpy as np
+
+# Ensure backend root is on Python path
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent))
+
+
+NON_MERCHANDISE_CODES = {
+    "POST", "DOT", "M", "BANK CHARGES", "PADS", "AMAZONFEE",
+    "D", "CRUK", "ADJUST", "TEST001", "C2"
+}
 
 
 def get_default_processed_data_dir() -> Path:
@@ -94,6 +104,12 @@ def extract_returns(classified_df: pd.DataFrame) -> pd.DataFrame:
 def extract_exceptional_records(classified_df: pd.DataFrame) -> pd.DataFrame:
     """Extracts exceptional or excluded records (zero/negative prices, etc.)."""
     return classified_df[classified_df["transaction_stream"] == "exceptional"].copy()
+
+
+def extract_service_records(df: pd.DataFrame) -> pd.DataFrame:
+    """Extracts non-merchandise service, postage, fee, and administrative adjustments."""
+    codes = df["StockCode"].fillna("").astype(str).str.strip().str.upper()
+    return df[codes.isin(NON_MERCHANDISE_CODES)].copy()
 
 
 def validate_preprocessed_data(
@@ -177,11 +193,17 @@ def save_processed_data(
         "gross_sales": target_dir / "clean_gross_sales.csv",
         "cancellations": target_dir / "cancellation_transactions.csv",
         "returns": target_dir / "return_transactions.csv",
-        "exceptional": target_dir / "exceptional_transactions.csv"
+        "exceptional": target_dir / "exceptional_transactions.csv",
+        "service": target_dir / "service_transactions.csv"
     }
+
+    service_df = extract_service_records(gross_df)
 
     print(f"[NEXORA Preprocessing] Saving clean gross sales to: {files['gross_sales']}...")
     gross_df.to_csv(files["gross_sales"], index=False, encoding="latin1")
+
+    print(f"[NEXORA Preprocessing] Saving non-merchandise service transactions ({len(service_df):,} records) to: {files['service']}...")
+    service_df.to_csv(files["service"], index=False, encoding="latin1")
 
     print(f"[NEXORA Preprocessing] Saving cancellations to: {files['cancellations']}...")
     cancellations_df.to_csv(files["cancellations"], index=False, encoding="latin1")

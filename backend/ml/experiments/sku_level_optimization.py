@@ -54,6 +54,17 @@ def load_and_enrich_sku_features(
     df_daily = pd.read_csv(daily_path, dtype={"StockCode": str}, low_memory=False)
     df_daily["StockCode"] = df_daily["StockCode"].str.strip()
     df_daily["date"] = pd.to_datetime(df_daily["date"]).dt.date
+
+    # Filter non-merchandise service and fee codes
+    NON_MERCHANDISE_CODES = {
+        "POST", "DOT", "M", "BANK CHARGES", "PADS", "AMAZONFEE",
+        "D", "CRUK", "ADJUST", "TEST001", "C2"
+    }
+    is_service = df_daily["StockCode"].str.strip().str.upper().isin(NON_MERCHANDISE_CODES)
+    n_service = int(is_service.sum())
+    df_daily = df_daily[~is_service].reset_index(drop=True)
+    print(f"[SKU Optimization] Separated {n_service:,} service code rows. Commercial SKUs: {df_daily['StockCode'].nunique():,}, Rows: {len(df_daily):,}")
+
     df_daily = df_daily.sort_values(["StockCode", "date"]).reset_index(drop=True)
 
     # Correction B: Point-in-Time Historical Unit Price
@@ -132,11 +143,14 @@ def run_sku_optimization_and_eval(
     }
 
     metadata = {
-        "project": "NEXORA SKU-Level Demand Optimization (Task 8 Corrected)",
+        "project": "NEXORA SKU-Level Demand Optimization (Task 10 Recovered 2-Year Dataset)",
         "timestamp": datetime.datetime.now(datetime.timezone.utc).isoformat(),
+        "dataset_rows": 1067371,
+        "dataset_span": "2009-12-01 to 2011-12-09 (738 calendar days)",
         "encoding_strategy": "ChronologicalTargetEncoder(smooth=10.0, default_prior=0.0, embargo=horizon+1)",
         "price_strategy": "PointInTimePrice(tx_date < T, cumulative expanding average, fallback to global historical)",
         "coverage_strategy": "Lag60/RollingMean60 imputed with Lag28/RollingMean28 + Has60dHistory indicator",
+        "service_code_separation": "Filtered 11 non-merchandise service codes (POST, DOT, M, BANK CHARGES, PADS, AMAZONFEE, etc.)",
         "models": {}
     }
 

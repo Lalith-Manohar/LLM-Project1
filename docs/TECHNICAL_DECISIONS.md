@@ -277,3 +277,22 @@ This document formally records all major technical and architectural decisions f
   - Forward-filling full dataset prices without cutoff (rejected: leaks future price regimes into early rows).
   - Dropping rows with $< 60$ days of history (rejected: causes unequal validation comparisons).
 - **Impact on Other Modules:** Standardized feature preparation pipeline across all experimental models.
+
+---
+
+### TD-019: Full 2-Year Dataset Recovery & Non-Merchandise Service Code Isolation
+- **Date:** 2026-11-20
+- **Topic:** Multi-sheet XLSX-to-CSV recovery, non-merchandise service code isolation, and 2-year time-series expansion.
+- **Context:** The raw dataset `online_retail_II.csv` previously contained only the single year 2010–2011 (541,910 records) due to default active-sheet export behavior from `online_retail_II.xlsx`. The entire first year (`Year 2009-2010`, 525,461 records) was omitted. Additionally, non-merchandise codes (`POST`, `DOT`, `M`, `BANK CHARGES`, `PADS`, `AMAZONFEE`, etc.) were mixed into sales data.
+- **Decision:**
+  1. Ingest both worksheets from `online_retail_II.xlsx` into unified `online_retail_II.csv` totaling exactly 1,067,371 rows with 100% zero-loss reconciliation. Standardize all timestamps to ISO `YYYY-MM-DD HH:MM:SS`. Preserve 1-year backup (`online_retail_II_2010_2011_backup.csv`).
+  2. Isolate non-merchandise service codes into `service_transactions.csv` (4,581 records) during preprocessing and filter them from physical inventory demand training in `sku_level_optimization.py`.
+  3. Re-aggregate continuous daily demand (`daily_product_demand.csv`: 2,292,587 product-days, 4,916 SKUs, 738 calendar days).
+- **Reasoning:**
+  1. Triples time series date span from 125 to 500+ training dates, resolving $D_{90}$ cross-validation embargo constraints.
+  2. Eliminates distortion of inventory replenishment models by non-inventory financial ledger items (postage, bank fees).
+  3. Achieves improved WAPE across all 4 horizons: $D_7$: **53.94%**, $D_{15}$: **44.87%**, $D_{30}$: **44.76%**, $D_{90}$: **51.73%**. Store-wide WAPE drops to 5.61% - 8.87%.
+- **Alternatives Considered:**
+  - Continuing with single-year dataset (rejected: omits half the training observations and holiday seasons).
+  - Forecasting demand for "Bank Charges" and "Postage" as physical inventory (rejected: violates physical store logic).
+- **Impact on Other Modules:** Deepens historical lookup coverage in `historical_data_service` from 374 to 739 days; improves all downstream purchasing and stockout simulation metrics.

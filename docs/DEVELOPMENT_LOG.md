@@ -4,6 +4,40 @@ This document maintains a strict chronological development record for NEXORA. Ev
 
 ---
 
+### [2026-11-20] — Task 10: Original Dataset Recovery, Multi-Worksheet Conversion & 2-Year Leakage-Free Pipeline
+
+- **Phase & Task:** Task 10 — Original Dataset Recovery, XLSX-to-CSV Multi-Worksheet Conversion, Preprocessing Reconciliation & Model Retraining (`uni_api_experimental` branch).
+- **Task Description:** Successfully investigated and resolved the dataset truncation identified in Task 9. The original Excel workbook `online_retail_II.xlsx` contained two worksheets (`Year 2009-2010` with 525,461 records and `Year 2010-2011` with 541,910 records). Previous conversion scripts defaulted to reading only the active second worksheet, inadvertently omitting Year 1. Developed and executed `convert_xlsx_to_csv.py` to parse both worksheets, normalize all timestamps to ISO `YYYY-MM-DD HH:MM:SS`, preserve the 1-year backup (`online_retail_II_2010_2011_backup.csv`), and generate the unified 2-year raw dataset (`online_retail_II.csv`) totaling exactly **1,067,371 records** with 100% zero-record-loss reconciliation. Updated `preprocessing.py` to isolate 11 non-merchandise service/fee codes (`POST`, `DOT`, `M`, `BANK CHARGES`, etc.) into `service_transactions.csv` (4,581 records) while maintaining clean gross sales (1,041,670 records) and stream reconciliation. Re-aggregated `daily_product_demand.csv` to 2,292,587 product-day rows across 4,916 SKUs and 738 calendar days. Retrained and evaluated corrected experimental models across all four operational horizons ($D_7, D_{15}, D_{30}, D_{90}$) using strictly leakage-free chronological target encoding, point-in-time historical pricing, and date-grouped cross-validation.
+- **Key Empirical Results on Full 2-Year Dataset:**
+  - **$D_7$ (42,106 validation rows, target sum=2,813,308.0):** Corrected WAPE: **53.94%** (vs 55.65% production baseline, **+1.71 pp improvement**; bias virtually eliminated at +0.95%)
+  - **$D_{15}$ (57,906 validation rows, target sum=8,386,891.0):** Corrected WAPE: **44.87%** (vs 50.00% production baseline, **+5.13 pp improvement**)
+  - **$D_{30}$ (100,527 validation rows, target sum=25,582,345.0):** Corrected WAPE: **44.76%** (vs 48.73% production baseline, **+3.97 pp improvement**)
+  - **$D_{90}$ (98,639 validation rows, target sum=63,112,358.0):** Corrected WAPE: **51.73%** (vs 53.22% production baseline, **+1.49 pp improvement**)
+  - **Store-Wide Macro Demand (2-Year Aggregation):** $D_7$: 8.87%, $D_{15}$: 12.15%, $D_{30}$: **7.56%**, $D_{90}$: **5.61% WAPE**, providing indisputable proof of macro variance cancellation.
+  - **Time Series Cross-Validation Expansion:** Expanded date span from 125 to 500+ dates in training sets, completely eliminating the $D_{90}$ narrow-window embargo constriction noted in Task 8/9.
+- **Files Created:**
+  - `backend/ml/src/convert_xlsx_to_csv.py` (Multi-sheet XLSX-to-CSV conversion and verification pipeline)
+  - `backend/ml/src/verify_dataset_conversion.py` (Automated data reconciliation verifier)
+  - `docs/DATASET_CONVERSION_REPORT.md` (Detailed 2-year conversion and reconciliation audit report)
+  - `backend/ml/data/raw/online_retail_II_2010_2011_backup.csv` (Preserved 1-year backup: 45,005,779 bytes)
+  - `backend/ml/data/processed/service_transactions.csv` (Isolated non-merchandise service ledger: 4,581 records)
+- **Files Modified:**
+  - `backend/ml/src/preprocessing.py` (Added service code isolation, sys.path portability, and reconciliation logging)
+  - `backend/ml/src/feature_engineering.py` (Whitespace-safe SKU aggregation, date parser normalization, `run_daily_aggregation_pipeline`)
+  - `backend/ml/src/point_in_time_price.py` (ISO date parser normalization)
+  - `backend/ml/experiments/sku_level_optimization.py` (Integrated service code filtering, updated 2-year metadata manifest)
+  - `backend/tests/test_historical_forecast.py` (Updated short-history test fixture to valid 1-day SKU `90004A`)
+  - `backend/tests/test_startup_readiness.py` (Updated history days assertion to 739 days, test SKU `90004A`)
+  - `backend/tests/test_leakage_corrections.py` (Updated validation sample counts to accommodate 2-year coverage: 100,527 and 98,639)
+  - `docs/DEVELOPMENT_LOG.md`
+- **Verification & Branch Safety:**
+  - Work executed strictly on branch `uni_api_experimental`.
+  - Protected branches `uni_api_submission` and `main` completely untouched.
+  - Production model directory `backend/ml/models/` completely untouched.
+  - Full automated test suite: **98/98 tests passed (100% pass rate in 25.63s)**.
+
+---
+
 ### [2026-11-20] — Task 8: Temporal Leakage Corrections & Validation Coverage Restoration
 
 - **Phase & Task:** Task 8 — Temporal Leakage Corrections & Validation Coverage Restoration (`uni_api_experimental` branch).
