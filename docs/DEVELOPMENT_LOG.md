@@ -4,6 +4,57 @@ This document maintains a strict chronological development record for NEXORA. Ev
 
 ---
 
+### [2026-11-21] — Task 28: Complete Postman API Demonstration Suite (Forecasting, Error Handling & Inventory Purchase Recommendations)
+
+- **Phase & Task:** Task 28 — Complete Postman API Demonstration Suite (Forecasting, Error Handling & Inventory Purchase Recommendations) (`uni_api_experimental` branch).
+- **Task Description:** Successfully implemented an end-to-end, mathematically explainable inventory replenishment decision-support system, fully integrated with the multi-horizon demand forecasting engine. Created a complete 19-request academic Postman demonstration suite, authored an evaluator demonstration guide, and verified all unit tests, collection requests, and regression suites:
+  1. *Inventory Replenishment Decision Support Endpoint (`POST /api/v1/inventory/recommend`):* Implemented `backend/app/services/inventory_service.py`, schemas in `backend/app/schemas/inventory.py`, and mounted router in `backend/app/api/routes/inventory.py`. Translates ML multi-horizon demand forecasts into actionable replenishment recommendations:
+     - Piecewise linear interpolation across cumulative multi-horizon anchor models ($D_7, D_{15}, D_{30}, D_{90}$) to capture empirical demand saturation across arbitrary replenishment windows ($T_{\text{cov}} = L + R$).
+     - Daily demand rate: $r_{\text{daily}} = \hat{y}_{\text{cov}} / T_{\text{cov}}$.
+     - Safety stock buffer: $SS = r_{\text{daily}} \times S$.
+     - Target stock level: $T = \hat{y}_{\text{cov}} + SS$.
+     - Recommended purchase quantity: $Q^* = \max(0, \lceil T - I_{\text{curr}} \rceil)$.
+     - Stock condition classification: `CRITICAL` ($I_{\text{curr}} < \hat{y}_{\text{cov}}$), `ELEVATED` ($\hat{y}_{\text{cov}} \le I_{\text{curr}} < T$), `SAFE` ($I_{\text{curr}} \ge T$).
+     - Returns complete human-readable mathematical calculation explanations in every response payload.
+  2. *API Error Handling & Schema Validation:* Enforces strict HTTP status semantics:
+     - 404 Not Found for non-catalog SKUs (`HistoricalDataNotFoundError`).
+     - 422 Unprocessable Entity for real SKUs with insufficient history (< 28 days) (`InsufficientHistoryError`).
+     - 422 Unprocessable Entity for negative stock quantities (`current_stock >= 0`).
+     - 422 Unprocessable Entity for missing required fields or unsupported horizons.
+     - 404 Not Found for non-existent routes.
+  3. *Complete Postman Academic Demonstration Collection (`docs/postman/NEXORA_Complete_Demonstration.postman_collection.json`):* Created a 19-request collection structured into Part A (12 core requests covering health, readiness, D7/D15/D30/D90 forecasts, multi-product generalization, and error handling) and Part C (7 dedicated inventory replenishment requests covering low stock, sufficient stock, zero stock, extended lead times, negative stock, unknown SKU, and insufficient history). Configured with collection variables and automated Postman test assertions (`pm.test`).
+  4. *Academic Demonstration Guide (`docs/postman/NEXORA_Postman_Demonstration_Guide.md`):* Authored a comprehensive user and evaluator guide covering collection import, variable configuration, ngrok header bypass, theoretical formulation, step-by-step request directory, worked demonstration scenarios, and viva defense Q&A.
+  5. *Automated Unit & Regression Suite (`backend/tests/test_inventory_recommend.py`):* Added 13 comprehensive test cases covering positive replenishment, zero replenishment, zero inventory, lead time sensitivity, negative stock rejection, non-existent SKU handling, insufficient history handling, non-negativity invariance, monotonicity with current stock, exact 7-day forecast reconciliation, and Task 12 experimental model support.
+  6. *Test Execution & Empirical Verification:*
+     - Inventory recommendation unit tests: **13 / 13 passed in 30.79s**.
+     - Full repository test suite: **168 / 168 passed in 57.15s (100% pass rate, 0 failures, 0 skips)**.
+     - Complete Postman collection test runner: **19 / 19 requests passed (100% pass rate)**.
+  7. *Model Immutability & Branch Safety:* Verified zero model retraining. All 8 model binary SHA-256 hashes remain 100% bitwise intact. Protected branches `uni_api_submission` and `main` remain completely untouched.
+- **Key Technical Deliverables & Empirical Guarantees:**
+  - **New Endpoints:** `POST /api/v1/inventory/recommend`.
+  - **New Schemas:** `InventoryRecommendationRequest`, `InventoryRecommendationResponse` in `backend/app/schemas/inventory.py`.
+  - **New Service:** `InventoryService` in `backend/app/services/inventory_service.py`.
+  - **Postman Collection:** `docs/postman/NEXORA_Complete_Demonstration.postman_collection.json` (19 requests, 100% pass rate).
+  - **Demonstration Guide:** `docs/postman/NEXORA_Postman_Demonstration_Guide.md` (Comprehensive documentation).
+  - **Unit Test Suite:** `backend/tests/test_inventory_recommend.py` (13 tests, all passing).
+  - **Pytest Suite:** 168 / 168 passed (100% pass rate).
+- **Files Created / Modified:**
+  - `backend/app/schemas/inventory.py` (Created)
+  - `backend/app/services/inventory_service.py` (Created)
+  - `backend/app/api/routes/inventory.py` (Created)
+  - `backend/app/api/routes/__init__.py` (Modified to mount inventory router)
+  - `backend/tests/test_inventory_recommend.py` (Created)
+  - `docs/postman/NEXORA_Complete_Demonstration.postman_collection.json` (Created)
+  - `docs/postman/NEXORA_Postman_Demonstration_Guide.md` (Created)
+  - `docs/DEVELOPMENT_LOG.md` (Updated with Task 28 entry)
+  - `docs/KNOWN_ISSUES.md` (Updated with ISSUE-017 resolution)
+- **Branch Safety & Cleanliness:**
+  - Active branch: `uni_api_experimental`.
+  - Protected branches `uni_api_submission` (`596430fc`) and `main` (`f0e56bad`) remain strictly untouched and frozen.
+  - Zero model retraining.
+
+---
+
 ### [2026-11-21] — Task 24: Final Dataset Regeneration, Model Consistency & Academic Submission Readiness
 
 - **Phase & Task:** Task 24 — Final Dataset Regeneration, Model Consistency & Academic Submission Readiness (`uni_api_experimental` branch).

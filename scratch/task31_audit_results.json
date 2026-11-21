@@ -1,0 +1,921 @@
+{
+  "section4_deployment": {
+    "health": {
+      "local_status": 200,
+      "public_status": 200,
+      "local_summary": {
+        "status": "healthy",
+        "service": "backend",
+        "version": "0.1.0"
+      },
+      "public_summary": {
+        "status": "healthy",
+        "service": "backend",
+        "version": "0.1.0"
+      }
+    },
+    "ready": {
+      "local_status": 200,
+      "public_status": 200,
+      "local_summary": {
+        "status": "ready",
+        "service": "backend",
+        "version": "0.1.0",
+        "models": {
+          "ready": true,
+          "models_count": 4,
+          "loaded_horizons": [
+            7,
+            15,
+            30,
+            90
+          ],
+          "total_skus": null,
+          "total_records": null,
+          "dataset_file": null,
+          "demand_data_ready": null,
+          "price_service_ready": null,
+          "models_dir": null,
+          "price_service": null,
+          "error": null
+        },
+        "historical_data": {
+          "ready": true,
+          "models_count": null,
+          "loaded_horizons": null,
+          "total_skus": 4905,
+          "total_records": 2287495,
+          "dataset_file": "daily_product_demand.csv",
+          "demand_data_ready": true,
+          "price_service_ready": true,
+          "models_dir": null,
+          "price_service": {
+            "ready": true,
+            "total_skus": 4905,
+            "global_dates_count": 604,
+            "cache_file": "pit_sku_price_history.json",
+            "cache_metadata": {
+              "source_file": "clean_gross_sales.csv",
+              "source_size": 104267993,
+              "source_mtime": 1795198894.2250557,
+              "source_mtime_iso": "2026-11-20T18:21:34.225056+00:00",
+              "built_at": "2026-11-20T18:22:20.026043+00:00",
+              "total_skus": 4905,
+              "total_transactions": 1037089,
+              "global_dates_count": 604,
+              "schema_version": "1.1"
+            },
+            "error": null
+          },
+          "error": null
+        },
+        "experimental_models": {
+          "ready": true,
+          "models_count": 4,
+          "loaded_horizons": [
+            7,
+            15,
+            30,
+            90
+          ],
+          "total_skus": null,
+          "total_records": null,
+          "dataset_file": null,
+          "demand_data_ready": null,
+          "price_service_ready": true,
+          "models_dir": "models_task12",
+          "price_service": null,
+          "error": null
+        }
+      },
+      "public_summary": {
+        "status": "ready",
+        "service": "backend",
+        "version": "0.1.0",
+        "models": {
+          "ready": true,
+          "models_count": 4,
+          "loaded_horizons": [
+            7,
+            15,
+            30,
+            90
+          ],
+          "total_skus": null,
+          "total_records": null,
+          "dataset_file": null,
+          "demand_data_ready": null,
+          "price_service_ready": null,
+          "models_dir": null,
+          "price_service": null,
+          "error": null
+        },
+        "historical_data": {
+          "ready": true,
+          "models_count": null,
+          "loaded_horizons": null,
+          "total_skus": 4905,
+          "total_records": 2287495,
+          "dataset_file": "daily_product_demand.csv",
+          "demand_data_ready": true,
+          "price_service_ready": true,
+          "models_dir": null,
+          "price_service": {
+            "ready": true,
+            "total_skus": 4905,
+            "global_dates_count": 604,
+            "cache_file": "pit_sku_price_history.json",
+            "cache_metadata": {
+              "source_file": "clean_gross_sales.csv",
+              "source_size": 104267993,
+              "source_mtime": 1795198894.2250557,
+              "source_mtime_iso": "2026-11-20T18:21:34.225056+00:00",
+              "built_at": "2026-11-20T18:22:20.026043+00:00",
+              "total_skus": 4905,
+              "total_transactions": 1037089,
+              "global_dates_count": 604,
+              "schema_version": "1.1"
+            },
+            "error": null
+          },
+          "error": null
+        },
+        "experimental_models": {
+          "ready": true,
+          "models_count": 4,
+          "loaded_horizons": [
+            7,
+            15,
+            30,
+            90
+          ],
+          "total_skus": null,
+          "total_records": null,
+          "dataset_file": null,
+          "demand_data_ready": null,
+          "price_service_ready": true,
+          "models_dir": "models_task12",
+          "price_service": null,
+          "error": null
+        }
+      }
+    },
+    "docs": {
+      "local_status": 200,
+      "public_status": 200,
+      "local_summary": "OK",
+      "public_summary": "OK"
+    },
+    "openapi": {
+      "local_status": 200,
+      "public_status": 200,
+      "local_summary": "OK",
+      "public_summary": "OK"
+    },
+    "horizons": {
+      "local_status": 200,
+      "public_status": 200,
+      "local_summary": {
+        "supported_horizons_days": [
+          7,
+          15,
+          30,
+          90
+        ],
+        "description": "Multi-horizon retail demand planning windows (7 to 90 days).",
+        "horizon_definitions": {
+          "7": "Weekly fast-moving replenishment & shelf restock",
+          "15": "Bi-weekly supplier batch ordering",
+          "30": "Monthly inventory planning & space allocation",
+          "90": "Quarterly supplier volume quotas & supply chain planning"
+        }
+      },
+      "public_summary": {
+        "supported_horizons_days": [
+          7,
+          15,
+          30,
+          90
+        ],
+        "description": "Multi-horizon retail demand planning windows (7 to 90 days).",
+        "horizon_definitions": {
+          "7": "Weekly fast-moving replenishment & shelf restock",
+          "15": "Bi-weekly supplier batch ordering",
+          "30": "Monthly inventory planning & space allocation",
+          "90": "Quarterly supplier volume quotas & supply chain planning"
+        }
+      }
+    },
+    "model_metrics": {
+      "local_status": 200,
+      "public_status": 200,
+      "local_summary": "OK",
+      "public_summary": "OK"
+    },
+    "openapi_check": {
+      "total_paths": 17,
+      "has_predict": true,
+      "has_recommend": true,
+      "paths_list": [
+        "/",
+        "/api/v1/experimental/forecast",
+        "/api/v1/experimental/forecast/horizons",
+        "/api/v1/experimental/forecast/model-info",
+        "/api/v1/experimental/forecast/model-metrics",
+        "/api/v1/experimental/forecast/predict",
+        "/api/v1/experimental/ready",
+        "/api/v1/forecast/",
+        "/api/v1/forecast/evaluation-comparison",
+        "/api/v1/forecast/horizons",
+        "/api/v1/forecast/model-info",
+        "/api/v1/forecast/model-metrics",
+        "/api/v1/forecast/predict",
+        "/api/v1/forecast/store-wide",
+        "/api/v1/inventory/recommend",
+        "/health",
+        "/ready"
+      ]
+    }
+  },
+  "section5_forecast": {
+    "F01_sku85123A_h7": {
+      "payload": {
+        "stock_code": "85123A",
+        "horizon_days": 7
+      },
+      "local_status": 200,
+      "public_status": 200,
+      "local_response": {
+        "stock_code": "85123A",
+        "horizons": [
+          7
+        ],
+        "predictions": {
+          "7": 771.5717
+        },
+        "horizon_details": [
+          {
+            "horizon_days": 7,
+            "predicted_demand": 771.5717,
+            "model_name": "Linear Regression",
+            "wape": 55.65
+          }
+        ],
+        "units": "units",
+        "model_version": "Phase 1 (Task 5 Model Training & Serialization)",
+        "timestamp": "2026-11-20T21:00:32.293511+00:00",
+        "warnings": [
+          "Historical demand features automatically generated from 739 daily records up to observation date 2011-12-09 (UCI Online Retail II dataset)."
+        ],
+        "observation_date": "2011-12-09",
+        "history_days": 739,
+        "is_auto_generated": true,
+        "status": "success",
+        "total_predicted_demand": 771.5717,
+        "horizon_days": 7
+      },
+      "public_response": {
+        "stock_code": "85123A",
+        "horizons": [
+          7
+        ],
+        "predictions": {
+          "7": 771.5717
+        },
+        "horizon_details": [
+          {
+            "horizon_days": 7,
+            "predicted_demand": 771.5717,
+            "model_name": "Linear Regression",
+            "wape": 55.65
+          }
+        ],
+        "units": "units",
+        "model_version": "Phase 1 (Task 5 Model Training & Serialization)",
+        "timestamp": "2026-11-20T21:00:32.401675+00:00",
+        "warnings": [
+          "Historical demand features automatically generated from 739 daily records up to observation date 2011-12-09 (UCI Online Retail II dataset)."
+        ],
+        "observation_date": "2011-12-09",
+        "history_days": 739,
+        "is_auto_generated": true,
+        "status": "success",
+        "total_predicted_demand": 771.5717,
+        "horizon_days": 7
+      }
+    },
+    "F02_sku85123A_h30": {
+      "payload": {
+        "stock_code": "85123A",
+        "horizon_days": 30
+      },
+      "local_status": 200,
+      "public_status": 200,
+      "local_response": {
+        "stock_code": "85123A",
+        "horizons": [
+          30
+        ],
+        "predictions": {
+          "30": 3062.395
+        },
+        "horizon_details": [
+          {
+            "horizon_days": 30,
+            "predicted_demand": 3062.395,
+            "model_name": "Random Forest",
+            "wape": 48.73
+          }
+        ],
+        "units": "units",
+        "model_version": "Phase 1 (Task 5 Model Training & Serialization)",
+        "timestamp": "2026-11-20T21:00:32.488644+00:00",
+        "warnings": [
+          "Historical demand features automatically generated from 739 daily records up to observation date 2011-12-09 (UCI Online Retail II dataset)."
+        ],
+        "observation_date": "2011-12-09",
+        "history_days": 739,
+        "is_auto_generated": true,
+        "status": "success",
+        "total_predicted_demand": 3062.395,
+        "horizon_days": 30
+      },
+      "public_response": {
+        "stock_code": "85123A",
+        "horizons": [
+          30
+        ],
+        "predictions": {
+          "30": 3062.395
+        },
+        "horizon_details": [
+          {
+            "horizon_days": 30,
+            "predicted_demand": 3062.395,
+            "model_name": "Random Forest",
+            "wape": 48.73
+          }
+        ],
+        "units": "units",
+        "model_version": "Phase 1 (Task 5 Model Training & Serialization)",
+        "timestamp": "2026-11-20T21:00:32.621076+00:00",
+        "warnings": [
+          "Historical demand features automatically generated from 739 daily records up to observation date 2011-12-09 (UCI Online Retail II dataset)."
+        ],
+        "observation_date": "2011-12-09",
+        "history_days": 739,
+        "is_auto_generated": true,
+        "status": "success",
+        "total_predicted_demand": 3062.395,
+        "horizon_days": 30
+      }
+    },
+    "F03_sku22423_h7": {
+      "payload": {
+        "stock_code": "22423",
+        "horizon_days": 7
+      },
+      "local_status": 200,
+      "public_status": 200,
+      "local_response": {
+        "stock_code": "22423",
+        "horizons": [
+          7
+        ],
+        "predictions": {
+          "7": 254.151
+        },
+        "horizon_details": [
+          {
+            "horizon_days": 7,
+            "predicted_demand": 254.151,
+            "model_name": "Linear Regression",
+            "wape": 55.65
+          }
+        ],
+        "units": "units",
+        "model_version": "Phase 1 (Task 5 Model Training & Serialization)",
+        "timestamp": "2026-11-20T21:00:32.681839+00:00",
+        "warnings": [
+          "Historical demand features automatically generated from 635 daily records up to observation date 2011-12-09 (UCI Online Retail II dataset)."
+        ],
+        "observation_date": "2011-12-09",
+        "history_days": 635,
+        "is_auto_generated": true,
+        "status": "success",
+        "total_predicted_demand": 254.151,
+        "horizon_days": 7
+      },
+      "public_response": {
+        "stock_code": "22423",
+        "horizons": [
+          7
+        ],
+        "predictions": {
+          "7": 254.151
+        },
+        "horizon_details": [
+          {
+            "horizon_days": 7,
+            "predicted_demand": 254.151,
+            "model_name": "Linear Regression",
+            "wape": 55.65
+          }
+        ],
+        "units": "units",
+        "model_version": "Phase 1 (Task 5 Model Training & Serialization)",
+        "timestamp": "2026-11-20T21:00:33.063264+00:00",
+        "warnings": [
+          "Historical demand features automatically generated from 635 daily records up to observation date 2011-12-09 (UCI Online Retail II dataset)."
+        ],
+        "observation_date": "2011-12-09",
+        "history_days": 635,
+        "is_auto_generated": true,
+        "status": "success",
+        "total_predicted_demand": 254.151,
+        "horizon_days": 7
+      }
+    },
+    "F04_unknown_sku": {
+      "payload": {
+        "stock_code": "NON_EXISTENT_SKU_99999",
+        "horizon_days": 7
+      },
+      "local_status": 404,
+      "public_status": 404,
+      "local_response": {
+        "detail": "Product SKU 'NON_EXISTENT_SKU_99999' was not found in historical sales records. Ensure the SKU exists in the UCI Online Retail II catalog."
+      },
+      "public_response": {
+        "detail": "Product SKU 'NON_EXISTENT_SKU_99999' was not found in historical sales records. Ensure the SKU exists in the UCI Online Retail II catalog."
+      }
+    },
+    "F05_insufficient_history": {
+      "payload": {
+        "stock_code": "20877",
+        "horizon_days": 7
+      },
+      "local_status": 422,
+      "public_status": 422,
+      "local_response": {
+        "detail": "Insufficient historical sales data for SKU '20877' (9 calendar days available; minimum 29 days required to compute 28-day lag and rolling average features)."
+      },
+      "public_response": {
+        "detail": "Insufficient historical sales data for SKU '20877' (9 calendar days available; minimum 29 days required to compute 28-day lag and rolling average features)."
+      }
+    },
+    "F06_invalid_horizon_999": {
+      "payload": {
+        "stock_code": "85123A",
+        "horizon_days": 999
+      },
+      "local_status": 422,
+      "public_status": 422,
+      "local_response": {
+        "detail": [
+          {
+            "type": "value_error",
+            "loc": [
+              "body"
+            ],
+            "msg": "Value error, Unsupported forecast horizon '999'. Supported horizons are [7, 15, 30, 90] days.",
+            "input": {
+              "stock_code": "85123A",
+              "horizon_days": 999
+            },
+            "ctx": {
+              "error": {}
+            }
+          }
+        ]
+      },
+      "public_response": {
+        "detail": [
+          {
+            "type": "value_error",
+            "loc": [
+              "body"
+            ],
+            "msg": "Value error, Unsupported forecast horizon '999'. Supported horizons are [7, 15, 30, 90] days.",
+            "input": {
+              "stock_code": "85123A",
+              "horizon_days": 999
+            },
+            "ctx": {
+              "error": {}
+            }
+          }
+        ]
+      }
+    },
+    "F07_missing_stock_code": {
+      "payload": {
+        "horizon_days": 7
+      },
+      "local_status": 422,
+      "public_status": 422,
+      "local_response": {
+        "detail": [
+          {
+            "type": "missing",
+            "loc": [
+              "body",
+              "stock_code"
+            ],
+            "msg": "Field required",
+            "input": {
+              "horizon_days": 7
+            }
+          }
+        ]
+      },
+      "public_response": {
+        "detail": [
+          {
+            "type": "missing",
+            "loc": [
+              "body",
+              "stock_code"
+            ],
+            "msg": "Field required",
+            "input": {
+              "horizon_days": 7
+            }
+          }
+        ]
+      }
+    },
+    "F08_invalid_request_data": {
+      "payload": {
+        "stock_code": 12345,
+        "horizon_days": "invalid"
+      },
+      "local_status": 422,
+      "public_status": 422,
+      "local_response": {
+        "detail": [
+          {
+            "type": "string_type",
+            "loc": [
+              "body",
+              "stock_code"
+            ],
+            "msg": "Input should be a valid string",
+            "input": 12345
+          },
+          {
+            "type": "int_parsing",
+            "loc": [
+              "body",
+              "horizon_days"
+            ],
+            "msg": "Input should be a valid integer, unable to parse string as an integer",
+            "input": "invalid"
+          }
+        ]
+      },
+      "public_response": {
+        "detail": [
+          {
+            "type": "string_type",
+            "loc": [
+              "body",
+              "stock_code"
+            ],
+            "msg": "Input should be a valid string",
+            "input": 12345
+          },
+          {
+            "type": "int_parsing",
+            "loc": [
+              "body",
+              "horizon_days"
+            ],
+            "msg": "Input should be a valid integer, unable to parse string as an integer",
+            "input": "invalid"
+          }
+        ]
+      }
+    }
+  },
+  "section6_inventory": {
+    "I01_sku85123A_stock100": {
+      "payload": {
+        "stock_code": "85123A",
+        "current_stock": 100.0,
+        "lead_time_days": 7,
+        "review_period_days": 7,
+        "safety_stock_days": 3.0
+      },
+      "local_status": 200,
+      "public_status": 200,
+      "local_response": {
+        "stock_code": "85123A",
+        "current_stock": 100.0,
+        "lead_time_days": 7,
+        "review_period_days": 7,
+        "coverage_period_days": 14,
+        "forecast_demand": 2729.6,
+        "daily_demand_rate": 194.9715,
+        "safety_stock_days": 3.0,
+        "safety_stock": 584.91,
+        "target_stock": 3314.51,
+        "recommended_purchase_quantity": 3214.51,
+        "stock_condition": "CRITICAL",
+        "recommendation": "Purchase 3215 additional units to restore target inventory and protect against stockout risk through the 14-day replenishment cycle.",
+        "calculation_explanation": "Coverage window of 14 days (lead time 7d + review period 7d) has projected demand of 2729.60 units (daily rate 194.97 units/day). Safety stock buffer of 3.0 days requires 584.91 units. Target stock level is 3314.51 units (2729.60 forecast + 584.91 safety stock). With current stock of 100.00 units, recommended purchase quantity is max(0, 3314.51 - 100.00) = 3214.51 units. Stock condition: CRITICAL.",
+        "model_used": "Production Baseline (Phase 1 (Task 5 Model Training & Serialization))",
+        "timestamp": "2026-11-20T21:00:33.904347+00:00"
+      },
+      "public_response": {
+        "stock_code": "85123A",
+        "current_stock": 100.0,
+        "lead_time_days": 7,
+        "review_period_days": 7,
+        "coverage_period_days": 14,
+        "forecast_demand": 2729.6,
+        "daily_demand_rate": 194.9715,
+        "safety_stock_days": 3.0,
+        "safety_stock": 584.91,
+        "target_stock": 3314.51,
+        "recommended_purchase_quantity": 3214.51,
+        "stock_condition": "CRITICAL",
+        "recommendation": "Purchase 3215 additional units to restore target inventory and protect against stockout risk through the 14-day replenishment cycle.",
+        "calculation_explanation": "Coverage window of 14 days (lead time 7d + review period 7d) has projected demand of 2729.60 units (daily rate 194.97 units/day). Safety stock buffer of 3.0 days requires 584.91 units. Target stock level is 3314.51 units (2729.60 forecast + 584.91 safety stock). With current stock of 100.00 units, recommended purchase quantity is max(0, 3314.51 - 100.00) = 3214.51 units. Stock condition: CRITICAL.",
+        "model_used": "Production Baseline (Phase 1 (Task 5 Model Training & Serialization))",
+        "timestamp": "2026-11-20T21:00:34.166204+00:00"
+      }
+    },
+    "I02_sku85123A_high_stock": {
+      "payload": {
+        "stock_code": "85123A",
+        "current_stock": 50000.0,
+        "lead_time_days": 7,
+        "review_period_days": 7,
+        "safety_stock_days": 3.0
+      },
+      "local_status": 200,
+      "public_status": 200,
+      "local_response": {
+        "stock_code": "85123A",
+        "current_stock": 50000.0,
+        "lead_time_days": 7,
+        "review_period_days": 7,
+        "coverage_period_days": 14,
+        "forecast_demand": 2729.6,
+        "daily_demand_rate": 194.9715,
+        "safety_stock_days": 3.0,
+        "safety_stock": 584.91,
+        "target_stock": 3314.51,
+        "recommended_purchase_quantity": 0.0,
+        "stock_condition": "SAFE",
+        "recommendation": "Current stock of 50000 units adequately covers projected demand (2730 units) and safety buffer (585 units) through the 14-day cycle. No reorder required.",
+        "calculation_explanation": "Coverage window of 14 days (lead time 7d + review period 7d) has projected demand of 2729.60 units (daily rate 194.97 units/day). Safety stock buffer of 3.0 days requires 584.91 units. Target stock level is 3314.51 units (2729.60 forecast + 584.91 safety stock). With current stock of 50000.00 units, recommended purchase quantity is max(0, 3314.51 - 50000.00) = 0.00 units. Stock condition: SAFE.",
+        "model_used": "Production Baseline (Phase 1 (Task 5 Model Training & Serialization))",
+        "timestamp": "2026-11-20T21:00:34.312917+00:00"
+      },
+      "public_response": {
+        "stock_code": "85123A",
+        "current_stock": 50000.0,
+        "lead_time_days": 7,
+        "review_period_days": 7,
+        "coverage_period_days": 14,
+        "forecast_demand": 2729.6,
+        "daily_demand_rate": 194.9715,
+        "safety_stock_days": 3.0,
+        "safety_stock": 584.91,
+        "target_stock": 3314.51,
+        "recommended_purchase_quantity": 0.0,
+        "stock_condition": "SAFE",
+        "recommendation": "Current stock of 50000 units adequately covers projected demand (2730 units) and safety buffer (585 units) through the 14-day cycle. No reorder required.",
+        "calculation_explanation": "Coverage window of 14 days (lead time 7d + review period 7d) has projected demand of 2729.60 units (daily rate 194.97 units/day). Safety stock buffer of 3.0 days requires 584.91 units. Target stock level is 3314.51 units (2729.60 forecast + 584.91 safety stock). With current stock of 50000.00 units, recommended purchase quantity is max(0, 3314.51 - 50000.00) = 0.00 units. Stock condition: SAFE.",
+        "model_used": "Production Baseline (Phase 1 (Task 5 Model Training & Serialization))",
+        "timestamp": "2026-11-20T21:00:34.532283+00:00"
+      }
+    },
+    "I03_sku85123A_zero_stock": {
+      "payload": {
+        "stock_code": "85123A",
+        "current_stock": 0.0,
+        "lead_time_days": 7,
+        "review_period_days": 7,
+        "safety_stock_days": 3.0
+      },
+      "local_status": 200,
+      "public_status": 200,
+      "local_response": {
+        "stock_code": "85123A",
+        "current_stock": 0.0,
+        "lead_time_days": 7,
+        "review_period_days": 7,
+        "coverage_period_days": 14,
+        "forecast_demand": 2729.6,
+        "daily_demand_rate": 194.9715,
+        "safety_stock_days": 3.0,
+        "safety_stock": 584.91,
+        "target_stock": 3314.51,
+        "recommended_purchase_quantity": 3314.51,
+        "stock_condition": "CRITICAL",
+        "recommendation": "Purchase 3315 additional units to restore target inventory and protect against stockout risk through the 14-day replenishment cycle.",
+        "calculation_explanation": "Coverage window of 14 days (lead time 7d + review period 7d) has projected demand of 2729.60 units (daily rate 194.97 units/day). Safety stock buffer of 3.0 days requires 584.91 units. Target stock level is 3314.51 units (2729.60 forecast + 584.91 safety stock). With current stock of 0.00 units, recommended purchase quantity is max(0, 3314.51 - 0.00) = 3314.51 units. Stock condition: CRITICAL.",
+        "model_used": "Production Baseline (Phase 1 (Task 5 Model Training & Serialization))",
+        "timestamp": "2026-11-20T21:00:34.674127+00:00"
+      },
+      "public_response": {
+        "stock_code": "85123A",
+        "current_stock": 0.0,
+        "lead_time_days": 7,
+        "review_period_days": 7,
+        "coverage_period_days": 14,
+        "forecast_demand": 2729.6,
+        "daily_demand_rate": 194.9715,
+        "safety_stock_days": 3.0,
+        "safety_stock": 584.91,
+        "target_stock": 3314.51,
+        "recommended_purchase_quantity": 3314.51,
+        "stock_condition": "CRITICAL",
+        "recommendation": "Purchase 3315 additional units to restore target inventory and protect against stockout risk through the 14-day replenishment cycle.",
+        "calculation_explanation": "Coverage window of 14 days (lead time 7d + review period 7d) has projected demand of 2729.60 units (daily rate 194.97 units/day). Safety stock buffer of 3.0 days requires 584.91 units. Target stock level is 3314.51 units (2729.60 forecast + 584.91 safety stock). With current stock of 0.00 units, recommended purchase quantity is max(0, 3314.51 - 0.00) = 3314.51 units. Stock condition: CRITICAL.",
+        "model_used": "Production Baseline (Phase 1 (Task 5 Model Training & Serialization))",
+        "timestamp": "2026-11-20T21:00:34.882035+00:00"
+      }
+    },
+    "I04_sku85123A_longer_lead": {
+      "payload": {
+        "stock_code": "85123A",
+        "current_stock": 100.0,
+        "lead_time_days": 14,
+        "review_period_days": 7,
+        "safety_stock_days": 3.0
+      },
+      "local_status": 200,
+      "public_status": 200,
+      "local_response": {
+        "stock_code": "85123A",
+        "current_stock": 100.0,
+        "lead_time_days": 14,
+        "review_period_days": 7,
+        "coverage_period_days": 21,
+        "forecast_demand": 3030.55,
+        "daily_demand_rate": 144.3119,
+        "safety_stock_days": 3.0,
+        "safety_stock": 432.94,
+        "target_stock": 3463.49,
+        "recommended_purchase_quantity": 3363.49,
+        "stock_condition": "CRITICAL",
+        "recommendation": "Purchase 3363 additional units to restore target inventory and protect against stockout risk through the 21-day replenishment cycle.",
+        "calculation_explanation": "Coverage window of 21 days (lead time 14d + review period 7d) has projected demand of 3030.55 units (daily rate 144.31 units/day). Safety stock buffer of 3.0 days requires 432.94 units. Target stock level is 3463.49 units (3030.55 forecast + 432.94 safety stock). With current stock of 100.00 units, recommended purchase quantity is max(0, 3463.49 - 100.00) = 3363.49 units. Stock condition: CRITICAL.",
+        "model_used": "Production Baseline (Phase 1 (Task 5 Model Training & Serialization))",
+        "timestamp": "2026-11-20T21:00:35.029520+00:00"
+      },
+      "public_response": {
+        "stock_code": "85123A",
+        "current_stock": 100.0,
+        "lead_time_days": 14,
+        "review_period_days": 7,
+        "coverage_period_days": 21,
+        "forecast_demand": 3030.55,
+        "daily_demand_rate": 144.3119,
+        "safety_stock_days": 3.0,
+        "safety_stock": 432.94,
+        "target_stock": 3463.49,
+        "recommended_purchase_quantity": 3363.49,
+        "stock_condition": "CRITICAL",
+        "recommendation": "Purchase 3363 additional units to restore target inventory and protect against stockout risk through the 21-day replenishment cycle.",
+        "calculation_explanation": "Coverage window of 21 days (lead time 14d + review period 7d) has projected demand of 3030.55 units (daily rate 144.31 units/day). Safety stock buffer of 3.0 days requires 432.94 units. Target stock level is 3463.49 units (3030.55 forecast + 432.94 safety stock). With current stock of 100.00 units, recommended purchase quantity is max(0, 3463.49 - 100.00) = 3363.49 units. Stock condition: CRITICAL.",
+        "model_used": "Production Baseline (Phase 1 (Task 5 Model Training & Serialization))",
+        "timestamp": "2026-11-20T21:00:35.255334+00:00"
+      }
+    },
+    "I05_negative_current_stock": {
+      "payload": {
+        "stock_code": "85123A",
+        "current_stock": -10.0,
+        "lead_time_days": 7,
+        "review_period_days": 7,
+        "safety_stock_days": 3.0
+      },
+      "local_status": 422,
+      "public_status": 422,
+      "local_response": {
+        "detail": [
+          {
+            "type": "greater_than_equal",
+            "loc": [
+              "body",
+              "current_stock"
+            ],
+            "msg": "Input should be greater than or equal to 0",
+            "input": -10.0,
+            "ctx": {
+              "ge": 0.0
+            }
+          }
+        ]
+      },
+      "public_response": {
+        "detail": [
+          {
+            "type": "greater_than_equal",
+            "loc": [
+              "body",
+              "current_stock"
+            ],
+            "msg": "Input should be greater than or equal to 0",
+            "input": -10.0,
+            "ctx": {
+              "ge": 0.0
+            }
+          }
+        ]
+      }
+    },
+    "I06_unknown_sku": {
+      "payload": {
+        "stock_code": "NON_EXISTENT_SKU_99999",
+        "current_stock": 100.0,
+        "lead_time_days": 7,
+        "review_period_days": 7,
+        "safety_stock_days": 3.0
+      },
+      "local_status": 404,
+      "public_status": 404,
+      "local_response": {
+        "detail": "Product SKU 'NON_EXISTENT_SKU_99999' not found in historical retail catalog."
+      },
+      "public_response": {
+        "detail": "Product SKU 'NON_EXISTENT_SKU_99999' not found in historical retail catalog."
+      }
+    },
+    "I07_insufficient_history": {
+      "payload": {
+        "stock_code": "20877",
+        "current_stock": 100.0,
+        "lead_time_days": 7,
+        "review_period_days": 7,
+        "safety_stock_days": 3.0
+      },
+      "local_status": 422,
+      "public_status": 422,
+      "local_response": {
+        "detail": "Insufficient historical sales data for SKU '20877' (9 calendar days available; minimum 29 days required to compute 28-day lag and rolling average features)."
+      },
+      "public_response": {
+        "detail": "Insufficient historical sales data for SKU '20877' (9 calendar days available; minimum 29 days required to compute 28-day lag and rolling average features)."
+      }
+    },
+    "multi_horizon_forecast_85123A": {
+      "stock_code": "85123A",
+      "horizons": [
+        7,
+        15,
+        30,
+        90
+      ],
+      "predictions": {
+        "7": 771.5717,
+        "15": 3009.3201,
+        "30": 3062.395,
+        "90": 9427.142
+      },
+      "horizon_details": [
+        {
+          "horizon_days": 7,
+          "predicted_demand": 771.5717,
+          "model_name": "Linear Regression",
+          "wape": 55.65
+        },
+        {
+          "horizon_days": 15,
+          "predicted_demand": 3009.3201,
+          "model_name": "Random Forest",
+          "wape": 50.0
+        },
+        {
+          "horizon_days": 30,
+          "predicted_demand": 3062.395,
+          "model_name": "Random Forest",
+          "wape": 48.73
+        },
+        {
+          "horizon_days": 90,
+          "predicted_demand": 9427.142,
+          "model_name": "Random Forest",
+          "wape": 53.22
+        }
+      ],
+      "units": "units",
+      "model_version": "Phase 1 (Task 5 Model Training & Serialization)",
+      "timestamp": "2026-11-20T21:00:35.848418+00:00",
+      "warnings": [
+        "Historical demand features automatically generated from 739 daily records up to observation date 2011-12-09 (UCI Online Retail II dataset)."
+      ],
+      "observation_date": "2011-12-09",
+      "history_days": 739,
+      "is_auto_generated": true,
+      "status": "success",
+      "total_predicted_demand": 771.5717,
+      "horizon_days": null
+    }
+  }
+}

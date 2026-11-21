@@ -1,0 +1,747 @@
+{
+  "info": {
+    "_postman_id": "b1e3f890-5c6d-4e78-9a21-9d10e4a56789",
+    "name": "NEXORA Experimental Demand Forecasting API (Task 12)",
+    "description": "Postman Collection for NEXORA Experimental Demand Forecasting Subsystem (Task 12 Models).\nIncludes 12 distinct requests covering service lifecycle, model architecture, multi-horizon predictions, error handling, and production isolation verification.\nTarget Base URL: {{baseUrl}} (defaults to http://localhost:8000).",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:8000",
+      "type": "string",
+      "description": "Base URL of the running FastAPI backend server (e.g. http://localhost:8000 or public HTTPS tunnel URL)."
+    }
+  ],
+  "item": [
+    {
+      "name": "1. Liveness Probe (GET /health)",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Status code is 200\", function () {",
+              "    pm.response.to.have.status(200);",
+              "});",
+              "pm.test(\"Service is healthy\", function () {",
+              "    var json = pm.response.json();",
+              "    pm.expect(json.status).to.eql(\"healthy\");",
+              "});"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "ngrok-skip-browser-warning",
+            "value": "69420",
+            "type": "text"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/health",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "health"
+          ]
+        },
+        "description": "Verifies that the FastAPI process is active and responsive.\nExpected: HTTP 200 OK."
+      },
+      "response": [
+        {
+          "name": "200 Healthy",
+          "status": "OK",
+          "code": 200,
+          "_postman_previewlanguage": "json",
+          "body": "{\n  \"status\": \"healthy\",\n  \"service\": \"backend\",\n  \"version\": \"0.1.0\"\n}"
+        }
+      ]
+    },
+    {
+      "name": "2. Production Readiness Probe (GET /ready)",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Status code is 200\", function () {",
+              "    pm.response.to.have.status(200);",
+              "});",
+              "pm.test(\"Overall status is ready\", function () {",
+              "    var json = pm.response.json();",
+              "    pm.expect(json.status).to.eql(\"ready\");",
+              "    pm.expect(json.models.ready).to.be.true;",
+              "    pm.expect(json.historical_data.ready).to.be.true;",
+              "});"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "ngrok-skip-browser-warning",
+            "value": "69420",
+            "type": "text"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/ready",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "ready"
+          ]
+        },
+        "description": "Verifies baseline production readiness. Returns 200 even if experimental subsystems are uninitialized.\nExpected: HTTP 200 OK."
+      },
+      "response": [
+        {
+          "name": "200 Ready",
+          "status": "OK",
+          "code": 200,
+          "_postman_previewlanguage": "json",
+          "body": "{\n  \"status\": \"ready\",\n  \"service\": \"backend\",\n  \"version\": \"0.1.0\",\n  \"models\": {\n    \"ready\": true,\n    \"models_count\": 4,\n    \"loaded_horizons\": [7, 15, 30, 90]\n  },\n  \"historical_data\": {\n    \"ready\": true,\n    \"total_skus\": 3922,\n    \"total_records\": 1074653,\n    \"dataset_file\": \"daily_product_demand.csv\"\n  }\n}"
+        }
+      ]
+    },
+    {
+      "name": "3. Experimental Readiness Probe (GET /api/v1/experimental/ready)",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Status code is 200\", function () {",
+              "    pm.response.to.have.status(200);",
+              "});",
+              "pm.test(\"Experimental subsystem is ready\", function () {",
+              "    var json = pm.response.json();",
+              "    pm.expect(json.status).to.eql(\"ready\");",
+              "    pm.expect(json.experimental_models.ready).to.be.true;",
+              "    pm.expect(json.historical_data.price_service_ready).to.be.true;",
+              "});"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "ngrok-skip-browser-warning",
+            "value": "69420",
+            "type": "text"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/experimental/ready",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "v1",
+            "experimental",
+            "ready"
+          ]
+        },
+        "description": "Verifies that Task 12 experimental models, point-in-time pricing service, and historical demand dataset are all loaded and ready.\nExpected: HTTP 200 OK."
+      },
+      "response": [
+        {
+          "name": "200 Experimental Ready",
+          "status": "OK",
+          "code": 200,
+          "_postman_previewlanguage": "json",
+          "body": "{\n  \"status\": \"ready\",\n  \"service\": \"experimental_forecast\",\n  \"experimental_models\": {\n    \"ready\": true,\n    \"models_count\": 4,\n    \"loaded_horizons\": [7, 15, 30, 90],\n    \"models_dir\": \"models_task12\",\n    \"price_service_ready\": true,\n    \"error\": null\n  },\n  \"historical_data\": {\n    \"ready\": true,\n    \"demand_data_ready\": true,\n    \"price_service_ready\": true,\n    \"total_skus\": 3922,\n    \"total_records\": 1074653,\n    \"dataset_file\": \"daily_product_demand.csv\",\n    \"error\": null\n  }\n}"
+        }
+      ]
+    },
+    {
+      "name": "4. Experimental Supported Horizons (GET /api/v1/experimental/forecast/horizons)",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Status code is 200\", function () {",
+              "    pm.response.to.have.status(200);",
+              "});",
+              "pm.test(\"Supported horizons are [7, 15, 30, 90]\", function () {",
+              "    var json = pm.response.json();",
+              "    pm.expect(json.supported_horizons_days).to.eql([7, 15, 30, 90]);",
+              "});"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "ngrok-skip-browser-warning",
+            "value": "69420",
+            "type": "text"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/experimental/forecast/horizons",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "v1",
+            "experimental",
+            "forecast",
+            "horizons"
+          ]
+        },
+        "description": "Retrieves the four Task 12 operational horizons and their selected model algorithms.\nExpected: HTTP 200 OK."
+      },
+      "response": [
+        {
+          "name": "200 Horizons",
+          "status": "OK",
+          "code": 200,
+          "_postman_previewlanguage": "json",
+          "body": "{\n  \"supported_horizons_days\": [7, 15, 30, 90],\n  \"description\": \"Multi-horizon retail demand planning windows (7 to 90 days) using Task 12 optimized estimators.\",\n  \"horizon_definitions\": {\n    \"7\": \"Weekly operational shelf replenishment (ElasticNet: l1=0.1, alpha=0.01)\",\n    \"15\": \"Bi-weekly supplier batch ordering (Residual Ridge: alpha=1.0)\",\n    \"30\": \"Monthly inventory planning (Residual Ridge: alpha=100.0)\",\n    \"90\": \"Quarterly supplier volume quotas (Residual Ridge: alpha=10.0)\"\n  }\n}"
+        }
+      ]
+    },
+    {
+      "name": "5. Experimental Model Benchmark Metrics (GET /api/v1/experimental/forecast/model-metrics)",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Status code is 200\", function () {",
+              "    pm.response.to.have.status(200);",
+              "});",
+              "pm.test(\"Contains Task 12 CV and holdout metrics\", function () {",
+              "    var json = pm.response.json();",
+              "    pm.expect(json.milestone).to.include(\"Task 12\");",
+              "    pm.expect(json.models).to.have.property(\"D_7\");",
+              "    pm.expect(json.models).to.have.property(\"D_15\");",
+              "    pm.expect(json.models).to.have.property(\"D_30\");",
+              "    pm.expect(json.models).to.have.property(\"D_90\");",
+              "});"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "ngrok-skip-browser-warning",
+            "value": "69420",
+            "type": "text"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/experimental/forecast/model-metrics",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "v1",
+            "experimental",
+            "forecast",
+            "model-metrics"
+          ]
+        },
+        "description": "Returns documented cross-validation WAPE and final holdout performance metrics for all 4 horizons.\nExpected: HTTP 200 OK."
+      },
+      "response": [
+        {
+          "name": "200 Model Metrics",
+          "status": "OK",
+          "code": 200,
+          "_postman_previewlanguage": "json",
+          "body": "{\n  \"project\": \"NEXORA\",\n  \"milestone\": \"Task 12: Production-Grade Model Selection & Multi-Horizon Evaluation\",\n  \"dataset_reference\": \"UCI Online Retail II (2009-2011)\",\n  \"training_timestamp\": \"2026-11-19T20:41:40+05:30\",\n  \"encoding_strategy\": \"ChronologicalExpandingTargetEncoder\",\n  \"backtesting_strategy\": \"5-Fold Expanding Window Chronological Time-Series Cross-Validation\",\n  \"models\": {\n    \"D_7\": {\n      \"selected_model\": \"ElasticNet\",\n      \"best_hyperparameters\": {\"alpha\": 0.01, \"l1_ratio\": 0.1},\n      \"pooled_cv_wape\": 80.33,\n      \"holdout_wape\": 54.20\n    },\n    \"D_15\": {\n      \"selected_model\": \"Residual Ridge\",\n      \"best_hyperparameters\": {\"alpha\": 1.0},\n      \"pooled_cv_wape\": 71.90,\n      \"holdout_wape\": 44.88\n    },\n    \"D_30\": {\n      \"selected_model\": \"Residual Ridge\",\n      \"best_hyperparameters\": {\"alpha\": 100.0},\n      \"pooled_cv_wape\": 68.32,\n      \"holdout_wape\": 46.52\n    },\n    \"D_90\": {\n      \"selected_model\": \"Residual Ridge\",\n      \"best_hyperparameters\": {\"alpha\": 10.0},\n      \"pooled_cv_wape\": 64.91,\n      \"holdout_wape\": 46.12\n    }\n  }\n}"
+        }
+      ]
+    },
+    {
+      "name": "6. Experimental Runtime Model Architecture (GET /api/v1/experimental/forecast/model-info)",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Status code is 200\", function () {",
+              "    pm.response.to.have.status(200);",
+              "});",
+              "pm.test(\"Features contract contains 20 columns\", function () {",
+              "    var json = pm.response.json();",
+              "    pm.expect(json.feature_columns.length).to.eql(20);",
+              "    pm.expect(json.feature_columns).to.include(\"UnitPrice\");",
+              "    pm.expect(json.feature_columns).to.include(\"Lag60\");",
+              "});"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "ngrok-skip-browser-warning",
+            "value": "69420",
+            "type": "text"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/experimental/forecast/model-info",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "v1",
+            "experimental",
+            "forecast",
+            "model-info"
+          ]
+        },
+        "description": "Returns active model architectures and the strict 20-column feature contract.\nExpected: HTTP 200 OK."
+      },
+      "response": [
+        {
+          "name": "200 Model Info",
+          "status": "OK",
+          "code": 200,
+          "_postman_previewlanguage": "json",
+          "body": "{\n  \"project\": \"NEXORA\",\n  \"version\": \"1.0.0-experimental\",\n  \"status\": \"ready\",\n  \"supported_horizons\": [7, 15, 30, 90],\n  \"active_models\": {\n    \"D_7\": \"ElasticNet\",\n    \"D_15\": \"Residual Ridge\",\n    \"D_30\": \"Residual Ridge\",\n    \"D_90\": \"Residual Ridge\"\n  },\n  \"feature_columns_count\": 20,\n  \"feature_columns\": [\n    \"StockCode\", \"date\", \"DayOfWeek\", \"Month\", \"DayOfMonth\",\n    \"Lag1\", \"Lag7\", \"Lag14\", \"Lag28\", \"Lag60\",\n    \"RollingMean7\", \"RollingMean14\", \"RollingMean28\", \"RollingMean60\",\n    \"RollingStd7\", \"RollingStd28\", \"ZeroFraction28\", \"MomentumRatio\",\n    \"UnitPrice\", \"Has60dHistory\"\n  ]\n}"
+        }
+      ]
+    },
+    {
+      "name": "7. Valid Multi-Horizon Forecast - All Horizons Auto (POST /api/v1/experimental/forecast/predict)",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Status code is 200\", function () {",
+              "    pm.response.to.have.status(200);",
+              "});",
+              "pm.test(\"Returns non-negative predictions for all 4 horizons\", function () {",
+              "    var json = pm.response.json();",
+              "    pm.expect(json.stock_code).to.eql(\"85123A\");",
+              "    pm.expect(json.predictions).to.have.all.keys(\"7\", \"15\", \"30\", \"90\");",
+              "    pm.expect(json.predictions[\"7\"]).to.be.at.least(0);",
+              "    pm.expect(json.predictions[\"15\"]).to.be.at.least(0);",
+              "    pm.expect(json.predictions[\"30\"]).to.be.at.least(0);",
+              "    pm.expect(json.predictions[\"90\"]).to.be.at.least(0);",
+              "});"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json",
+            "type": "text"
+          },
+          {
+            "key": "ngrok-skip-browser-warning",
+            "value": "69420",
+            "type": "text"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"stock_code\": \"85123A\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/experimental/forecast/predict",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "v1",
+            "experimental",
+            "forecast",
+            "predict"
+          ]
+        },
+        "description": "Submits SKU '85123A' to generate multi-horizon forecasts using Task 12 models.\nHistorical features are automatically computed from indexed demand and point-in-time pricing data.\nExpected: HTTP 200 OK."
+      },
+      "response": [
+        {
+          "name": "200 Prediction Success",
+          "status": "OK",
+          "code": 200,
+          "_postman_previewlanguage": "json",
+          "body": "{\n  \"stock_code\": \"85123A\",\n  \"horizons\": [7, 15, 30, 90],\n  \"predictions\": {\n    \"7\": 745.24,\n    \"15\": 1608.12,\n    \"30\": 3215.45,\n    \"90\": 9646.35\n  },\n  \"units\": \"units\",\n  \"model_version\": \"Task 12: Production-Grade Model Selection & Multi-Horizon Evaluation\",\n  \"observation_date\": \"2011-12-09\",\n  \"history_days\": 374,\n  \"is_auto_generated\": true,\n  \"status\": \"success\"\n}"
+        }
+      ]
+    },
+    {
+      "name": "8. Selective Horizons Forecast - D7 & D30 (POST /api/v1/experimental/forecast/predict)",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Status code is 200\", function () {",
+              "    pm.response.to.have.status(200);",
+              "});",
+              "pm.test(\"Returns predictions strictly for requested horizons [7, 30]\", function () {",
+              "    var json = pm.response.json();",
+              "    pm.expect(json.horizons).to.eql([7, 30]);",
+              "    pm.expect(Object.keys(json.predictions)).to.eql([\"7\", \"30\"]);",
+              "});"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json",
+            "type": "text"
+          },
+          {
+            "key": "ngrok-skip-browser-warning",
+            "value": "69420",
+            "type": "text"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"stock_code\": \"85123A\",\n  \"horizons\": [7, 30]\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/experimental/forecast/predict",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "v1",
+            "experimental",
+            "forecast",
+            "predict"
+          ]
+        },
+        "description": "Requests forecasts only for horizons 7 and 30 days.\nExpected: HTTP 200 OK with predictions restricted to requested horizons."
+      },
+      "response": [
+        {
+          "name": "200 Selective Success",
+          "status": "OK",
+          "code": 200,
+          "_postman_previewlanguage": "json",
+          "body": "{\n  \"stock_code\": \"85123A\",\n  \"horizons\": [7, 30],\n  \"predictions\": {\n    \"7\": 745.24,\n    \"30\": 3215.45\n  },\n  \"units\": \"units\",\n  \"model_version\": \"Task 12: Production-Grade Model Selection & Multi-Horizon Evaluation\",\n  \"observation_date\": \"2011-12-09\",\n  \"is_auto_generated\": true,\n  \"status\": \"success\"\n}"
+        }
+      ]
+    },
+    {
+      "name": "9. Manual 20-Feature Forecast (POST /api/v1/experimental/forecast/predict)",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Status code is 200\", function () {",
+              "    pm.response.to.have.status(200);",
+              "});",
+              "pm.test(\"Predicts from manual feature payload\", function () {",
+              "    var json = pm.response.json();",
+              "    pm.expect(json.is_auto_generated).to.be.false;",
+              "    pm.expect(json.predictions).to.have.property(\"7\");",
+              "});"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json",
+            "type": "text"
+          },
+          {
+            "key": "ngrok-skip-browser-warning",
+            "value": "69420",
+            "type": "text"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"stock_code\": \"85123A\",\n  \"features\": {\n    \"day_of_week\": 4,\n    \"month\": 12,\n    \"day_of_month\": 9,\n    \"lag_1\": 15.0,\n    \"lag_7\": 12.0,\n    \"lag_14\": 10.0,\n    \"lag_28\": 14.0,\n    \"rolling_mean_7\": 13.5,\n    \"rolling_mean_28\": 11.8,\n    \"lag_60\": 9.0,\n    \"rolling_mean_14\": 12.1,\n    \"rolling_mean_60\": 10.5,\n    \"rolling_std_7\": 2.1,\n    \"rolling_std_28\": 3.4,\n    \"zero_fraction_28\": 0.07,\n    \"momentum_ratio\": 1.05,\n    \"unit_price\": 2.55,\n    \"has_60d_history\": 1.0\n  }\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/experimental/forecast/predict",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "v1",
+            "experimental",
+            "forecast",
+            "predict"
+          ]
+        },
+        "description": "Passes an explicit manual 20-column feature payload for simulated what-if testing without requiring historical records.\nExpected: HTTP 200 OK."
+      },
+      "response": [
+        {
+          "name": "200 Manual Features Success",
+          "status": "OK",
+          "code": 200,
+          "_postman_previewlanguage": "json",
+          "body": "{\n  \"stock_code\": \"85123A\",\n  \"horizons\": [7, 15, 30, 90],\n  \"predictions\": {\n    \"7\": 94.5,\n    \"15\": 202.5,\n    \"30\": 405.0,\n    \"90\": 1215.0\n  },\n  \"units\": \"units\",\n  \"is_auto_generated\": false,\n  \"status\": \"success\"\n}"
+        }
+      ]
+    },
+    {
+      "name": "10. Unknown SKU Error Test (POST /api/v1/experimental/forecast/predict)",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Status code is 404\", function () {",
+              "    pm.response.to.have.status(404);",
+              "});",
+              "pm.test(\"Error detail mentions SKU not found\", function () {",
+              "    var json = pm.response.json();",
+              "    pm.expect(json.detail).to.include(\"not found\");",
+              "});"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json",
+            "type": "text"
+          },
+          {
+            "key": "ngrok-skip-browser-warning",
+            "value": "69420",
+            "type": "text"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"stock_code\": \"NON_EXISTENT_SKU_99999\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/experimental/forecast/predict",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "v1",
+            "experimental",
+            "forecast",
+            "predict"
+          ]
+        },
+        "description": "Submits an invalid SKU with no manual features to verify 404 Not Found error handling.\nExpected: HTTP 404 Not Found."
+      },
+      "response": [
+        {
+          "name": "404 Not Found",
+          "status": "Not Found",
+          "code": 404,
+          "_postman_previewlanguage": "json",
+          "body": "{\n  \"detail\": \"Product SKU 'NON_EXISTENT_SKU_99999' was not found in historical sales records. Ensure the SKU exists in the UCI Online Retail II catalog.\"\n}"
+        }
+      ]
+    },
+    {
+      "name": "11. Insufficient History Error Test (POST /api/v1/experimental/forecast/predict)",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Status code is 422\", function () {",
+              "    pm.response.to.have.status(422);",
+              "});",
+              "pm.test(\"Error detail mentions insufficient history\", function () {",
+              "    var json = pm.response.json();",
+              "    pm.expect(json.detail).to.include(\"Insufficient historical sales data\");",
+              "});"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json",
+            "type": "text"
+          },
+          {
+            "key": "ngrok-skip-browser-warning",
+            "value": "69420",
+            "type": "text"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"stock_code\": \"20877\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/experimental/forecast/predict",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "v1",
+            "experimental",
+            "forecast",
+            "predict"
+          ]
+        },
+        "description": "Submits SKU '20877' which has fewer than 29 calendar days of history to verify validation error handling.\nExpected: HTTP 422 Unprocessable Content."
+      },
+      "response": [
+        {
+          "name": "422 Unprocessable Content",
+          "status": "Unprocessable Entity",
+          "code": 422,
+          "_postman_previewlanguage": "json",
+          "body": "{\n  \"detail\": \"Insufficient historical sales data for SKU '20877' (9 calendar days available; minimum 29 days required to compute 28-day lag and rolling average features).\"\n}"
+        }
+      ]
+    },
+    {
+      "name": "12. Production Baseline Predict Comparison (POST /api/v1/forecast/predict)",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Status code is 200\", function () {",
+              "    pm.response.to.have.status(200);",
+              "});",
+              "pm.test(\"Production pipeline functions independently\", function () {",
+              "    var json = pm.response.json();",
+              "    pm.expect(json.stock_code).to.eql(\"85123A\");",
+              "    pm.expect(json.model_version).to.include(\"Phase 1\");",
+              "    pm.expect(json.predictions).to.have.all.keys(\"7\", \"15\", \"30\", \"90\");",
+              "});"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json",
+            "type": "text"
+          },
+          {
+            "key": "ngrok-skip-browser-warning",
+            "value": "69420",
+            "type": "text"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"stock_code\": \"85123A\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/forecast/predict",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "v1",
+            "forecast",
+            "predict"
+          ]
+        },
+        "description": "Verifies that production baseline forecasting continues to operate flawlessly and independently.\nExpected: HTTP 200 OK."
+      },
+      "response": [
+        {
+          "name": "200 Production Success",
+          "status": "OK",
+          "code": 200,
+          "_postman_previewlanguage": "json",
+          "body": "{\n  \"stock_code\": \"85123A\",\n  \"horizons\": [7, 15, 30, 90],\n  \"predictions\": {\n    \"7\": 771.5717,\n    \"15\": 3009.3201,\n    \"30\": 3062.395,\n    \"90\": 9427.142\n  },\n  \"units\": \"units\",\n  \"model_version\": \"Phase 1 (Task 5 Model Training & Serialization)\",\n  \"observation_date\": \"2011-12-09\",\n  \"history_days\": 374,\n  \"is_auto_generated\": true,\n  \"status\": \"success\"\n}"
+        }
+      ]
+    }
+  ]
+}

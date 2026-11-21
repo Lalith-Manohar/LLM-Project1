@@ -1,0 +1,94 @@
+<USER_REQUEST>
+# NEXORA — Task 28: Complete Postman API Demonstration Suite (Forecasting, Error Handling & Inventory Purchase Recommendations)
+
+**Project:** NEXORA – AI-Powered Retail Management & Intelligence System  
+**Repository:** `Lalith-Manohar/LLM-Project1`  
+**Working branch:** `uni_api_experimental`  
+**Current expected HEAD:** `453f78673537ce43f538245cfaae4807f4756d01`
+
+## OBJECTIVE
+
+Create a comprehensive Postman collection for the NEXORA academic demonstration.
+
+The collection must demonstrate:
+
+1. Backend health and readiness.
+2. Available forecasting horizons.
+3. Demand forecasts for different products.
+4. Correct API error handling, including genuine 404, 422 and other applicable errors.
+5. How the system determines which products need replenishment.
+6. How much stock should be purchased for each product.
+7. A clear explanation of the purchase recommendation using forecast demand, current stock and safety stock.
+
+Do not just create documentation. Inspect the actual FastAPI implementation, implement any genuinely missing API functionality, test it, and produce an importable Postman collection.
+
+---
+
+## PART A — CREATE 12 CORE POSTMAN REQUESTS
+
+Create the following requests in this exact order, adapting endpoint paths and request schemas to the actual implementation.
+
+**01. Liveness Probe**
+- Method: GET
+- Endpoint: `/health`
+- Expected: HTTP 200
+- Demonstrate that the backend process is alive.
+
+**02. Readiness Probe**
+- Method: GET
+- Endpoint: `/ready`
+- Expected: HTTP 200 when models and required datasets are loaded.
+- Show model and dataset readiness information.
+
+**03. API Readiness**
+- Method: GET
+- Endpoint: `/api/v1/ready`
+- Expected: HTTP 200 when ready.
+- If this route does not exist, inspect the existing implementation before deciding whether it should be added.
+
+**04. Supported Forecast Horizons**
+- Method: GET
+- Endpoint: `/api/v1/forecast/horizons`
+- Expected: HTTP 200
+- Display supported horizons: D7, D15, D30 and D90.
+
+**05. Valid Forecast — Short-Term**
+- Method: POST
+- Endpoi
+<truncated 9409 bytes>
+interpret forecasting responses.
+   - How to determine how much stock to buy.
+   - Actual demonstration examples and expected statuses.
+
+3. Any necessary backend implementation and tests for inventory recommendation functionality.
+
+4. A final Task 28 report containing:
+   - Changed files.
+   - API endpoints created or reused.
+   - Actual Postman collection request count.
+   - Actual status codes from every request.
+   - Pytest results.
+   - Newman results, if available.
+   - Verified demonstration SKUs.
+   - Example forecast outputs.
+   - Example inventory purchase calculations.
+   - Confirmation that protected branches and model artifacts remain unchanged.
+   - Any limitations or uncompleted tests.
+
+**IMPORTANT:** First inspect the current codebase and actual API contracts. Do not blindly assume that suggested routes or request fields exist. Build on the real implementation.
+
+The final objective is a reliable, understandable academic demonstration showing that NEXORA can forecast retail demand and translate those forecasts into explainable stock replenishment recommendations.
+</USER_REQUEST>
+<ADDITIONAL_METADATA>
+The current local time is: 2026-11-21T00:49:05+05:30.
+
+The user's current state is as follows:
+Active Document: c:\Users\grand\OneDrive\Desktop\SDC -1 Project\LLM-Project1\.gitignore (LANGUAGE_UNSPECIFIED)
+Cursor is on line: 15
+Other open documents:
+- c:\Users\grand\OneDrive\Desktop\SDC -1 Project\LLM-Project1\start.ps1 (LANGUAGE_UNSPECIFIED)
+- c:\Users\grand\OneDrive\Desktop\SDC -1 Project\LLM-Project1\docs\postman\NEXORA_Experimental_API.postman_collection.json (LANGUAGE_UNSPECIFIED)
+- c:\Users\grand\OneDrive\Desktop\SDC -1 Project\LLM-Project1\backend\app\api\routes\experimental_forecast.py (LANGUAGE_UNSPECIFIED)
+- c:\Users\grand\OneDrive\Desktop\SDC -1 Project\LLM-Project1\backend\app\services\experimental_prediction_service.py (LANGUAGE_UNSPECIFIED)
+- c:\Users\grand\OneDrive\Desktop\SDC -1 Project\LLM-Project1\backend\tests\test_experimental_forecast.py (LANGUAGE_UNSPECIFIED)
+</ADDITIONAL_METADATA>

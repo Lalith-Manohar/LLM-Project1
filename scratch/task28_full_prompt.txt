@@ -1,0 +1,378 @@
+<USER_REQUEST>
+# NEXORA — Task 28: Complete Postman API Demonstration Suite (Forecasting, Error Handling & Inventory Purchase Recommendations)
+
+**Project:** NEXORA – AI-Powered Retail Management & Intelligence System  
+**Repository:** `Lalith-Manohar/LLM-Project1`  
+**Working branch:** `uni_api_experimental`  
+**Current expected HEAD:** `453f78673537ce43f538245cfaae4807f4756d01`
+
+## OBJECTIVE
+
+Create a comprehensive Postman collection for the NEXORA academic demonstration.
+
+The collection must demonstrate:
+
+1. Backend health and readiness.
+2. Available forecasting horizons.
+3. Demand forecasts for different products.
+4. Correct API error handling, including genuine 404, 422 and other applicable errors.
+5. How the system determines which products need replenishment.
+6. How much stock should be purchased for each product.
+7. A clear explanation of the purchase recommendation using forecast demand, current stock and safety stock.
+
+Do not just create documentation. Inspect the actual FastAPI implementation, implement any genuinely missing API functionality, test it, and produce an importable Postman collection.
+
+---
+
+## PART A — CREATE 12 CORE POSTMAN REQUESTS
+
+Create the following requests in this exact order, adapting endpoint paths and request schemas to the actual implementation.
+
+**01. Liveness Probe**
+- Method: GET
+- Endpoint: `/health`
+- Expected: HTTP 200
+- Demonstrate that the backend process is alive.
+
+**02. Readiness Probe**
+- Method: GET
+- Endpoint: `/ready`
+- Expected: HTTP 200 when models and required datasets are loaded.
+- Show model and dataset readiness information.
+
+**03. API Readiness**
+- Method: GET
+- Endpoint: `/api/v1/ready`
+- Expected: HTTP 200 when ready.
+- If this route does not exist, inspect the existing implementation before deciding whether it should be added.
+
+**04. Supported Forecast Horizons**
+- Method: GET
+- Endpoint: `/api/v1/forecast/horizons`
+- Expected: HTTP 200
+- Display supported horizons: D7, D15, D30 and D90.
+
+**05. Valid Forecast — Short-Term**
+- Method: POST
+- Endpoint: `/api/v1/forecast/predict`
+- Use a verified commercial SKU with sufficient history.
+- Request a D7 forecast.
+- Expected: HTTP 200.
+
+**06. Valid Forecast — Multi-Horizon**
+- Method: POST
+- Endpoint: `/api/v1/forecast/predict`
+- Use a verified SKU with sufficient history.
+- Request D7, D15, D30 and D90 if the API supports horizon selection.
+- Expected: HTTP 200.
+- Show the forecast for each horizon.
+
+**07. Second Product Forecast**
+- Method: POST
+- Endpoint: `/api/v1/forecast/predict`
+- Use a different verified commercial SKU.
+- Expected: HTTP 200.
+- This demonstrates that the model supports multiple products.
+
+**08. Unknown SKU Error**
+- Method: POST
+- Endpoint: `/api/v1/forecast/predict`
+- Use `NON_EXISTENT_SKU_99999`.
+- Expected: HTTP 404.
+- Demonstrate correct unknown-product handling.
+
+**09. Genuine Insufficient History Error**
+- Method: POST
+- Endpoint: `/api/v1/forecast/predict`
+- Inspect the extended dataset to identify a real SKU that genuinely has insufficient history for the requested forecast.
+- Expected: HTTP 422, only if the API's actual validation rules establish that result.
+- Do not artificially generate an error or use a fabricated SKU.
+- If no qualifying SKU exists, report this honestly and use another genuine validation-error case.
+
+**10. Invalid Request Validation**
+- Method: POST
+- Endpoint: `/api/v1/forecast/predict`
+- Send a malformed payload or invalid horizon.
+- Expected: HTTP 422 or the actual documented validation status.
+- Demonstrate request validation.
+
+**11. Missing Required Field**
+- Method: POST
+- Endpoint: `/api/v1/forecast/predict`
+- Omit a genuinely required field.
+- Expected: HTTP 422 or actual documented validation status.
+
+**12. Invalid Endpoint / Not Found**
+- Method: GET
+- Use a deliberately nonexistent API route.
+- Expected: HTTP 404.
+
+For all 12 requests:
+- Add meaningful descriptions.
+- Add Postman tests that assert expected HTTP status codes.
+- Check important response fields.
+- Add response-time assertions where reasonable.
+- Use collection variables rather than hardcoded base URLs.
+- Do not make tests pass by changing the expected status to hide a backend defect.
+
+---
+
+## PART B — INVENTORY REPLENISHMENT / HOW MUCH STOCK TO BUY
+
+This is particularly important for the academic demonstration.
+
+The user must be able to select a SKU, provide the currently available stock, and receive a recommendation explaining how much additional stock should be purchased.
+
+First inspect whether a genuine inventory recommendation endpoint already exists.
+
+If it does, use and document it.
+
+If it does not, implement a properly integrated endpoint using the existing forecasting service and project architecture. Do not create a disconnected mock endpoint.
+
+Suggested endpoint:
+
+`POST /api/v1/inventory/recommend`
+
+Suggested request:
+
+```json
+{
+  "stock_code": "85123A",
+  "current_stock": 100,
+  "lead_time_days": 7,
+  "review_period_days": 7,
+  "safety_stock_days": 3
+}
+```
+
+Adapt field names to the actual project conventions.
+
+The recommendation must:
+
+1. Validate that the SKU exists.
+2. Validate that enough historical data is available.
+3. Obtain the demand forecast from the existing trained model.
+4. Calculate expected demand over the lead time and review period.
+5. Calculate safety stock using a clearly documented method.
+6. Compare projected demand and safety stock against current available stock.
+7. Return a non-negative recommended purchase quantity.
+8. Explain the calculation in the response.
+9. Handle invalid quantities and insufficient history properly.
+
+A transparent baseline formula is:
+
+`Target Stock = Forecast Demand During (Lead Time + Review Period) + Safety Stock`
+
+`Recommended Purchase Quantity = max(0, Target Stock - Current Stock)`
+
+Use daily forecasts or a documented, defensible method to estimate the requested coverage period. Do not simply multiply a D7 or D30 forecast by an arbitrary factor if a more appropriate method is available.
+
+If the existing model only provides fixed horizons, document how interpolation or scaling is performed and validate the approach.
+
+Do not confuse predicted demand with guaranteed sales.
+
+### Required inventory recommendation response
+
+Return fields equivalent to:
+
+```json
+{
+  "stock_code": "85123A",
+  "current_stock": 100,
+  "forecast_demand": 250,
+  "lead_time_days": 7,
+  "review_period_days": 7,
+  "safety_stock": 30,
+  "target_stock": 280,
+  "recommended_purchase_quantity": 180,
+  "recommendation": "Purchase 180 additional units",
+  "calculation_explanation": "Target stock is forecast demand plus safety stock. Current stock is subtracted to calculate the purchase quantity."
+}
+```
+
+These numbers are illustrative only. Actual API output must come from the actual model and calculation.
+
+---
+
+## PART C — ADDITIONAL POSTMAN INVENTORY REQUESTS
+
+Create a separate Postman folder named **Inventory Purchase Recommendations**.
+
+Include these additional requests:
+
+**I01. Stock Purchase Recommendation — Low Stock**
+- Select a verified SKU.
+- Set current stock to a low quantity.
+- Expected: HTTP 200.
+- Demonstrate a positive purchase recommendation.
+
+**I02. Stock Purchase Recommendation — Sufficient Stock**
+- Use a verified SKU.
+- Set current stock sufficiently high.
+- Expected: HTTP 200.
+- Demonstrate a purchase quantity of zero.
+
+**I03. Stock Purchase Recommendation — Zero Stock**
+- Use a verified SKU.
+- Set current stock to zero.
+- Expected: HTTP 200.
+- Demonstrate the purchase quantity required to cover the target period.
+
+**I04. Stock Purchase Recommendation — Different Lead Time**
+- Use the same SKU.
+- Increase lead time.
+- Expected: HTTP 200.
+- Demonstrate how longer supplier lead time affects the target stock and purchase recommendation.
+
+**I05. Invalid Stock Quantity**
+- Send a negative current stock value.
+- Expected: appropriate HTTP validation error.
+
+**I06. Unknown SKU Replenishment**
+- Use `NON_EXISTENT_SKU_99999`.
+- Expected: HTTP 404.
+
+**I07. Insufficient History for Replenishment**
+- Use a genuinely insufficient-history SKU if one exists.
+- Expected: HTTP 422.
+
+If the inventory API cannot safely support one of these scenarios, explain why rather than returning fabricated recommendations.
+
+---
+
+## PART D — MAKE THE DEMONSTRATION EASY TO UNDERSTAND
+
+Add a Postman collection description explaining this real-world workflow:
+
+1. Choose a product SKU.
+2. Call the forecast endpoint.
+3. Read predicted demand for the next 7, 15, 30 and 90 days.
+4. Open the inventory recommendation request.
+5. Enter the current available stock.
+6. Enter supplier lead time and review period.
+7. Send the request.
+8. Read the recommended purchase quantity.
+9. Explain why the system recommends purchasing that quantity.
+
+Include at least two concrete demonstration scenarios using actual verified SKUs.
+
+Clearly distinguish:
+- Forecast demand.
+- Current available stock.
+- Safety stock.
+- Target stock.
+- Recommended purchase quantity.
+
+Do not claim that the API automatically places supplier orders. It only provides a decision-support recommendation unless an actual purchasing integration exists.
+
+---
+
+## PART E — POSTMAN VARIABLES
+
+Use collection variables:
+
+- `baseUrl`
+- `testSku1`
+- `testSku2`
+- `unknownSku`
+- `insufficientHistorySku`
+- `currentStock`
+- `leadTimeDays`
+- `reviewPeriodDays`
+- `safetyStockDays`
+
+Set `baseUrl` to the ngrok public URL when demonstrating the API.
+
+Keep the ngrok browser-warning bypass header where needed:
+
+`ngrok-skip-browser-warning: 69420`
+
+All requests must work using the same base URL variable.
+
+---
+
+## PART F — TESTING AND VALIDATION
+
+Run the following:
+
+1. Existing complete pytest suite.
+2. New unit tests for inventory calculations.
+3. API integration tests.
+4. Validation and error-handling tests.
+5. Direct comparison of inventory API forecasts against the existing forecasting endpoint.
+6. Verify that purchase quantity is never negative.
+7. Verify that increasing current stock cannot increase the recommended purchase quantity, all else equal.
+8. Verify that increasing forecast demand cannot decrease the recommended purchase quantity, all else equal.
+9. Verify that longer lead time is reflected in the demand coverage calculation.
+10. Verify that all collection requests use the correct endpoints and variables.
+
+Use actual Postman/Newman execution if available. If not available, state exactly which test runner was used. Never claim that the collection was run in Postman when it was only tested using Python TestClient.
+
+---
+
+## PART G — REPOSITORY SAFETY RULES
+
+- Work only on `uni_api_experimental`.
+- Do not modify `main`.
+- Do not modify `uni_api_submission`.
+- Do not merge or push anything.
+- Do not retrain existing models.
+- Do not alter the raw dataset or existing model files.
+- Do not change existing production forecasting behavior unnecessarily.
+- Preserve existing API compatibility.
+- Do not weaken data validation.
+- Do not fabricate successful test results.
+- Keep all changes scoped to the task.
+
+If any new endpoint is added, update API tests and relevant documentation.
+
+---
+
+## PART H — FINAL DELIVERABLES
+
+Create:
+
+1. `docs/postman/NEXORA_Complete_Demonstration.postman_collection.json`
+   - 12 core requests.
+   - Additional inventory recommendation requests.
+
+2. `docs/postman/NEXORA_Postman_Demonstration_Guide.md`
+   - How to import the collection.
+   - How to set the ngrok URL.
+   - How to run all requests.
+   - How to interpret forecasting responses.
+   - How to determine how much stock to buy.
+   - Actual demonstration examples and expected statuses.
+
+3. Any necessary backend implementation and tests for inventory recommendation functionality.
+
+4. A final Task 28 report containing:
+   - Changed files.
+   - API endpoints created or reused.
+   - Actual Postman collection request count.
+   - Actual status codes from every request.
+   - Pytest results.
+   - Newman results, if available.
+   - Verified demonstration SKUs.
+   - Example forecast outputs.
+   - Example inventory purchase calculations.
+   - Confirmation that protected branches and model artifacts remain unchanged.
+   - Any limitations or uncompleted tests.
+
+**IMPORTANT:** First inspect the current codebase and actual API contracts. Do not blindly assume that suggested routes or request fields exist. Build on the real implementation.
+
+The final objective is a reliable, understandable academic demonstration showing that NEXORA can forecast retail demand and translate those forecasts into explainable stock replenishment recommendations.
+</USER_REQUEST>
+<ADDITIONAL_METADATA>
+The current local time is: 2026-11-21T00:49:05+05:30.
+
+The user's current state is as follows:
+Active Document: c:\Users\grand\OneDrive\Desktop\SDC -1 Project\LLM-Project1\.gitignore (LANGUAGE_UNSPECIFIED)
+Cursor is on line: 15
+Other open documents:
+- c:\Users\grand\OneDrive\Desktop\SDC -1 Project\LLM-Project1\start.ps1 (LANGUAGE_UNSPECIFIED)
+- c:\Users\grand\OneDrive\Desktop\SDC -1 Project\LLM-Project1\docs\postman\NEXORA_Experimental_API.postman_collection.json (LANGUAGE_UNSPECIFIED)
+- c:\Users\grand\OneDrive\Desktop\SDC -1 Project\LLM-Project1\backend\app\api\routes\experimental_forecast.py (LANGUAGE_UNSPECIFIED)
+- c:\Users\grand\OneDrive\Desktop\SDC -1 Project\LLM-Project1\backend\app\services\experimental_prediction_service.py (LANGUAGE_UNSPECIFIED)
+- c:\Users\grand\OneDrive\Desktop\SDC -1 Project\LLM-Project1\backend\tests\test_experimental_forecast.py (LANGUAGE_UNSPECIFIED)
+</ADDITIONAL_METADATA>

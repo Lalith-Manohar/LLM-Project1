@@ -1,0 +1,1914 @@
+{
+  "local_health": {
+    "status": 200,
+    "json": {
+      "status": "healthy",
+      "service": "backend",
+      "version": "0.1.0"
+    },
+    "body": "{\"status\":\"healthy\",\"service\":\"backend\",\"version\":\"0.1.0\"}"
+  },
+  "local_ready": {
+    "status": 200,
+    "json": {
+      "status": "ready",
+      "service": "backend",
+      "version": "0.1.0",
+      "models": {
+        "ready": true,
+        "models_count": 4,
+        "loaded_horizons": [
+          7,
+          15,
+          30,
+          90
+        ],
+        "total_skus": null,
+        "total_records": null,
+        "dataset_file": null,
+        "demand_data_ready": null,
+        "price_service_ready": null,
+        "models_dir": null,
+        "price_service": null,
+        "error": null
+      },
+      "historical_data": {
+        "ready": true,
+        "models_count": null,
+        "loaded_horizons": null,
+        "total_skus": 4905,
+        "total_records": 2287495,
+        "dataset_file": "daily_product_demand.csv",
+        "demand_data_ready": true,
+        "price_service_ready": true,
+        "models_dir": null,
+        "price_service": {
+          "ready": true,
+          "total_skus": 4905,
+          "global_dates_count": 604,
+          "cache_file": "pit_sku_price_history.json",
+          "cache_metadata": {
+            "source_file": "clean_gross_sales.csv",
+            "source_size": 104267993,
+            "source_mtime": 1795198894.2250557,
+            "source_mtime_iso": "2026-11-20T18:21:34.225056+00:00",
+            "built_at": "2026-11-20T18:22:20.026043+00:00",
+            "total_skus": 4905,
+            "total_transactions": 1037089,
+            "global_dates_count": 604,
+            "schema_version": "1.1"
+          },
+          "error": null
+        },
+        "error": null
+      },
+      "experimental_models": {
+        "ready": true,
+        "models_count": 4,
+        "loaded_horizons": [
+          7,
+          15,
+          30,
+          90
+        ],
+        "total_skus": null,
+        "total_records": null,
+        "dataset_file": null,
+        "demand_data_ready": null,
+        "price_service_ready": true,
+        "models_dir": "models_task12",
+        "price_service": null,
+        "error": null
+      }
+    },
+    "body": "{\"status\":\"ready\",\"service\":\"backend\",\"version\":\"0.1.0\",\"models\":{\"ready\":true,\"models_count\":4,\"loaded_horizons\":[7,15,30,90],\"total_skus\":null,\"total_records\":null,\"dataset_file\":null,\"demand_data_ready\":null,\"price_service_ready\":null,\"models_dir\":null,\"price_service\":null,\"error\":null},\"historical_data\":{\"ready\":true,\"models_count\":null,\"loaded_horizons\":null,\"total_skus\":4905,\"total_records\":2287495,\"dataset_file\":\"daily_product_demand.csv\",\"demand_data_ready\":true,\"price_service_ready\":true,\"models_dir\":null,\"price_service\":{\"ready\":true,\"total_skus\":4905,\"global_dates_count\":604,\"cache_file\":\"pit_sku_price_history.json\",\"cache_metadata\":{\"source_file\":\"clean_gross_sales.csv\",\"source_size\":104267993,\"source_mtime\":1795198894.2250557,\"source_mtime_iso\":\"2026-11-20T18:21:34.225056+00:00\",\"built_at\":\"2026-11-20T18:22:20.026043+00:00\",\"total_skus\":4905,\"total_transactions\":1037089,\"global_dates_count\":604,\"schema_version\":\"1.1\"},\"error\":null},\"error\":null},\"experimental_models\":{\"ready\":true,\"models_count\":4,\"loaded_horizons\":[7,15,30,90],\"total_skus\":null,\"total_records\":null,\"dataset_file\":null,\"demand_data_ready\":null,\"price_service_ready\":true,\"models_dir\":\"models_task12\",\"price_service\":null,\"error\":null}}"
+  },
+  "local_openapi": {
+    "status": 200,
+    "json": {
+      "openapi": "3.1.0",
+      "info": {
+        "title": "NEXORA Retail Management & Intelligence System",
+        "description": "Backend API services for demand forecasting, inventory management, and retail intelligence.",
+        "version": "0.1.0"
+      },
+      "paths": {
+        "/api/v1/forecast/horizons": {
+          "get": {
+            "tags": [
+              "Forecast"
+            ],
+            "summary": "Get supported forecast horizons",
+            "description": "Returns the list and business definitions of forecasting horizons supported by NEXORA.",
+            "operationId": "get_supported_horizons_api_v1_forecast_horizons_get",
+            "responses": {
+              "200": {
+                "description": "Successful Response",
+                "content": {
+                  "application/json": {
+                    "schema": {
+                      "$ref": "#/components/schemas/SupportedHorizonsResponse"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "/api/v1/forecast/model-metrics": {
+          "get": {
+            "tags": [
+              "Forecast"
+            ],
+            "summary": "Get model evaluation benchmark metrics",
+            "description": "Returns out-of-time chronological backtesting error metrics (MAE, RMSE, WAPE) across all models.",
+            "operationId": "get_model_metrics_api_v1_forecast_model_metrics_get",
+            "responses": {
+              "200": {
+                "description": "Successful Response",
+                "content": {
+                  "application/json": {
+                    "schema": {
+                      "additionalProperties": true,
+                      "type": "object",
+                      "title": "Response Get Model Metrics Api V1 Forecast Model Metrics Get"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "/api/v1/forecast/model-info": {
+          "get": {
+            "tags": [
+              "Forecast"
+            ],
+            "summary": "Get runtime model registry architecture",
+            "description": "Returns active model architectures, feature column specifications, and encoding configuration.",
+            "operationId": "get_model_info_api_v1_forecast_model_info_get",
+            "responses": {
+              "200": {
+                "description": "Successful Response",
+                "content": {
+                  "application/json": {
+                    "schema": {
+                      "additionalProperties": true,
+                      "type": "object",
+                      "title": "Response Get Model Info Api V1 Forecast Model Info Get"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "/api/v1/forecast/": {
+          "post": {
+            "tags": [
+              "Forecast"
+            ],
+            "summary": "Generate multi-horizon demand forecast",
+            "description": "Submits an SKU to generate estimated demand over requested horizons from historical CSV data (or manual features for testing).",
+            "operationId": "predict_demand_api_v1_forecast__post",
+            "requestBody": {
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/ForecastRequest"
+                  }
+                }
+              },
+              "required": true
+            },
+            "responses": {
+              "200": {
+                "description": "Successful Response",
+                "content": {
+                  "application/json": {
+                    "schema": {
+                      "$ref": "#/components/schemas/ForecastResponse"
+                    }
+                  }
+                }
+              },
+              "422": {
+                "description": "Validation Error",
+                "content": {
+                  "application/json": {
+                    "schema": {
+                      "$ref": "#/components/schemas/HTTPValidationError"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "/api/v1/forecast/predict": {
+          "post": {
+            "tags": [
+              "Forecast"
+            ],
+            "summary": "Generate multi-horizon demand forecast (Blueprint alias)",
+            "description": "Alternative route matching Section 9 of the Technical Blueprint.",
+            "operationId": "predict_demand_alias_api_v1_forecast_predict_post",
+            "requestBody": {
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/ForecastRequest"
+                  }
+                }
+              },
+              "required": true
+            },
+            "responses": {
+              "200": {
+                "description": "Successful Response",
+                "content": {
+                  "application/json": {
+                    "schema": {
+                      "$ref": "#/components/schemas/ForecastResponse"
+                    }
+                  }
+                }
+              },
+              "422": {
+                "description": "Validation Error",
+                "content": {
+                  "application/json": {
+                    "schema": {
+                      "$ref": "#/components/schemas/HTTPValidationError"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "/api/v1/forecast/evaluation-comparison": {
+          "get": {
+            "tags": [
+              "Forecast"
+            ],
+            "summary": "Get multi-horizon comparative model evaluation metrics",
+            "description": "Returns comparative performance benchmarks across three evaluation tiers: (1) Production Baseline SKU Models, (2) Optimized Experimental SKU Models, and (3) Store-Wide Macro Demand Models, explaining the empirical variance gap.",
+            "operationId": "get_evaluation_comparison_api_v1_forecast_evaluation_comparison_get",
+            "responses": {
+              "200": {
+                "description": "Successful Response",
+                "content": {
+                  "application/json": {
+                    "schema": {
+                      "additionalProperties": true,
+                      "type": "object",
+                      "title": "Response Get Evaluation Comparison Api V1 Forecast Evaluation Comparison Get"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "/api/v1/forecast/store-wide": {
+          "get": {
+            "tags": [
+              "Forecast"
+            ],
+            "summary": "Get store-wide macro aggregate demand forecasts",
+            "description": "Returns multi-horizon store-wide aggregate demand predictions (D_7, D_15, D_30, D_90) and current store-level sales run-rate across all 3,922 catalog SKUs.",
+            "operationId": "get_store_wide_forecast_api_v1_forecast_store_wide_get",
+            "responses": {
+              "200": {
+                "description": "Successful Response",
+                "content": {
+                  "application/json": {
+                    "schema": {
+                      "additionalProperties": true,
+                      "type": "object",
+                      "title": "Response Get Store Wide Forecast Api V1 Forecast Store Wide Get"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "/api/v1/experimental/ready": {
+          "get": {
+            "tags": [
+              "Experimental Forecast"
+            ],
+            "summary": "Experimental service readiness probe",
+            "description": "Verifies that Task 12 experimental models and the historical dataset are loaded and ready.",
+            "operationId": "get_experimental_readiness_api_v1_experimental_ready_get",
+            "responses": {
+              "200": {
+                "description": "Successful Response",
+                "content": {
+                  "application/json": {
+                    "schema": {
+                      "additionalProperties": true,
+                      "type": "object",
+                      "title": "Response Get Experimental Readiness Api V1 Experimental Ready Get"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "/api/v1/experimental/forecast/horizons": {
+          "get": {
+            "tags": [
+              "Experimental Forecast"
+            ],
+            "summary": "Get experimental supported forecast horizons",
+            "description": "Returns the list and candidate model definitions for Task 12 experimental horizons.",
+            "operationId": "get_experimental_supported_horizons_api_v1_experimental_forecast_horizons_get",
+            "responses": {
+              "200": {
+                "description": "Successful Response",
+                "content": {
+                  "application/json": {
+                    "schema": {
+                      "additionalProperties": true,
+                      "type": "object",
+                      "title": "Response Get Experimental Supported Horizons Api V1 Experimental Forecast Horizons Get"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "/api/v1/experimental/forecast/model-metrics": {
+          "get": {
+            "tags": [
+              "Experimental Forecast"
+            ],
+            "summary": "Get Task 12 experimental evaluation benchmark metrics",
+            "description": "Returns chronological time-series cross-validation and holdout error metrics for Task 12 models.",
+            "operationId": "get_experimental_model_metrics_api_v1_experimental_forecast_model_metrics_get",
+            "responses": {
+              "200": {
+                "description": "Successful Response",
+                "content": {
+                  "application/json": {
+                    "schema": {
+                      "additionalProperties": true,
+                      "type": "object",
+                      "title": "Response Get Experimental Model Metrics Api V1 Experimental Forecast Model Metrics Get"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "/api/v1/experimental/forecast/model-info": {
+          "get": {
+            "tags": [
+              "Experimental Forecast"
+            ],
+            "summary": "Get Task 12 experimental runtime model architecture",
+            "description": "Returns active Task 12 model architectures, 20-column feature contract, and encoding configuration.",
+            "operationId": "get_experimental_model_info_api_v1_experimental_forecast_model_info_get",
+            "responses": {
+              "200": {
+                "description": "Successful Response",
+                "content": {
+                  "application/json": {
+                    "schema": {
+                      "additionalProperties": true,
+                      "type": "object",
+                      "title": "Response Get Experimental Model Info Api V1 Experimental Forecast Model Info Get"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "/api/v1/experimental/forecast/predict": {
+          "post": {
+            "tags": [
+              "Experimental Forecast"
+            ],
+            "summary": "Generate multi-horizon demand forecast using Task 12 experimental models",
+            "description": "Submits an SKU to generate estimated demand over requested horizons using the Task 12 best models.",
+            "operationId": "predict_experimental_demand_api_v1_experimental_forecast_predict_post",
+            "requestBody": {
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/ForecastRequest"
+                  }
+                }
+              },
+              "required": true
+            },
+            "responses": {
+              "200": {
+                "description": "Successful Response",
+                "content": {
+                  "application/json": {
+                    "schema": {
+                      "$ref": "#/components/schemas/ForecastResponse"
+                    }
+                  }
+                }
+              },
+              "422": {
+                "description": "Validation Error",
+                "content": {
+                  "application/json": {
+                    "schema": {
+                      "$ref": "#/components/schemas/HTTPValidationError"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "/api/v1/experimental/forecast": {
+          "post": {
+            "tags": [
+              "Experimental Forecast"
+            ],
+            "summary": "Generate multi-horizon demand forecast (Experimental root alias)",
+            "description": "Alias for /api/v1/experimental/forecast/predict.",
+            "operationId": "predict_experimental_demand_alias_api_v1_experimental_forecast_post",
+            "requestBody": {
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/ForecastRequest"
+                  }
+                }
+              },
+              "required": true
+            },
+            "responses": {
+              "200": {
+                "description": "Successful Response",
+                "content": {
+                  "application/json": {
+                    "schema": {
+                      "$ref": "#/components/schemas/ForecastResponse"
+                    }
+                  }
+                }
+              },
+              "422": {
+                "description": "Validation Error",
+                "content": {
+                  "application/json": {
+                    "schema": {
+                      "$ref": "#/components/schemas/HTTPValidationError"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "/api/v1/inventory/recommend": {
+          "post": {
+            "tags": [
+              "Inventory"
+            ],
+            "summary": "Generate inventory replenishment and purchase recommendation",
+            "description": "Translates machine learning demand forecasts into an explainable purchase recommendation based on current on-hand stock, supplier lead times, review cycles, and safety stock days.",
+            "operationId": "get_inventory_recommendation_api_v1_inventory_recommend_post",
+            "requestBody": {
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/InventoryRecommendationRequest"
+                  }
+                }
+              },
+              "required": true
+            },
+            "responses": {
+              "200": {
+                "description": "Replenishment recommendation generated successfully",
+                "content": {
+                  "application/json": {
+                    "schema": {
+                      "$ref": "#/components/schemas/InventoryRecommendationResponse"
+                    }
+                  }
+                }
+              },
+              "404": {
+                "description": "Product SKU not found in historical catalog"
+              },
+              "422": {
+                "description": "Validation error or insufficient historical sales data (< 29 days)"
+              },
+              "503": {
+                "description": "Forecasting service or historical dataset unavailable"
+              }
+            }
+          }
+        },
+        "/": {
+          "get": {
+            "tags": [
+              "General"
+            ],
+            "summary": "Root endpoint",
+            "description": "Welcome endpoint providing service metadata.",
+            "operationId": "root__get",
+            "responses": {
+              "200": {
+                "description": "Successful Response",
+                "content": {
+                  "application/json": {
+                    "schema": {}
+                  }
+                }
+              }
+            }
+          }
+        },
+        "/health": {
+          "get": {
+            "tags": [
+              "General"
+            ],
+            "summary": "Liveness check endpoint",
+            "description": "Service liveness check indicating that the FastAPI process is active.\n\nReturns 200 OK as long as the HTTP process is alive and responsive.\nDoes not imply that machine learning models or inference datasets are loaded.",
+            "operationId": "health_check_health_get",
+            "responses": {
+              "200": {
+                "description": "Successful Response",
+                "content": {
+                  "application/json": {
+                    "schema": {}
+                  }
+                }
+              }
+            }
+          }
+        },
+        "/ready": {
+          "get": {
+            "tags": [
+              "General"
+            ],
+            "summary": "Readiness check endpoint",
+            "description": "Service readiness probe verifying that ML models and historical datasets are ready.\n\nReturns HTTP 200 when all models are verified and dataset is indexed.\nReturns HTTP 503 Service Unavailable if any component is missing or failed to initialize.",
+            "operationId": "readiness_check_ready_get",
+            "responses": {
+              "200": {
+                "description": "All inference services are ready",
+                "content": {
+                  "application/json": {
+                    "schema": {
+                      "$ref": "#/components/schemas/ReadinessResponse"
+                    }
+                  }
+                }
+              },
+              "503": {
+                "description": "One or more critical inference subsystems are not ready"
+              }
+            }
+          }
+        }
+      },
+      "components": {
+        "schemas": {
+          "ComponentReadiness": {
+            "properties": {
+              "ready": {
+                "type": "boolean",
+                "title": "Ready"
+              },
+              "models_count": {
+                "anyOf": [
+                  {
+                    "type": "integer"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Models Count"
+              },
+              "loaded_horizons": {
+                "anyOf": [
+                  {
+                    "items": {
+                      "type": "integer"
+                    },
+                    "type": "array"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Loaded Horizons"
+              },
+              "total_skus": {
+                "anyOf": [
+                  {
+                    "type": "integer"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Total Skus"
+              },
+              "total_records": {
+                "anyOf": [
+                  {
+                    "type": "integer"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Total Records"
+              },
+              "dataset_file": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Dataset File"
+              },
+              "demand_data_ready": {
+                "anyOf": [
+                  {
+                    "type": "boolean"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Demand Data Ready"
+              },
+              "price_service_ready": {
+                "anyOf": [
+                  {
+                    "type": "boolean"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Price Service Ready"
+              },
+              "models_dir": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Models Dir"
+              },
+              "price_service": {
+                "anyOf": [
+                  {
+                    "additionalProperties": true,
+                    "type": "object"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Price Service"
+              },
+              "error": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Error"
+              }
+            },
+            "type": "object",
+            "required": [
+              "ready"
+            ],
+            "title": "ComponentReadiness",
+            "description": "Readiness status for an individual subsystem."
+          },
+          "ForecastRequest": {
+            "properties": {
+              "stock_code": {
+                "type": "string",
+                "minLength": 1,
+                "title": "Stock Code",
+                "description": "Unique product SKU or stock code (e.g. '85123A')."
+              },
+              "horizons": {
+                "anyOf": [
+                  {
+                    "items": {
+                      "type": "integer"
+                    },
+                    "type": "array"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Horizons",
+                "description": "List of target horizons in days to forecast (subset of [7, 15, 30, 90]). Defaults to all four."
+              },
+              "horizon_days": {
+                "anyOf": [
+                  {
+                    "type": "integer"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Horizon Days",
+                "description": "Legacy single horizon field for backward compatibility."
+              },
+              "features": {
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/HistoricalFeatures"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "description": "Historical feature vector. If omitted, flat fields are parsed from root level."
+              },
+              "day_of_week": {
+                "anyOf": [
+                  {
+                    "type": "integer",
+                    "maximum": 6.0,
+                    "minimum": 0.0
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Day Of Week"
+              },
+              "month": {
+                "anyOf": [
+                  {
+                    "type": "integer",
+                    "maximum": 12.0,
+                    "minimum": 1.0
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Month"
+              },
+              "day_of_month": {
+                "anyOf": [
+                  {
+                    "type": "integer",
+                    "maximum": 31.0,
+                    "minimum": 1.0
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Day Of Month"
+              },
+              "lag_1": {
+                "anyOf": [
+                  {
+                    "type": "number",
+                    "minimum": 0.0
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Lag 1"
+              },
+              "lag_7": {
+                "anyOf": [
+                  {
+                    "type": "number",
+                    "minimum": 0.0
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Lag 7"
+              },
+              "lag_14": {
+                "anyOf": [
+                  {
+                    "type": "number",
+                    "minimum": 0.0
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Lag 14"
+              },
+              "lag_28": {
+                "anyOf": [
+                  {
+                    "type": "number",
+                    "minimum": 0.0
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Lag 28"
+              },
+              "rolling_mean_7": {
+                "anyOf": [
+                  {
+                    "type": "number",
+                    "minimum": 0.0
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Rolling Mean 7"
+              },
+              "rolling_mean_28": {
+                "anyOf": [
+                  {
+                    "type": "number",
+                    "minimum": 0.0
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Rolling Mean 28"
+              },
+              "lag_60": {
+                "anyOf": [
+                  {
+                    "type": "number",
+                    "minimum": 0.0
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Lag 60"
+              },
+              "rolling_mean_14": {
+                "anyOf": [
+                  {
+                    "type": "number",
+                    "minimum": 0.0
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Rolling Mean 14"
+              },
+              "rolling_mean_60": {
+                "anyOf": [
+                  {
+                    "type": "number",
+                    "minimum": 0.0
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Rolling Mean 60"
+              },
+              "rolling_std_7": {
+                "anyOf": [
+                  {
+                    "type": "number",
+                    "minimum": 0.0
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Rolling Std 7"
+              },
+              "rolling_std_28": {
+                "anyOf": [
+                  {
+                    "type": "number",
+                    "minimum": 0.0
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Rolling Std 28"
+              },
+              "zero_fraction_28": {
+                "anyOf": [
+                  {
+                    "type": "number",
+                    "maximum": 1.0,
+                    "minimum": 0.0
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Zero Fraction 28"
+              },
+              "momentum_ratio": {
+                "anyOf": [
+                  {
+                    "type": "number",
+                    "minimum": 0.0
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Momentum Ratio"
+              },
+              "unit_price": {
+                "anyOf": [
+                  {
+                    "type": "number",
+                    "minimum": 0.0
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Unit Price"
+              },
+              "has_60d_history": {
+                "anyOf": [
+                  {
+                    "type": "number",
+                    "maximum": 1.0,
+                    "minimum": 0.0
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Has 60D History"
+              },
+              "observation_date": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Observation Date"
+              }
+            },
+            "type": "object",
+            "required": [
+              "stock_code"
+            ],
+            "title": "ForecastRequest",
+            "description": "Request schema for product demand forecast.\n\nAccepts an SKU identifier, an optional list of requested horizons\n(subset of [7, 15, 30, 90]), and historical features (either nested\nunder 'features' or passed directly as flat fields).",
+            "example": {
+              "features": {
+                "day_of_month": 15,
+                "day_of_week": 2,
+                "lag_1": 12.0,
+                "lag_14": 10.0,
+                "lag_28": 14.0,
+                "lag_7": 15.0,
+                "month": 11,
+                "rolling_mean_28": 12.8,
+                "rolling_mean_7": 13.5
+              },
+              "horizons": [
+                7,
+                15,
+                30,
+                90
+              ],
+              "stock_code": "85123A"
+            }
+          },
+          "ForecastResponse": {
+            "properties": {
+              "stock_code": {
+                "type": "string",
+                "title": "Stock Code",
+                "description": "Product SKU identifier"
+              },
+              "horizons": {
+                "items": {
+                  "type": "integer"
+                },
+                "type": "array",
+                "title": "Horizons",
+                "description": "List of forecast horizons evaluated"
+              },
+              "predictions": {
+                "additionalProperties": {
+                  "type": "number"
+                },
+                "type": "object",
+                "title": "Predictions",
+                "description": "Key-value mapping of horizon days (e.g. '7', '15', '30', '90') to predicted demand units."
+              },
+              "horizon_details": {
+                "items": {
+                  "$ref": "#/components/schemas/HorizonPredictionDetail"
+                },
+                "type": "array",
+                "title": "Horizon Details",
+                "description": "Granular performance and model details per requested horizon.",
+                "default": []
+              },
+              "units": {
+                "type": "string",
+                "title": "Units",
+                "description": "Unit of measurement for forecasted demand",
+                "default": "units"
+              },
+              "model_version": {
+                "type": "string",
+                "title": "Model Version",
+                "description": "Model training version / manifest identifier",
+                "default": "v1.0"
+              },
+              "timestamp": {
+                "type": "string",
+                "title": "Timestamp",
+                "description": "ISO-8601 timestamp of forecast inference"
+              },
+              "warnings": {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array",
+                "title": "Warnings",
+                "description": "Informational notes or warnings (e.g., infrequent SKU mapping).",
+                "default": []
+              },
+              "observation_date": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Observation Date",
+                "description": "Historical observation cutoff date (YYYY-MM-DD) from which the forecast is projected."
+              },
+              "history_days": {
+                "anyOf": [
+                  {
+                    "type": "integer"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "History Days",
+                "description": "Number of continuous daily historical records evaluated."
+              },
+              "is_auto_generated": {
+                "type": "boolean",
+                "title": "Is Auto Generated",
+                "description": "True if historical features were automatically derived from CSV dataset.",
+                "default": false
+              },
+              "status": {
+                "type": "string",
+                "title": "Status",
+                "description": "Prediction status code",
+                "default": "success"
+              },
+              "total_predicted_demand": {
+                "anyOf": [
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Total Predicted Demand",
+                "description": "Demand for primary requested horizon (for backward compatibility)."
+              },
+              "horizon_days": {
+                "anyOf": [
+                  {
+                    "type": "integer"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Horizon Days",
+                "description": "Primary horizon in days (for backward compatibility)."
+              }
+            },
+            "type": "object",
+            "required": [
+              "stock_code",
+              "horizons",
+              "predictions",
+              "timestamp"
+            ],
+            "title": "ForecastResponse",
+            "description": "Response schema for multi-horizon demand forecast predictions."
+          },
+          "HTTPValidationError": {
+            "properties": {
+              "detail": {
+                "items": {
+                  "$ref": "#/components/schemas/ValidationError"
+                },
+                "type": "array",
+                "title": "Detail"
+              }
+            },
+            "type": "object",
+            "title": "HTTPValidationError"
+          },
+          "HistoricalFeatures": {
+            "properties": {
+              "day_of_week": {
+                "anyOf": [
+                  {
+                    "type": "integer",
+                    "maximum": 6.0,
+                    "minimum": 0.0
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Day Of Week",
+                "description": "Day of week index (0=Monday, 6=Sunday). Defaults to observation date if omitted."
+              },
+              "month": {
+                "anyOf": [
+                  {
+                    "type": "integer",
+                    "maximum": 12.0,
+                    "minimum": 1.0
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Month",
+                "description": "Calendar month (1=January, 12=December). Defaults to observation date if omitted."
+              },
+              "day_of_month": {
+                "anyOf": [
+                  {
+                    "type": "integer",
+                    "maximum": 31.0,
+                    "minimum": 1.0
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Day Of Month",
+                "description": "Day of the month (1-31). Defaults to observation date if omitted."
+              },
+              "lag_1": {
+                "type": "number",
+                "minimum": 0.0,
+                "title": "Lag 1",
+                "description": "Actual sales demand from 1 day prior (t-1). Must be finite and non-negative."
+              },
+              "lag_7": {
+                "type": "number",
+                "minimum": 0.0,
+                "title": "Lag 7",
+                "description": "Actual sales demand from 7 days prior (t-7). Must be finite and non-negative."
+              },
+              "lag_14": {
+                "type": "number",
+                "minimum": 0.0,
+                "title": "Lag 14",
+                "description": "Actual sales demand from 14 days prior (t-14). Must be finite and non-negative."
+              },
+              "lag_28": {
+                "type": "number",
+                "minimum": 0.0,
+                "title": "Lag 28",
+                "description": "Actual sales demand from 28 days prior (t-28). Must be finite and non-negative."
+              },
+              "rolling_mean_7": {
+                "type": "number",
+                "minimum": 0.0,
+                "title": "Rolling Mean 7",
+                "description": "Historical 7-day rolling average demand (t-7 to t-1). Must be finite and non-negative."
+              },
+              "rolling_mean_28": {
+                "type": "number",
+                "minimum": 0.0,
+                "title": "Rolling Mean 28",
+                "description": "Historical 28-day rolling average demand (t-28 to t-1). Must be finite and non-negative."
+              },
+              "lag_60": {
+                "anyOf": [
+                  {
+                    "type": "number",
+                    "minimum": 0.0
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Lag 60",
+                "description": "Actual sales demand from 60 days prior (t-60). Optional."
+              },
+              "rolling_mean_14": {
+                "anyOf": [
+                  {
+                    "type": "number",
+                    "minimum": 0.0
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Rolling Mean 14",
+                "description": "Historical 14-day rolling average demand (t-14 to t-1). Optional."
+              },
+              "rolling_mean_60": {
+                "anyOf": [
+                  {
+                    "type": "number",
+                    "minimum": 0.0
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Rolling Mean 60",
+                "description": "Historical 60-day rolling average demand (t-60 to t-1). Optional."
+              },
+              "rolling_std_7": {
+                "anyOf": [
+                  {
+                    "type": "number",
+                    "minimum": 0.0
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Rolling Std 7",
+                "description": "Historical 7-day rolling standard deviation. Optional."
+              },
+              "rolling_std_28": {
+                "anyOf": [
+                  {
+                    "type": "number",
+                    "minimum": 0.0
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Rolling Std 28",
+                "description": "Historical 28-day rolling standard deviation. Optional."
+              },
+              "zero_fraction_28": {
+                "anyOf": [
+                  {
+                    "type": "number",
+                    "maximum": 1.0,
+                    "minimum": 0.0
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Zero Fraction 28",
+                "description": "Fraction of zero-demand days over past 28 days (t-28 to t-1). Optional."
+              },
+              "momentum_ratio": {
+                "anyOf": [
+                  {
+                    "type": "number",
+                    "minimum": 0.0
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Momentum Ratio",
+                "description": "Ratio of 7-day rolling mean to (28-day rolling mean + 1). Optional."
+              },
+              "unit_price": {
+                "anyOf": [
+                  {
+                    "type": "number",
+                    "minimum": 0.0
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Unit Price",
+                "description": "Point-in-time historical unit price. Optional."
+              },
+              "has_60d_history": {
+                "anyOf": [
+                  {
+                    "type": "number",
+                    "maximum": 1.0,
+                    "minimum": 0.0
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Has 60D History",
+                "description": "Coverage indicator (1.0 if history >= 60 days, else 0.0). Optional."
+              }
+            },
+            "type": "object",
+            "required": [
+              "lag_1",
+              "lag_7",
+              "lag_14",
+              "lag_28",
+              "rolling_mean_7",
+              "rolling_mean_28"
+            ],
+            "title": "HistoricalFeatures",
+            "description": "Historical demand lag and rolling statistics for feature input.",
+            "example": {
+              "day_of_month": 15,
+              "day_of_week": 2,
+              "has_60d_history": 1.0,
+              "lag_1": 12.0,
+              "lag_14": 10.0,
+              "lag_28": 14.0,
+              "lag_60": 10.0,
+              "lag_7": 15.0,
+              "momentum_ratio": 0.98,
+              "month": 11,
+              "rolling_mean_14": 13.0,
+              "rolling_mean_28": 12.8,
+              "rolling_mean_60": 11.5,
+              "rolling_mean_7": 13.5,
+              "rolling_std_28": 4.1,
+              "rolling_std_7": 3.2,
+              "unit_price": 2.55,
+              "zero_fraction_28": 0.15
+            }
+          },
+          "HorizonPredictionDetail": {
+            "properties": {
+              "horizon_days": {
+                "type": "integer",
+                "title": "Horizon Days",
+                "description": "Target forecast window in days"
+              },
+              "predicted_demand": {
+                "type": "number",
+                "title": "Predicted Demand",
+                "description": "Projected cumulative demand units over horizon"
+              },
+              "model_name": {
+                "type": "string",
+                "title": "Model Name",
+                "description": "Selected ML pipeline name"
+              },
+              "wape": {
+                "anyOf": [
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Wape",
+                "description": "Validation Weighted Absolute Percentage Error (%)"
+              }
+            },
+            "type": "object",
+            "required": [
+              "horizon_days",
+              "predicted_demand",
+              "model_name"
+            ],
+            "title": "HorizonPredictionDetail",
+            "description": "Detailed breakdown for a single forecast horizon."
+          },
+          "InventoryRecommendationRequest": {
+            "properties": {
+              "stock_code": {
+                "type": "string",
+                "minLength": 1,
+                "title": "Stock Code",
+                "description": "Unique product SKU or stock code (e.g. '85123A')."
+              },
+              "current_stock": {
+                "type": "number",
+                "minimum": 0.0,
+                "title": "Current Stock",
+                "description": "Current physical or available on-hand stock quantity. Must be non-negative."
+              },
+              "lead_time_days": {
+                "type": "integer",
+                "maximum": 180.0,
+                "minimum": 1.0,
+                "title": "Lead Time Days",
+                "description": "Supplier replenishment lead time in calendar days (default: 7).",
+                "default": 7
+              },
+              "review_period_days": {
+                "type": "integer",
+                "maximum": 180.0,
+                "minimum": 1.0,
+                "title": "Review Period Days",
+                "description": "Inventory review and reorder cycle period in calendar days (default: 7).",
+                "default": 7
+              },
+              "safety_stock_days": {
+                "type": "number",
+                "maximum": 90.0,
+                "minimum": 0.0,
+                "title": "Safety Stock Days",
+                "description": "Safety buffer expressed in days of projected daily demand (default: 3.0).",
+                "default": 3.0
+              },
+              "use_experimental": {
+                "type": "boolean",
+                "title": "Use Experimental",
+                "description": "Whether to use Task 12 experimental models instead of baseline production models.",
+                "default": false
+              }
+            },
+            "type": "object",
+            "required": [
+              "stock_code",
+              "current_stock"
+            ],
+            "title": "InventoryRecommendationRequest",
+            "description": "Request schema for inventory replenishment recommendation.",
+            "example": {
+              "current_stock": 100.0,
+              "lead_time_days": 7,
+              "review_period_days": 7,
+              "safety_stock_days": 3.0,
+              "stock_code": "85123A",
+              "use_experimental": false
+            }
+          },
+          "InventoryRecommendationResponse": {
+            "properties": {
+              "stock_code": {
+                "type": "string",
+                "title": "Stock Code",
+                "description": "Unique product SKU identifier"
+              },
+              "current_stock": {
+                "type": "number",
+                "title": "Current Stock",
+                "description": "Current available on-hand stock units"
+              },
+              "lead_time_days": {
+                "type": "integer",
+                "title": "Lead Time Days",
+                "description": "Supplier replenishment lead time in days"
+              },
+              "review_period_days": {
+                "type": "integer",
+                "title": "Review Period Days",
+                "description": "Inventory review period in days"
+              },
+              "coverage_period_days": {
+                "type": "integer",
+                "title": "Coverage Period Days",
+                "description": "Total coverage cycle window in days (lead_time + review_period)"
+              },
+              "forecast_demand": {
+                "type": "number",
+                "title": "Forecast Demand",
+                "description": "Projected cumulative customer demand over coverage period"
+              },
+              "daily_demand_rate": {
+                "type": "number",
+                "title": "Daily Demand Rate",
+                "description": "Average daily projected demand rate (forecast_demand / coverage_period_days)"
+              },
+              "safety_stock_days": {
+                "type": "number",
+                "title": "Safety Stock Days",
+                "description": "Safety buffer duration in days"
+              },
+              "safety_stock": {
+                "type": "number",
+                "title": "Safety Stock",
+                "description": "Calculated safety stock buffer units"
+              },
+              "target_stock": {
+                "type": "number",
+                "title": "Target Stock",
+                "description": "Total target inventory level (forecast_demand + safety_stock)"
+              },
+              "recommended_purchase_quantity": {
+                "type": "number",
+                "title": "Recommended Purchase Quantity",
+                "description": "Recommended additional stock units to purchase (max(0, target_stock - current_stock))"
+              },
+              "stock_condition": {
+                "type": "string",
+                "title": "Stock Condition",
+                "description": "Operational stock condition risk classification ('CRITICAL', 'ELEVATED', 'SAFE')"
+              },
+              "recommendation": {
+                "type": "string",
+                "title": "Recommendation",
+                "description": "Actionable replenishment recommendation directive"
+              },
+              "calculation_explanation": {
+                "type": "string",
+                "title": "Calculation Explanation",
+                "description": "Transparent mathematical breakdown of the recommendation calculation"
+              },
+              "model_used": {
+                "type": "string",
+                "title": "Model Used",
+                "description": "ML model pipeline version utilized for demand inference"
+              },
+              "timestamp": {
+                "type": "string",
+                "title": "Timestamp",
+                "description": "ISO-8601 timestamp of recommendation calculation"
+              }
+            },
+            "type": "object",
+            "required": [
+              "stock_code",
+              "current_stock",
+              "lead_time_days",
+              "review_period_days",
+              "coverage_period_days",
+              "forecast_demand",
+              "daily_demand_rate",
+              "safety_stock_days",
+              "safety_stock",
+              "target_stock",
+              "recommended_purchase_quantity",
+              "stock_condition",
+              "recommendation",
+              "calculation_explanation",
+              "model_used",
+              "timestamp"
+            ],
+            "title": "InventoryRecommendationResponse",
+            "description": "Response schema for inventory replenishment recommendation."
+          },
+          "ReadinessResponse": {
+            "properties": {
+              "status": {
+                "type": "string",
+                "title": "Status"
+              },
+              "service": {
+                "type": "string",
+                "title": "Service"
+              },
+              "version": {
+                "type": "string",
+                "title": "Version"
+              },
+              "models": {
+                "$ref": "#/components/schemas/ComponentReadiness"
+              },
+              "historical_data": {
+                "$ref": "#/components/schemas/ComponentReadiness"
+              },
+              "experimental_models": {
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/ComponentReadiness"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              }
+            },
+            "type": "object",
+            "required": [
+              "status",
+              "service",
+              "version",
+              "models",
+              "historical_data"
+            ],
+            "title": "ReadinessResponse",
+            "description": "Overall readiness response schema for health and lifecycle probes."
+          },
+          "SupportedHorizonsResponse": {
+            "properties": {
+              "supported_horizons_days": {
+                "items": {
+                  "type": "integer"
+                },
+                "type": "array",
+                "title": "Supported Horizons Days",
+                "description": "List of integer horizon windows in days"
+              },
+              "description": {
+                "type": "string",
+                "title": "Description",
+                "description": "Operational description of forecast horizons"
+              },
+              "horizon_definitions": {
+                "additionalProperties": {
+                  "type": "string"
+                },
+                "type": "object",
+                "title": "Horizon Definitions",
+                "description": "Business operational usage per horizon"
+              }
+            },
+            "type": "object",
+            "required": [
+              "supported_horizons_days",
+              "description",
+              "horizon_definitions"
+            ],
+            "title": "SupportedHorizonsResponse",
+            "description": "Response schema for supported forecast horizons."
+          },
+          "ValidationError": {
+            "properties": {
+              "loc": {
+                "items": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "integer"
+                    }
+                  ]
+                },
+                "type": "array",
+                "title": "Location"
+              },
+              "msg": {
+                "type": "string",
+                "title": "Message"
+              },
+              "type": {
+                "type": "string",
+                "title": "Error Type"
+              },
+              "input": {
+                "title": "Input"
+              },
+              "ctx": {
+                "type": "object",
+                "title": "Context"
+              }
+            },
+            "type": "object",
+            "required": [
+              "loc",
+              "msg",
+              "type"
+            ],
+            "title": "ValidationError"
+          }
+        }
+      }
+    },
+    "body": "{\"openapi\":\"3.1.0\",\"info\":{\"title\":\"NEXORA Retail Management & Intelligence System\",\"description\":\"Backend API services for demand forecasting, inventory management, and retail intelligence.\",\"version\":\"0.1.0\"},\"paths\":{\"/api/v1/forecast/horizons\":{\"get\":{\"tags\":[\"Forecast\"],\"summary\":\"Get supported forecast horizons\",\"description\":\"Returns the list and business definitions of forecasting horizons supported by NEXORA.\",\"operationId\":\"get_supported_horizons_api_v1_forecast_horizons_get\",\"responses\":{\"200\":{\"description\":\"Successful Response\",\"content\":{\"application/json\":{\"schema\":{\"$ref\":\"#/components/schemas/SupportedHorizonsResponse\"}}}}}}},\"/api/v1/forecast/model-metrics\":{\"get\":{\"tags\":[\"Forecast\"],\"summary\":\"Get model evaluation benchmark metrics\",\"description\":\"Returns out-of-time chronological backtesting error metrics (MAE, RMSE, WAPE) across all models.\",\"operationId\":\"get_model_metrics_api_v1_forecast_model_metrics_get\",\"responses\":{\"200\":{\"description\":\"Successful Response\",\"content\":{\"application/json\":{\"schema\":{\"additionalProperties\":true,\"type\":\"object\",\"title\":\"Response Get Model Metrics Api V1 Forecast Model Metrics Get\"}}}}}}},\"/api/v1/forecast/model-info\":{\"get\":{\"tags\":[\"Forecast\"],\"summary\":\"Get runtime model registry architecture\",\"description\":\"Returns active model architectures, feature column specifications, and encoding configuration.\",\"operationId\":\"get_model_info_api_v1_forecast_model_info_get\",\"responses\":{\"200\":{\"description\":\"Successful Response\",\"content\":{\"application/json\":{\"schema\":{\"additionalProperties\":true,\"type\":\"object\",\"title\":\"Response Get Model Info Api V1 Forecast Model Info Get\"}}}}}}},\"/api/v1/forecast/\":{\"post\":{\"tags\":[\"Forecast\"],\"summary\":\"Generate multi-horizon demand forecast\",\"description\":\"Submits an SKU to generate estimated demand over requested horizons from historical CSV data (or manual features for testing).\",\"operationId\":\"predict_demand_api_v1_forecast__post\",\"requestBody\":{\"content\":{\"application/json\":{\"schema\":{\"$ref\":\"#/components/schemas/ForecastRequest\"}}},\"required\":true},\"responses\":{\"200\":{\"description\":\"Successful Response\",\"content\":{\"application/json\":{\"schema\":{\"$ref\":\"#/components/schemas/ForecastResponse\"}}}},\"422\":{\"description\":\"Validation Error\",\"content\":{\"application/json\":{\"schema\":{\"$ref\":\"#/components/schemas/HTTPValidationError\"}}}}}}},\"/api/v1/forecast/predict\":{\"post\":{\"tags\":[\"Forecast\"],\"summary\":\"Generate multi-horizon demand forecast (Blueprint alias)\",\"description\":\"Alternative route matching Section 9 of the Technical Blueprint.\",\"operationId\":\"predict_demand_alias_api_v1_forecast_predict_post\",\"requestBody\":{\"content\":{\"application/json\":{\"schema\":{\"$ref\":\"#/components/schemas/ForecastRequest\"}}},\"required\":true},\"responses\":{\"200\":{\"description\":\"Successful Response\",\"content\":{\"application/json\":{\"schema\":{\"$ref\":\"#/components/schemas/ForecastResponse\"}}}},\"422\":{\"description\":\"Validation Error\",\"content\":{\"application/json\":{\"schema\":{\"$ref\":\"#/components/schemas/HTTPValidationError\"}}}}}}},\"/api/v1/forecast/evaluation-comparison\":{\"get\":{\"tags\":[\"Forecast\"],\"summary\":\"Get multi-horizon comparative model evaluation metrics\",\"description\":\"Returns comparative performance benchmarks across three evaluation tiers: (1) Production Baseline SKU Models, (2) Optimized Experimental SKU Models, and (3) Store-Wide Macro Demand Models, explaining the empirical variance gap.\",\"operationId\":\"get_evaluation_comparison_api_v1_forecast_evaluation_comparison_get\",\"responses\":{\"200\":{\"description\":\"Successful Response\",\"content\":{\"application/json\":{\"schema\":{\"additionalProperties\":true,\"type\":\"object\",\"title\":\"Response Get Evaluation Comparison Api V1 Forecast Evaluation Comparison Get\"}}}}}}},\"/api/v1/forecast/store-wide\":{\"get\":{\"tags\":[\"Forecast\"],\"summary\":\"Get store-wide macro aggregate demand forecasts\",\"description\":\"Returns multi-horizon store-wide aggregate demand predictions (D_7, D_15, D_30, D_90) and current store-level sales run-rate across all 3,922 catalog SKUs.\",\"operationId\":\"get_store_wide_forecast_api_v1_forecast_store_wide_get\",\"responses\":{\"200\":{\"description\":\"Successful Response\",\"content\":{\"application/json\":{\"schema\":{\"additionalProperties\":true,\"type\":\"object\",\"title\":\"Response Get Store Wide Forecast Api V1 Forecast Store Wide Get\"}}}}}}},\"/api/v1/experimental/ready\":{\"get\":{\"tags\":[\"Experimental Forecast\"],\"summary\":\"Experimental service readiness probe\",\"description\":\"Verifies that Task 12 experimental models and the historical dataset are loaded and ready.\",\"operationId\":\"get_experimental_readiness_api_v1_experimental_ready_get\",\"responses\":{\"200\":{\"description\":\"Successful Response\",\"content\":{\"application/json\":{\"schema\":{\"additionalProperties\":true,\"type\":\"object\",\"title\":\"Response Get Experimental Readiness Api V1 Experimental Ready Get\"}}}}}}},\"/api/v1/experimental/forecast/horizons\":{\"get\":{\"tags\":[\"Experimental Forecast\"],\"summary\":\"Get experimental supported forecast horizons\",\"description\":\"Returns the list and candidate model definitions for Task 12 experimental horizons.\",\"operationId\":\"get_experimental_supported_horizons_api_v1_experimental_forecast_horizons_get\",\"responses\":{\"200\":{\"description\":\"Successful Response\",\"content\":{\"application/json\":{\"schema\":{\"additionalProperties\":true,\"type\":\"object\",\"title\":\"Response Get Experimental Supported Horizons Api V1 Experimental Forecast Horizons Get\"}}}}}}},\"/api/v1/experimental/forecast/model-metrics\":{\"get\":{\"tags\":[\"Experimental Forecast\"],\"summary\":\"Get Task 12 experimental evaluation benchmark metrics\",\"description\":\"Returns chronological time-series cross-validation and holdout error metrics for Task 12 models.\",\"operationId\":\"get_experimental_model_metrics_api_v1_experimental_forecast_model_metrics_get\",\"responses\":{\"200\":{\"description\":\"Successful Response\",\"content\":{\"application/json\":{\"schema\":{\"additionalProperties\":true,\"type\":\"object\",\"title\":\"Response Get Experimental Model Metrics Api V1 Experimental Forecast Model Metrics Get\"}}}}}}},\"/api/v1/experimental/forecast/model-info\":{\"get\":{\"tags\":[\"Experimental Forecast\"],\"summary\":\"Get Task 12 experimental runtime model architecture\",\"description\":\"Returns active Task 12 model architectures, 20-column feature contract, and encoding configuration.\",\"operationId\":\"get_experimental_model_info_api_v1_experimental_forecast_model_info_get\",\"responses\":{\"200\":{\"description\":\"Successful Response\",\"content\":{\"application/json\":{\"schema\":{\"additionalProperties\":true,\"type\":\"object\",\"title\":\"Response Get Experimental Model Info Api V1 Experimental Forecast Model Info Get\"}}}}}}},\"/api/v1/experimental/forecast/predict\":{\"post\":{\"tags\":[\"Experimental Forecast\"],\"summary\":\"Generate multi-horizon demand forecast using Task 12 experimental models\",\"description\":\"Submits an SKU to generate estimated demand over requested horizons using the Task 12 best models.\",\"operationId\":\"predict_experimental_demand_api_v1_experimental_forecast_predict_post\",\"requestBody\":{\"content\":{\"application/json\":{\"schema\":{\"$ref\":\"#/components/schemas/ForecastRequest\"}}},\"required\":true},\"responses\":{\"200\":{\"description\":\"Successful Response\",\"content\":{\"application/json\":{\"schema\":{\"$ref\":\"#/components/schemas/ForecastResponse\"}}}},\"422\":{\"description\":\"Validation Error\",\"content\":{\"application/json\":{\"schema\":{\"$ref\":\"#/components/schemas/HTTPValidationError\"}}}}}}},\"/api/v1/experimental/forecast\":{\"post\":{\"tags\":[\"Experimental Forecast\"],\"summary\":\"Generate multi-horizon demand forecast (Experimental root alias)\",\"description\":\"Alias for /api/v1/experimental/forecast/predict.\",\"operationId\":\"predict_experimental_demand_alias_api_v1_experimental_forecast_post\",\"requestBody\":{\"content\":{\"application/json\":{\"schema\":{\"$ref\":\"#/components/schemas/ForecastRequest\"}}},\"required\":true},\"responses\":{\"200\":{\"description\":\"Successful Response\",\"content\":{\"application/json\":{\"schema\":{\"$ref\":\"#/components/schemas/ForecastResponse\"}}}},\"422\":{\"description\":\"Validation Error\",\"content\":{\"application/json\":{\"schema\":{\"$ref\":\"#/components/schemas/HTTPValidationError\"}}}}}}},\"/api/v1/inventory/recommend\":{\"post\":{\"tags\":[\"Inventory\"],\"summary\":\"Generate inventory replenishment and purchase recommendation\",\"description\":\"Translates machine learning demand forecasts into an explainable purchase recommendation based on current on-hand stock, supplier lead times, review cycles, and safety stock days.\",\"operationId\":\"get_inventory_recommendation_api_v1_inventory_recommend_post\",\"requestBody\":{\"content\":{\"application/json\":{\"schema\":{\"$ref\":\"#/components/schemas/InventoryRecommendationRequest\"}}},\"required\":true},\"responses\":{\"200\":{\"description\":\"Replenishment recommendation generated successfully\",\"content\":{\"application/json\":{\"schema\":{\"$ref\":\"#/components/schemas/InventoryRecommendationResponse\"}}}},\"404\":{\"description\":\"Product SKU not found in historical catalog\"},\"422\":{\"description\":\"Validation error or insufficient historical sales data (< 29 days)\"},\"503\":{\"description\":\"Forecasting service or historical dataset unavailable\"}}}},\"/\":{\"get\":{\"tags\":[\"General\"],\"summary\":\"Root endpoint\",\"description\":\"Welcome endpoint providing service metadata.\",\"operationId\":\"root__get\",\"responses\":{\"200\":{\"description\":\"Successful Response\",\"content\":{\"application/json\":{\"schema\":{}}}}}}},\"/health\":{\"get\":{\"tags\":[\"General\"],\"summary\":\"Liveness check endpoint\",\"description\":\"Service liveness check indicating that the FastAPI process is active.\\n\\nReturns 200 OK as long as the HTTP process is alive and responsive.\\nDoes not imply that machine learning models or inference datasets are loaded.\",\"operationId\":\"health_check_health_get\",\"responses\":{\"200\":{\"description\":\"Successful Response\",\"content\":{\"application/json\":{\"schema\":{}}}}}}},\"/ready\":{\"get\":{\"tags\":[\"General\"],\"summary\":\"Readiness check endpoint\",\"description\":\"Service readiness probe verifying that ML models and historical datasets are ready.\\n\\nReturns HTTP 200 when all models are verified and dataset is indexed.\\nReturns HTTP 503 Service Unavailable if any component is missing or failed to initialize.\",\"operationId\":\"readiness_check_ready_get\",\"responses\":{\"200\":{\"description\":\"All inference services are ready\",\"content\":{\"application/json\":{\"schema\":{\"$ref\":\"#/components/schemas/ReadinessResponse\"}}}},\"503\":{\"description\":\"One or more critical inference subsystems are not ready\"}}}}},\"components\":{\"schemas\":{\"ComponentReadiness\":{\"properties\":{\"ready\":{\"type\":\"boolean\",\"title\":\"Ready\"},\"models_count\":{\"anyOf\":[{\"type\":\"integer\"},{\"type\":\"null\"}],\"title\":\"Models Count\"},\"loaded_horizons\":{\"anyOf\":[{\"items\":{\"type\":\"integer\"},\"type\":\"array\"},{\"type\":\"null\"}],\"title\":\"Loaded Horizons\"},\"total_skus\":{\"anyOf\":[{\"type\":\"integer\"},{\"type\":\"null\"}],\"title\":\"Total Skus\"},\"total_records\":{\"anyOf\":[{\"type\":\"integer\"},{\"type\":\"null\"}],\"title\":\"Total Records\"},\"dataset_file\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"null\"}],\"title\":\"Dataset File\"},\"demand_data_ready\":{\"anyOf\":[{\"type\":\"boolean\"},{\"type\":\"null\"}],\"title\":\"Demand Data Ready\"},\"price_service_ready\":{\"anyOf\":[{\"type\":\"boolean\"},{\"type\":\"null\"}],\"title\":\"Price Service Ready\"},\"models_dir\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"null\"}],\"title\":\"Models Dir\"},\"price_service\":{\"anyOf\":[{\"additionalProperties\":true,\"type\":\"object\"},{\"type\":\"null\"}],\"title\":\"Price Service\"},\"error\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"null\"}],\"title\":\"Error\"}},\"type\":\"object\",\"required\":[\"ready\"],\"title\":\"ComponentReadiness\",\"description\":\"Readiness status for an individual subsystem.\"},\"ForecastRequest\":{\"properties\":{\"stock_code\":{\"type\":\"string\",\"minLength\":1,\"title\":\"Stock Code\",\"description\":\"Unique product SKU or stock code (e.g. '85123A').\"},\"horizons\":{\"anyOf\":[{\"items\":{\"type\":\"integer\"},\"type\":\"array\"},{\"type\":\"null\"}],\"title\":\"Horizons\",\"description\":\"List of target horizons in days to forecast (subset of [7, 15, 30, 90]). Defaults to all four.\"},\"horizon_days\":{\"anyOf\":[{\"type\":\"integer\"},{\"type\":\"null\"}],\"title\":\"Horizon Days\",\"description\":\"Legacy single horizon field for backward compatibility.\"},\"features\":{\"anyOf\":[{\"$ref\":\"#/components/schemas/HistoricalFeatures\"},{\"type\":\"null\"}],\"description\":\"Historical feature vector. If omitted, flat fields are parsed from root level.\"},\"day_of_week\":{\"anyOf\":[{\"type\":\"integer\",\"maximum\":6.0,\"minimum\":0.0},{\"type\":\"null\"}],\"title\":\"Day Of Week\"},\"month\":{\"anyOf\":[{\"type\":\"integer\",\"maximum\":12.0,\"minimum\":1.0},{\"type\":\"null\"}],\"title\":\"Month\"},\"day_of_month\":{\"anyOf\":[{\"type\":\"integer\",\"maximum\":31.0,\"minimum\":1.0},{\"type\":\"null\"}],\"title\":\"Day Of Month\"},\"lag_1\":{\"anyOf\":[{\"type\":\"number\",\"minimum\":0.0},{\"type\":\"null\"}],\"title\":\"Lag 1\"},\"lag_7\":{\"anyOf\":[{\"type\":\"number\",\"minimum\":0.0},{\"type\":\"null\"}],\"title\":\"Lag 7\"},\"lag_14\":{\"anyOf\":[{\"type\":\"number\",\"minimum\":0.0},{\"type\":\"null\"}],\"title\":\"Lag 14\"},\"lag_28\":{\"anyOf\":[{\"type\":\"number\",\"minimum\":0.0},{\"type\":\"null\"}],\"title\":\"Lag 28\"},\"rolling_mean_7\":{\"anyOf\":[{\"type\":\"number\",\"minimum\":0.0},{\"type\":\"null\"}],\"title\":\"Rolling Mean 7\"},\"rolling_mean_28\":{\"anyOf\":[{\"type\":\"number\",\"minimum\":0.0},{\"type\":\"null\"}],\"title\":\"Rolling Mean 28\"},\"lag_60\":{\"anyOf\":[{\"type\":\"number\",\"minimum\":0.0},{\"type\":\"null\"}],\"title\":\"Lag 60\"},\"rolling_mean_14\":{\"anyOf\":[{\"type\":\"number\",\"minimum\":0.0},{\"type\":\"null\"}],\"title\":\"Rolling Mean 14\"},\"rolling_mean_60\":{\"anyOf\":[{\"type\":\"number\",\"minimum\":0.0},{\"type\":\"null\"}],\"title\":\"Rolling Mean 60\"},\"rolling_std_7\":{\"anyOf\":[{\"type\":\"number\",\"minimum\":0.0},{\"type\":\"null\"}],\"title\":\"Rolling Std 7\"},\"rolling_std_28\":{\"anyOf\":[{\"type\":\"number\",\"minimum\":0.0},{\"type\":\"null\"}],\"title\":\"Rolling Std 28\"},\"zero_fraction_28\":{\"anyOf\":[{\"type\":\"number\",\"maximum\":1.0,\"minimum\":0.0},{\"type\":\"null\"}],\"title\":\"Zero Fraction 28\"},\"momentum_ratio\":{\"anyOf\":[{\"type\":\"number\",\"minimum\":0.0},{\"type\":\"null\"}],\"title\":\"Momentum Ratio\"},\"unit_price\":{\"anyOf\":[{\"type\":\"number\",\"minimum\":0.0},{\"type\":\"null\"}],\"title\":\"Unit Price\"},\"has_60d_history\":{\"anyOf\":[{\"type\":\"number\",\"maximum\":1.0,\"minimum\":0.0},{\"type\":\"null\"}],\"title\":\"Has 60D History\"},\"observation_date\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"null\"}],\"title\":\"Observation Date\"}},\"type\":\"object\",\"required\":[\"stock_code\"],\"title\":\"ForecastRequest\",\"description\":\"Request schema for product demand forecast.\\n\\nAccepts an SKU identifier, an optional list of requested horizons\\n(subset of [7, 15, 30, 90]), and historical features (either nested\\nunder 'features' or passed directly as flat fields).\",\"example\":{\"features\":{\"day_of_month\":15,\"day_of_week\":2,\"lag_1\":12.0,\"lag_14\":10.0,\"lag_28\":14.0,\"lag_7\":15.0,\"month\":11,\"rolling_mean_28\":12.8,\"rolling_mean_7\":13.5},\"horizons\":[7,15,30,90],\"stock_code\":\"85123A\"}},\"ForecastResponse\":{\"properties\":{\"stock_code\":{\"type\":\"string\",\"title\":\"Stock Code\",\"description\":\"Product SKU identifier\"},\"horizons\":{\"items\":{\"type\":\"integer\"},\"type\":\"array\",\"title\":\"Horizons\",\"description\":\"List of forecast horizons evaluated\"},\"predictions\":{\"additionalProperties\":{\"type\":\"number\"},\"type\":\"object\",\"title\":\"Predictions\",\"description\":\"Key-value mapping of horizon days (e.g. '7', '15', '30', '90') to predicted demand units.\"},\"horizon_details\":{\"items\":{\"$ref\":\"#/components/schemas/HorizonPredictionDetail\"},\"type\":\"array\",\"title\":\"Horizon Details\",\"description\":\"Granular performance and model details per requested horizon.\",\"default\":[]},\"units\":{\"type\":\"string\",\"title\":\"Units\",\"description\":\"Unit of measurement for forecasted demand\",\"default\":\"units\"},\"model_version\":{\"type\":\"string\",\"title\":\"Model Version\",\"description\":\"Model training version / manifest identifier\",\"default\":\"v1.0\"},\"timestamp\":{\"type\":\"string\",\"title\":\"Timestamp\",\"description\":\"ISO-8601 timestamp of forecast inference\"},\"warnings\":{\"items\":{\"type\":\"string\"},\"type\":\"array\",\"title\":\"Warnings\",\"description\":\"Informational notes or warnings (e.g., infrequent SKU mapping).\",\"default\":[]},\"observation_date\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"null\"}],\"title\":\"Observation Date\",\"description\":\"Historical observation cutoff date (YYYY-MM-DD) from which the forecast is projected.\"},\"history_days\":{\"anyOf\":[{\"type\":\"integer\"},{\"type\":\"null\"}],\"title\":\"History Days\",\"description\":\"Number of continuous daily historical records evaluated.\"},\"is_auto_generated\":{\"type\":\"boolean\",\"title\":\"Is Auto Generated\",\"description\":\"True if historical features were automatically derived from CSV dataset.\",\"default\":false},\"status\":{\"type\":\"string\",\"title\":\"Status\",\"description\":\"Prediction status code\",\"default\":\"success\"},\"total_predicted_demand\":{\"anyOf\":[{\"type\":\"number\"},{\"type\":\"null\"}],\"title\":\"Total Predicted Demand\",\"description\":\"Demand for primary requested horizon (for backward compatibility).\"},\"horizon_days\":{\"anyOf\":[{\"type\":\"integer\"},{\"type\":\"null\"}],\"title\":\"Horizon Days\",\"description\":\"Primary horizon in days (for backward compatibility).\"}},\"type\":\"object\",\"required\":[\"stock_code\",\"horizons\",\"predictions\",\"timestamp\"],\"title\":\"ForecastResponse\",\"description\":\"Response schema for multi-horizon demand forecast predictions.\"},\"HTTPValidationError\":{\"properties\":{\"detail\":{\"items\":{\"$ref\":\"#/components/schemas/ValidationError\"},\"type\":\"array\",\"title\":\"Detail\"}},\"type\":\"object\",\"title\":\"HTTPValidationError\"},\"HistoricalFeatures\":{\"properties\":{\"day_of_week\":{\"anyOf\":[{\"type\":\"integer\",\"maximum\":6.0,\"minimum\":0.0},{\"type\":\"null\"}],\"title\":\"Day Of Week\",\"description\":\"Day of week index (0=Monday, 6=Sunday). Defaults to observation date if omitted.\"},\"month\":{\"anyOf\":[{\"type\":\"integer\",\"maximum\":12.0,\"minimum\":1.0},{\"type\":\"null\"}],\"title\":\"Month\",\"description\":\"Calendar month (1=January, 12=December). Defaults to observation date if omitted.\"},\"day_of_month\":{\"anyOf\":[{\"type\":\"integer\",\"maximum\":31.0,\"minimum\":1.0},{\"type\":\"null\"}],\"title\":\"Day Of Month\",\"description\":\"Day of the month (1-31). Defaults to observation date if omitted.\"},\"lag_1\":{\"type\":\"number\",\"minimum\":0.0,\"title\":\"Lag 1\",\"description\":\"Actual sales demand from 1 day prior (t-1). Must be finite and non-negative.\"},\"lag_7\":{\"type\":\"number\",\"minimum\":0.0,\"title\":\"Lag 7\",\"description\":\"Actual sales demand from 7 days prior (t-7). Must be finite and non-negative.\"},\"lag_14\":{\"type\":\"number\",\"minimum\":0.0,\"title\":\"Lag 14\",\"description\":\"Actual sales demand from 14 days prior (t-14). Must be finite and non-negative.\"},\"lag_28\":{\"type\":\"number\",\"minimum\":0.0,\"title\":\"Lag 28\",\"description\":\"Actual sales demand from 28 days prior (t-28). Must be finite and non-negative.\"},\"rolling_mean_7\":{\"type\":\"number\",\"minimum\":0.0,\"title\":\"Rolling Mean 7\",\"description\":\"Historical 7-day rolling average demand (t-7 to t-1). Must be finite and non-negative.\"},\"rolling_mean_28\":{\"type\":\"number\",\"minimum\":0.0,\"title\":\"Rolling Mean 28\",\"description\":\"Historical 28-day rolling average demand (t-28 to t-1). Must be finite and non-negative.\"},\"lag_60\":{\"anyOf\":[{\"type\":\"number\",\"minimum\":0.0},{\"type\":\"null\"}],\"title\":\"Lag 60\",\"description\":\"Actual sales demand from 60 days prior (t-60). Optional.\"},\"rolling_mean_14\":{\"anyOf\":[{\"type\":\"number\",\"minimum\":0.0},{\"type\":\"null\"}],\"title\":\"Rolling Mean 14\",\"description\":\"Historical 14-day rolling average demand (t-14 to t-1). Optional.\"},\"rolling_mean_60\":{\"anyOf\":[{\"type\":\"number\",\"minimum\":0.0},{\"type\":\"null\"}],\"title\":\"Rolling Mean 60\",\"description\":\"Historical 60-day rolling average demand (t-60 to t-1). Optional.\"},\"rolling_std_7\":{\"anyOf\":[{\"type\":\"number\",\"minimum\":0.0},{\"type\":\"null\"}],\"title\":\"Rolling Std 7\",\"description\":\"Historical 7-day rolling standard deviation. Optional.\"},\"rolling_std_28\":{\"anyOf\":[{\"type\":\"number\",\"minimum\":0.0},{\"type\":\"null\"}],\"title\":\"Rolling Std 28\",\"description\":\"Historical 28-day rolling standard deviation. Optional.\"},\"zero_fraction_28\":{\"anyOf\":[{\"type\":\"number\",\"maximum\":1.0,\"minimum\":0.0},{\"type\":\"null\"}],\"title\":\"Zero Fraction 28\",\"description\":\"Fraction of zero-demand days over past 28 days (t-28 to t-1). Optional.\"},\"momentum_ratio\":{\"anyOf\":[{\"type\":\"number\",\"minimum\":0.0},{\"type\":\"null\"}],\"title\":\"Momentum Ratio\",\"description\":\"Ratio of 7-day rolling mean to (28-day rolling mean + 1). Optional.\"},\"unit_price\":{\"anyOf\":[{\"type\":\"number\",\"minimum\":0.0},{\"type\":\"null\"}],\"title\":\"Unit Price\",\"description\":\"Point-in-time historical unit price. Optional.\"},\"has_60d_history\":{\"anyOf\":[{\"type\":\"number\",\"maximum\":1.0,\"minimum\":0.0},{\"type\":\"null\"}],\"title\":\"Has 60D History\",\"description\":\"Coverage indicator (1.0 if history >= 60 days, else 0.0). Optional.\"}},\"type\":\"object\",\"required\":[\"lag_1\",\"lag_7\",\"lag_14\",\"lag_28\",\"rolling_mean_7\",\"rolling_mean_28\"],\"title\":\"HistoricalFeatures\",\"description\":\"Historical demand lag and rolling statistics for feature input.\",\"example\":{\"day_of_month\":15,\"day_of_week\":2,\"has_60d_history\":1.0,\"lag_1\":12.0,\"lag_14\":10.0,\"lag_28\":14.0,\"lag_60\":10.0,\"lag_7\":15.0,\"momentum_ratio\":0.98,\"month\":11,\"rolling_mean_14\":13.0,\"rolling_mean_28\":12.8,\"rolling_mean_60\":11.5,\"rolling_mean_7\":13.5,\"rolling_std_28\":4.1,\"rolling_std_7\":3.2,\"unit_price\":2.55,\"zero_fraction_28\":0.15}},\"HorizonPredictionDetail\":{\"properties\":{\"horizon_days\":{\"type\":\"integer\",\"title\":\"Horizon Days\",\"description\":\"Target forecast window in days\"},\"predicted_demand\":{\"type\":\"number\",\"title\":\"Predicted Demand\",\"description\":\"Projected cumulative demand units over horizon\"},\"model_name\":{\"type\":\"string\",\"title\":\"Model Name\",\"description\":\"Selected ML pipeline name\"},\"wape\":{\"anyOf\":[{\"type\":\"number\"},{\"type\":\"null\"}],\"title\":\"Wape\",\"description\":\"Validation Weighted Absolute Percentage Error (%)\"}},\"type\":\"object\",\"required\":[\"horizon_days\",\"predicted_demand\",\"model_name\"],\"title\":\"HorizonPredictionDetail\",\"description\":\"Detailed breakdown for a single forecast horizon.\"},\"InventoryRecommendationRequest\":{\"properties\":{\"stock_code\":{\"type\":\"string\",\"minLength\":1,\"title\":\"Stock Code\",\"description\":\"Unique product SKU or stock code (e.g. '85123A').\"},\"current_stock\":{\"type\":\"number\",\"minimum\":0.0,\"title\":\"Current Stock\",\"description\":\"Current physical or available on-hand stock quantity. Must be non-negative.\"},\"lead_time_days\":{\"type\":\"integer\",\"maximum\":180.0,\"minimum\":1.0,\"title\":\"Lead Time Days\",\"description\":\"Supplier replenishment lead time in calendar days (default: 7).\",\"default\":7},\"review_period_days\":{\"type\":\"integer\",\"maximum\":180.0,\"minimum\":1.0,\"title\":\"Review Period Days\",\"description\":\"Inventory review and reorder cycle period in calendar days (default: 7).\",\"default\":7},\"safety_stock_days\":{\"type\":\"number\",\"maximum\":90.0,\"minimum\":0.0,\"title\":\"Safety Stock Days\",\"description\":\"Safety buffer expressed in days of projected daily demand (default: 3.0).\",\"default\":3.0},\"use_experimental\":{\"type\":\"boolean\",\"title\":\"Use Experimental\",\"description\":\"Whether to use Task 12 experimental models instead of baseline production models.\",\"default\":false}},\"type\":\"object\",\"required\":[\"stock_code\",\"current_stock\"],\"title\":\"InventoryRecommendationRequest\",\"description\":\"Request schema for inventory replenishment recommendation.\",\"example\":{\"current_stock\":100.0,\"lead_time_days\":7,\"review_period_days\":7,\"safety_stock_days\":3.0,\"stock_code\":\"85123A\",\"use_experimental\":false}},\"InventoryRecommendationResponse\":{\"properties\":{\"stock_code\":{\"type\":\"string\",\"title\":\"Stock Code\",\"description\":\"Unique product SKU identifier\"},\"current_stock\":{\"type\":\"number\",\"title\":\"Current Stock\",\"description\":\"Current available on-hand stock units\"},\"lead_time_days\":{\"type\":\"integer\",\"title\":\"Lead Time Days\",\"description\":\"Supplier replenishment lead time in days\"},\"review_period_days\":{\"type\":\"integer\",\"title\":\"Review Period Days\",\"description\":\"Inventory review period in days\"},\"coverage_period_days\":{\"type\":\"integer\",\"title\":\"Coverage Period Days\",\"description\":\"Total coverage cycle window in days (lead_time + review_period)\"},\"forecast_demand\":{\"type\":\"number\",\"title\":\"Forecast Demand\",\"description\":\"Projected cumulative customer demand over coverage period\"},\"daily_demand_rate\":{\"type\":\"number\",\"title\":\"Daily Demand Rate\",\"description\":\"Average daily projected demand rate (forecast_demand / coverage_period_days)\"},\"safety_stock_days\":{\"type\":\"number\",\"title\":\"Safety Stock Days\",\"description\":\"Safety buffer duration in days\"},\"safety_stock\":{\"type\":\"number\",\"title\":\"Safety Stock\",\"description\":\"Calculated safety stock buffer units\"},\"target_stock\":{\"type\":\"number\",\"title\":\"Target Stock\",\"description\":\"Total target inventory level (forecast_demand + safety_stock)\"},\"recommended_purchase_quantity\":{\"type\":\"number\",\"title\":\"Recommended Purchase Quantity\",\"description\":\"Recommended additional stock units to purchase (max(0, target_stock - current_stock))\"},\"stock_condition\":{\"type\":\"string\",\"title\":\"Stock Condition\",\"description\":\"Operational stock condition risk classification ('CRITICAL', 'ELEVATED', 'SAFE')\"},\"recommendation\":{\"type\":\"string\",\"title\":\"Recommendation\",\"description\":\"Actionable replenishment recommendation directive\"},\"calculation_explanation\":{\"type\":\"string\",\"title\":\"Calculation Explanation\",\"description\":\"Transparent mathematical breakdown of the recommendation calculation\"},\"model_used\":{\"type\":\"string\",\"title\":\"Model Used\",\"description\":\"ML model pipeline version utilized for demand inference\"},\"timestamp\":{\"type\":\"string\",\"title\":\"Timestamp\",\"description\":\"ISO-8601 timestamp of recommendation calculation\"}},\"type\":\"object\",\"required\":[\"stock_code\",\"current_stock\",\"lead_time_days\",\"review_period_days\",\"coverage_period_days\",\"forecast_demand\",\"daily_demand_rate\",\"safety_stock_days\",\"safety_stock\",\"target_stock\",\"recommended_purchase_quantity\",\"stock_condition\",\"recommendation\",\"calculation_explanation\",\"model_used\",\"timestamp\"],\"title\":\"InventoryRecommendationResponse\",\"description\":\"Response schema for inventory replenishment recommendation.\"},\"ReadinessResponse\":{\"properties\":{\"status\":{\"type\":\"string\",\"title\":\"Status\"},\"service\":{\"type\":\"string\",\"title\":\"Service\"},\"version\":{\"type\":\"string\",\"title\":\"Version\"},\"models\":{\"$ref\":\"#/components/schemas/ComponentReadiness\"},\"historical_data\":{\"$ref\":\"#/components/schemas/ComponentReadiness\"},\"experimental_models\":{\"anyOf\":[{\"$ref\":\"#/components/schemas/ComponentReadiness\"},{\"type\":\"null\"}]}},\"type\":\"object\",\"required\":[\"status\",\"service\",\"version\",\"models\",\"historical_data\"],\"title\":\"ReadinessResponse\",\"description\":\"Overall readiness response schema for health and lifecycle probes.\"},\"SupportedHorizonsResponse\":{\"properties\":{\"supported_horizons_days\":{\"items\":{\"type\":\"integer\"},\"type\":\"array\",\"title\":\"Supported Horizons Days\",\"description\":\"List of integer horizon windows in days\"},\"description\":{\"type\":\"string\",\"title\":\"Description\",\"description\":\"Operational description of forecast horizons\"},\"horizon_definitions\":{\"additionalProperties\":{\"type\":\"string\"},\"type\":\"object\",\"title\":\"Horizon Definitions\",\"description\":\"Business operational usage per horizon\"}},\"type\":\"object\",\"required\":[\"supported_horizons_days\",\"description\",\"horizon_definitions\"],\"title\":\"SupportedHorizonsResponse\",\"description\":\"Response schema for supported forecast horizons.\"},\"ValidationError\":{\"properties\":{\"loc\":{\"items\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"integer\"}]},\"type\":\"array\",\"title\":\"Location\"},\"msg\":{\"type\":\"string\",\"title\":\"Message\"},\"type\":{\"type\":\"string\",\"title\":\"Error Type\"},\"input\":{\"title\":\"Input\"},\"ctx\":{\"type\":\"object\",\"title\":\"Context\"}},\"type\":\"object\",\"required\":[\"loc\",\"msg\",\"type\"],\"title\":\"ValidationError\"}}}}"
+  },
+  "local_forecast": {
+    "status": 200,
+    "json": {
+      "stock_code": "85123A",
+      "horizons": [
+        7
+      ],
+      "predictions": {
+        "7": 771.5717
+      },
+      "horizon_details": [
+        {
+          "horizon_days": 7,
+          "predicted_demand": 771.5717,
+          "model_name": "Linear Regression",
+          "wape": 55.65
+        }
+      ],
+      "units": "units",
+      "model_version": "Phase 1 (Task 5 Model Training & Serialization)",
+      "timestamp": "2026-11-20T20:48:11.653187+00:00",
+      "warnings": [
+        "Historical demand features automatically generated from 739 daily records up to observation date 2011-12-09 (UCI Online Retail II dataset)."
+      ],
+      "observation_date": "2011-12-09",
+      "history_days": 739,
+      "is_auto_generated": true,
+      "status": "success",
+      "total_predicted_demand": 771.5717,
+      "horizon_days": 7
+    },
+    "body": "{\"stock_code\":\"85123A\",\"horizons\":[7],\"predictions\":{\"7\":771.5717},\"horizon_details\":[{\"horizon_days\":7,\"predicted_demand\":771.5717,\"model_name\":\"Linear Regression\",\"wape\":55.65}],\"units\":\"units\",\"model_version\":\"Phase 1 (Task 5 Model Training & Serialization)\",\"timestamp\":\"2026-11-20T20:48:11.653187+00:00\",\"warnings\":[\"Historical demand features automatically generated from 739 daily records up to observation date 2011-12-09 (UCI Online Retail II dataset).\"],\"observation_date\":\"2011-12-09\",\"history_days\":739,\"is_auto_generated\":true,\"status\":\"success\",\"total_predicted_demand\":771.5717,\"horizon_days\":7}"
+  },
+  "local_inventory": {
+    "status": 200,
+    "json": {
+      "stock_code": "85123A",
+      "current_stock": 100.0,
+      "lead_time_days": 7,
+      "review_period_days": 7,
+      "coverage_period_days": 14,
+      "forecast_demand": 2729.6,
+      "daily_demand_rate": 194.9715,
+      "safety_stock_days": 3.0,
+      "safety_stock": 584.91,
+      "target_stock": 3314.51,
+      "recommended_purchase_quantity": 3214.51,
+      "stock_condition": "CRITICAL",
+      "recommendation": "Purchase 3215 additional units to restore target inventory and protect against stockout risk through the 14-day replenishment cycle.",
+      "calculation_explanation": "Coverage window of 14 days (lead time 7d + review period 7d) has projected demand of 2729.60 units (daily rate 194.97 units/day). Safety stock buffer of 3.0 days requires 584.91 units. Target stock level is 3314.51 units (2729.60 forecast + 584.91 safety stock). With current stock of 100.00 units, recommended purchase quantity is max(0, 3314.51 - 100.00) = 3214.51 units. Stock condition: CRITICAL.",
+      "model_used": "Production Baseline (Phase 1 (Task 5 Model Training & Serialization))",
+      "timestamp": "2026-11-20T20:48:11.784083+00:00"
+    },
+    "body": "{\"stock_code\":\"85123A\",\"current_stock\":100.0,\"lead_time_days\":7,\"review_period_days\":7,\"coverage_period_days\":14,\"forecast_demand\":2729.6,\"daily_demand_rate\":194.9715,\"safety_stock_days\":3.0,\"safety_stock\":584.91,\"target_stock\":3314.51,\"recommended_purchase_quantity\":3214.51,\"stock_condition\":\"CRITICAL\",\"recommendation\":\"Purchase 3215 additional units to restore target inventory and protect against stockout risk through the 14-day replenishment cycle.\",\"calculation_explanation\":\"Coverage window of 14 days (lead time 7d + review period 7d) has projected demand of 2729.60 units (daily rate 194.97 units/day). Safety stock buffer of 3.0 days requires 584.91 units. Target stock level is 3314.51 units (2729.60 forecast + 584.91 safety stock). With current stock of 100.00 units, recommended purchase quantity is max(0, 3314.51 - 100.00) = 3214.51 units. Stock condition: CRITICAL.\",\"model_used\":\"Production Baseline (Phase 1 (Task 5 Model Training & Serialization))\",\"timestamp\":\"2026-11-20T20:48:11.784083+00:00\"}"
+  },
+  "public_health": {
+    "status": 200,
+    "json": {
+      "status": "healthy",
+      "service": "backend",
+      "version": "0.1.0"
+    },
+    "body": "{\"status\":\"healthy\",\"service\":\"backend\",\"version\":\"0.1.0\"}"
+  },
+  "public_ready": {
+    "status": 200,
+    "json": {
+      "status": "ready",
+      "service": "backend",
+      "version": "0.1.0",
+      "models": {
+        "ready": true,
+        "models_count": 4,
+        "loaded_horizons": [
+          7,
+          15,
+          30,
+          90
+        ],
+        "total_skus": null,
+        "total_records": null,
+        "dataset_file": null,
+        "demand_data_ready": null,
+        "price_service_ready": null,
+        "models_dir": null,
+        "price_service": null,
+        "error": null
+      },
+      "historical_data": {
+        "ready": true,
+        "models_count": null,
+        "loaded_horizons": null,
+        "total_skus": 4905,
+        "total_records": 2287495,
+        "dataset_file": "daily_product_demand.csv",
+        "demand_data_ready": true,
+        "price_service_ready": true,
+        "models_dir": null,
+        "price_service": {
+          "ready": true,
+          "total_skus": 4905,
+          "global_dates_count": 604,
+          "cache_file": "pit_sku_price_history.json",
+          "cache_metadata": {
+            "source_file": "clean_gross_sales.csv",
+            "source_size": 104267993,
+            "source_mtime": 1795198894.2250557,
+            "source_mtime_iso": "2026-11-20T18:21:34.225056+00:00",
+            "built_at": "2026-11-20T18:22:20.026043+00:00",
+            "total_skus": 4905,
+            "total_transactions": 1037089,
+            "global_dates_count": 604,
+            "schema_version": "1.1"
+          },
+          "error": null
+        },
+        "error": null
+      },
+      "experimental_models": {
+        "ready": true,
+        "models_count": 4,
+        "loaded_horizons": [
+          7,
+          15,
+          30,
+          90
+        ],
+        "total_skus": null,
+        "total_records": null,
+        "dataset_file": null,
+        "demand_data_ready": null,
+        "price_service_ready": true,
+        "models_dir": "models_task12",
+        "price_service": null,
+        "error": null
+      }
+    },
+    "body": "{\"status\":\"ready\",\"service\":\"backend\",\"version\":\"0.1.0\",\"models\":{\"ready\":true,\"models_count\":4,\"loaded_horizons\":[7,15,30,90],\"total_skus\":null,\"total_records\":null,\"dataset_file\":null,\"demand_data_ready\":null,\"price_service_ready\":null,\"models_dir\":null,\"price_service\":null,\"error\":null},\"historical_data\":{\"ready\":true,\"models_count\":null,\"loaded_horizons\":null,\"total_skus\":4905,\"total_records\":2287495,\"dataset_file\":\"daily_product_demand.csv\",\"demand_data_ready\":true,\"price_service_ready\":true,\"models_dir\":null,\"price_service\":{\"ready\":true,\"total_skus\":4905,\"global_dates_count\":604,\"cache_file\":\"pit_sku_price_history.json\",\"cache_metadata\":{\"source_file\":\"clean_gross_sales.csv\",\"source_size\":104267993,\"source_mtime\":1795198894.2250557,\"source_mtime_iso\":\"2026-11-20T18:21:34.225056+00:00\",\"built_at\":\"2026-11-20T18:22:20.026043+00:00\",\"total_skus\":4905,\"total_transactions\":1037089,\"global_dates_count\":604,\"schema_version\":\"1.1\"},\"error\":null},\"error\":null},\"experimental_models\":{\"ready\":true,\"models_count\":4,\"loaded_horizons\":[7,15,30,90],\"total_skus\":null,\"total_records\":null,\"dataset_file\":null,\"demand_data_ready\":null,\"price_service_ready\":true,\"models_dir\":\"models_task12\",\"price_service\":null,\"error\":null}}"
+  },
+  "public_forecast": {
+    "status": 200,
+    "json": {
+      "stock_code": "85123A",
+      "horizons": [
+        7
+      ],
+      "predictions": {
+        "7": 771.5717
+      },
+      "horizon_details": [
+        {
+          "horizon_days": 7,
+          "predicted_demand": 771.5717,
+          "model_name": "Linear Regression",
+          "wape": 55.65
+        }
+      ],
+      "units": "units",
+      "model_version": "Phase 1 (Task 5 Model Training & Serialization)",
+      "timestamp": "2026-11-20T20:48:12.340944+00:00",
+      "warnings": [
+        "Historical demand features automatically generated from 739 daily records up to observation date 2011-12-09 (UCI Online Retail II dataset)."
+      ],
+      "observation_date": "2011-12-09",
+      "history_days": 739,
+      "is_auto_generated": true,
+      "status": "success",
+      "total_predicted_demand": 771.5717,
+      "horizon_days": 7
+    },
+    "body": "{\"stock_code\":\"85123A\",\"horizons\":[7],\"predictions\":{\"7\":771.5717},\"horizon_details\":[{\"horizon_days\":7,\"predicted_demand\":771.5717,\"model_name\":\"Linear Regression\",\"wape\":55.65}],\"units\":\"units\",\"model_version\":\"Phase 1 (Task 5 Model Training & Serialization)\",\"timestamp\":\"2026-11-20T20:48:12.340944+00:00\",\"warnings\":[\"Historical demand features automatically generated from 739 daily records up to observation date 2011-12-09 (UCI Online Retail II dataset).\"],\"observation_date\":\"2011-12-09\",\"history_days\":739,\"is_auto_generated\":true,\"status\":\"success\",\"total_predicted_demand\":771.5717,\"horizon_days\":7}"
+  },
+  "public_inventory": {
+    "status": 200,
+    "json": {
+      "stock_code": "85123A",
+      "current_stock": 100.0,
+      "lead_time_days": 7,
+      "review_period_days": 7,
+      "coverage_period_days": 14,
+      "forecast_demand": 2729.6,
+      "daily_demand_rate": 194.9715,
+      "safety_stock_days": 3.0,
+      "safety_stock": 584.91,
+      "target_stock": 3314.51,
+      "recommended_purchase_quantity": 3214.51,
+      "stock_condition": "CRITICAL",
+      "recommendation": "Purchase 3215 additional units to restore target inventory and protect against stockout risk through the 14-day replenishment cycle.",
+      "calculation_explanation": "Coverage window of 14 days (lead time 7d + review period 7d) has projected demand of 2729.60 units (daily rate 194.97 units/day). Safety stock buffer of 3.0 days requires 584.91 units. Target stock level is 3314.51 units (2729.60 forecast + 584.91 safety stock). With current stock of 100.00 units, recommended purchase quantity is max(0, 3314.51 - 100.00) = 3214.51 units. Stock condition: CRITICAL.",
+      "model_used": "Production Baseline (Phase 1 (Task 5 Model Training & Serialization))",
+      "timestamp": "2026-11-20T20:48:12.617118+00:00"
+    },
+    "body": "{\"stock_code\":\"85123A\",\"current_stock\":100.0,\"lead_time_days\":7,\"review_period_days\":7,\"coverage_period_days\":14,\"forecast_demand\":2729.6,\"daily_demand_rate\":194.9715,\"safety_stock_days\":3.0,\"safety_stock\":584.91,\"target_stock\":3314.51,\"recommended_purchase_quantity\":3214.51,\"stock_condition\":\"CRITICAL\",\"recommendation\":\"Purchase 3215 additional units to restore target inventory and protect against stockout risk through the 14-day replenishment cycle.\",\"calculation_explanation\":\"Coverage window of 14 days (lead time 7d + review period 7d) has projected demand of 2729.60 units (daily rate 194.97 units/day). Safety stock buffer of 3.0 days requires 584.91 units. Target stock level is 3314.51 units (2729.60 forecast + 584.91 safety stock). With current stock of 100.00 units, recommended purchase quantity is max(0, 3314.51 - 100.00) = 3214.51 units. Stock condition: CRITICAL.\",\"model_used\":\"Production Baseline (Phase 1 (Task 5 Model Training & Serialization))\",\"timestamp\":\"2026-11-20T20:48:12.617118+00:00\"}"
+  }
+}

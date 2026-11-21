@@ -22,6 +22,31 @@ This document maintains an active registry of known technical issues, architectu
 
 ## Resolved Issues
 
+### ISSUE-017: Absence of Integrated Inventory Replenishment Recommendation Endpoint for Academic Demonstration
+- **Severity:** Medium (Academic Demonstration Scope & Decision-Support Feature Completeness)
+- **Module Affected:** Inventory Decision Support, API Routing, Postman Demonstration Suite
+- **Relevant Files:**
+  - `backend/app/schemas/inventory.py`
+  - `backend/app/services/inventory_service.py`
+  - `backend/app/api/routes/inventory.py`
+  - `backend/app/api/routes/__init__.py`
+  - `backend/tests/test_inventory_recommend.py`
+  - `docs/postman/NEXORA_Complete_Demonstration.postman_collection.json`
+  - `docs/postman/NEXORA_Postman_Demonstration_Guide.md`
+- **Description:** Prior to Task 28, the NEXORA API offered demand forecasting endpoints (`/api/v1/forecast/predict`) but lacked an integrated endpoint to translate those demand predictions into actionable inventory replenishment recommendations (`POST /api/v1/inventory/recommend`) accounting for current warehouse stock, lead time, review cycle, and safety stock. Evaluators and students demonstrating the platform were forced to manually interpret demand numbers rather than presenting an end-to-end decision-support workflow.
+- **Resolution Date:** 2026-11-21 (Task 28).
+- **Resolution Details:**
+  1. Implemented `backend/app/schemas/inventory.py` defining Pydantic v2 validation models for `InventoryRecommendationRequest` and `InventoryRecommendationResponse`.
+  2. Implemented `backend/app/services/inventory_service.py` utilizing piecewise linear interpolation across multi-horizon demand estimators ($D_7, D_{15}, D_{30}, D_{90}$) to calculate demand across arbitrary coverage windows ($T_{\text{cov}} = L + R$).
+  3. Implemented transparent, mathematically explainable replenishment formulas:
+     $\text{Daily Rate} = \hat{y}_{\text{cov}} / T_{\text{cov}}$, $\text{Safety Stock} = \text{Daily Rate} \times S$, $\text{Target Stock} = \hat{y}_{\text{cov}} + \text{Safety Stock}$, and $\text{Purchase Quantity} = \max(0, \lceil \text{Target Stock} - \text{Current Stock} \rceil)$.
+  4. Classifies inventory risk into `CRITICAL`, `ELEVATED`, and `SAFE`.
+  5. Implemented `POST /api/v1/inventory/recommend` in `backend/app/api/routes/inventory.py` with 404 for unknown SKUs, 422 for insufficient history, and 422 for negative stock quantities.
+  6. Added 13 unit tests in `backend/tests/test_inventory_recommend.py`, bringing total passed tests to 168 / 168 (100% pass rate).
+  7. Created 19-request Postman collection `NEXORA_Complete_Demonstration.postman_collection.json` and comprehensive demonstration guide `NEXORA_Postman_Demonstration_Guide.md`. Verified all 19 requests pass.
+
+---
+
 ### ISSUE-016: Final Dataset Regeneration & Service Code Elimination from Daily Product Demand (F-01 End-to-End Pipeline)
 - **Severity:** Medium (Data Pipeline Consistency & Modeling Data Cleanliness)
 - **Module Affected:** ML Data Pipeline, Daily Aggregation, Point-in-Time Price Cache
