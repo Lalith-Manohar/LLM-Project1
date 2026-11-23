@@ -1,0 +1,13 @@
+{
+  "latest_date": "2011-12-09",
+  "latest_daily_demand": 93980,
+  "RollingMean7": 27602.57,
+  "RollingMean14": 24228.29,
+  "RollingMean28": 25081.75,
+  "predictions": {
+    "7": 175572.2,
+    "15": 376226.2,
+    "30": 752452.5,
+    "90": 2257357.5
+  }
+}

@@ -79,9 +79,9 @@ class TestHistoricalDataService(unittest.TestCase):
             historical_data_service.get_features_for_sku("NON_EXISTENT_SKU_99999")
 
     def test_04_insufficient_history_raises_error(self):
-        """Verifies SKU with < 29 days (e.g. 21777 with 6 days) raises InsufficientHistoryError."""
+        """Verifies SKU with < 29 days (e.g. 90004A with 1 day) raises InsufficientHistoryError."""
         with self.assertRaises(InsufficientHistoryError) as ctx:
-            historical_data_service.get_features_for_sku("21777")
+            historical_data_service.get_features_for_sku("90004A")
         self.assertIn("minimum 29 days required", str(ctx.exception))
 
 
@@ -133,8 +133,8 @@ class TestAutomatedForecastAPI(unittest.TestCase):
         self.assertIn("not found in historical sales records", resp.json()["detail"])
 
     def test_08_insufficient_history_returns_422(self):
-        """Verifies SKU with < 29 days history (21777) returns HTTP 422 with explanation."""
-        payload = {"stock_code": "21777"}
+        """Verifies SKU with < 29 days history (90004A) returns HTTP 422 with explanation."""
+        payload = {"stock_code": "90004A"}
         resp = self.client.post("/api/v1/forecast/", json=payload)
         self.assertEqual(resp.status_code, 422)
         self.assertIn("Insufficient historical sales data", resp.json()["detail"])

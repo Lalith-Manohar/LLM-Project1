@@ -1,0 +1,22 @@
+$kind: http-request
+name: 4. Valid Multi-Horizon Forecast (POST /api/v1/forecast/predict)
+description: |-
+  Submits SKU '85123A' to generate multi-horizon demand forecasts across 7, 15, 30, and 90 days.
+  Historical features are automatically calculated from indexed sales records.
+  Expected: HTTP 200 OK with predictions for D7, D15, D30, and D90.
+url: "{{baseUrl}}/api/v1/forecast/predict"
+method: POST
+headers:
+  - key: Content-Type
+    value: application/json
+  - key: ngrok-skip-browser-warning
+    value: "69420"
+    description: Bypasses the ngrok free-tier browser warning interstitial page.
+body:
+  type: json
+  content: |-
+    {
+      "stock_code": "85123A"
+    }
+examples: ./.resources/4. Valid Multi-Horizon Forecast (POST -api-v1-forecast-predict).resources/examples
+order: 4000

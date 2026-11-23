@@ -53,6 +53,44 @@ class HistoricalFeatures(BaseModel):
         description="Historical 28-day rolling average demand (t-28 to t-1). Must be finite and non-negative."
     )
 
+    # Extended features for Task 12 experimental models (optional for backward compatibility)
+    lag_60: Optional[float] = Field(
+        default=None, ge=0.0,
+        description="Actual sales demand from 60 days prior (t-60). Optional."
+    )
+    rolling_mean_14: Optional[float] = Field(
+        default=None, ge=0.0,
+        description="Historical 14-day rolling average demand (t-14 to t-1). Optional."
+    )
+    rolling_mean_60: Optional[float] = Field(
+        default=None, ge=0.0,
+        description="Historical 60-day rolling average demand (t-60 to t-1). Optional."
+    )
+    rolling_std_7: Optional[float] = Field(
+        default=None, ge=0.0,
+        description="Historical 7-day rolling standard deviation. Optional."
+    )
+    rolling_std_28: Optional[float] = Field(
+        default=None, ge=0.0,
+        description="Historical 28-day rolling standard deviation. Optional."
+    )
+    zero_fraction_28: Optional[float] = Field(
+        default=None, ge=0.0, le=1.0,
+        description="Fraction of zero-demand days over past 28 days (t-28 to t-1). Optional."
+    )
+    momentum_ratio: Optional[float] = Field(
+        default=None, ge=0.0,
+        description="Ratio of 7-day rolling mean to (28-day rolling mean + 1). Optional."
+    )
+    unit_price: Optional[float] = Field(
+        default=None, ge=0.0,
+        description="Point-in-time historical unit price. Optional."
+    )
+    has_60d_history: Optional[float] = Field(
+        default=None, ge=0.0, le=1.0,
+        description="Coverage indicator (1.0 if history >= 60 days, else 0.0). Optional."
+    )
+
     model_config = ConfigDict(
         json_schema_extra={
             "example": {
@@ -64,14 +102,27 @@ class HistoricalFeatures(BaseModel):
                 "lag_14": 10.0,
                 "lag_28": 14.0,
                 "rolling_mean_7": 13.5,
-                "rolling_mean_28": 12.8
+                "rolling_mean_28": 12.8,
+                "lag_60": 10.0,
+                "rolling_mean_14": 13.0,
+                "rolling_mean_60": 11.5,
+                "rolling_std_7": 3.2,
+                "rolling_std_28": 4.1,
+                "zero_fraction_28": 0.15,
+                "momentum_ratio": 0.98,
+                "unit_price": 2.55,
+                "has_60d_history": 1.0
             }
         }
     )
 
     @model_validator(mode="after")
     def validate_finite_numbers(self) -> "HistoricalFeatures":
-        num_fields = ["lag_1", "lag_7", "lag_14", "lag_28", "rolling_mean_7", "rolling_mean_28"]
+        num_fields = [
+            "lag_1", "lag_7", "lag_14", "lag_28", "rolling_mean_7", "rolling_mean_28",
+            "lag_60", "rolling_mean_14", "rolling_mean_60", "rolling_std_7", "rolling_std_28",
+            "zero_fraction_28", "momentum_ratio", "unit_price", "has_60d_history"
+        ]
         for f in num_fields:
             val = getattr(self, f)
             if val is not None and (math.isnan(val) or math.isinf(val)):
@@ -113,6 +164,16 @@ class ForecastRequest(BaseModel):
     lag_28: Optional[float] = Field(None, ge=0.0)
     rolling_mean_7: Optional[float] = Field(None, ge=0.0)
     rolling_mean_28: Optional[float] = Field(None, ge=0.0)
+    lag_60: Optional[float] = Field(None, ge=0.0)
+    rolling_mean_14: Optional[float] = Field(None, ge=0.0)
+    rolling_mean_60: Optional[float] = Field(None, ge=0.0)
+    rolling_std_7: Optional[float] = Field(None, ge=0.0)
+    rolling_std_28: Optional[float] = Field(None, ge=0.0)
+    zero_fraction_28: Optional[float] = Field(None, ge=0.0, le=1.0)
+    momentum_ratio: Optional[float] = Field(None, ge=0.0)
+    unit_price: Optional[float] = Field(None, ge=0.0)
+    has_60d_history: Optional[float] = Field(None, ge=0.0, le=1.0)
+    observation_date: Optional[str] = Field(None)
 
     model_config = ConfigDict(
         json_schema_extra={
@@ -197,7 +258,16 @@ class ForecastRequest(BaseModel):
                     lag_14=self.lag_14,
                     lag_28=self.lag_28,
                     rolling_mean_7=self.rolling_mean_7,
-                    rolling_mean_28=self.rolling_mean_28
+                    rolling_mean_28=self.rolling_mean_28,
+                    lag_60=self.lag_60,
+                    rolling_mean_14=self.rolling_mean_14,
+                    rolling_mean_60=self.rolling_mean_60,
+                    rolling_std_7=self.rolling_std_7,
+                    rolling_std_28=self.rolling_std_28,
+                    zero_fraction_28=self.zero_fraction_28,
+                    momentum_ratio=self.momentum_ratio,
+                    unit_price=self.unit_price,
+                    has_60d_history=self.has_60d_history
                 )
 
         # 4. Fill calendar defaults if manual features were provided without calendar values
@@ -302,12 +372,18 @@ class ModelInfoResponse(BaseModel):
 
 class ComponentReadiness(BaseModel):
     """Readiness status for an individual subsystem."""
+    model_config = ConfigDict(extra="ignore")
+
     ready: bool
     models_count: Optional[int] = None
     loaded_horizons: Optional[List[int]] = None
     total_skus: Optional[int] = None
     total_records: Optional[int] = None
     dataset_file: Optional[str] = None
+    demand_data_ready: Optional[bool] = None
+    price_service_ready: Optional[bool] = None
+    models_dir: Optional[str] = None
+    price_service: Optional[Dict[str, Any]] = None
     error: Optional[str] = None
 
 
@@ -318,3 +394,4 @@ class ReadinessResponse(BaseModel):
     version: str
     models: ComponentReadiness
     historical_data: ComponentReadiness
+    experimental_models: Optional[ComponentReadiness] = None

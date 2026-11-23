@@ -10,7 +10,7 @@ parity to the training pipeline.
 import threading
 import datetime
 from pathlib import Path
-from typing import Dict, Any, Optional, Tuple, List
+from typing import Dict, Any, Optional, Tuple, List, Union
 import pandas as pd
 import numpy as np
 
@@ -43,6 +43,7 @@ class HistoricalDataService:
     def __init__(self, data_path: Optional[str] = None):
         self._data_path = Path(data_path) if data_path else None
         self._sku_records: Dict[str, pd.DataFrame] = {}
+        self._price_map: Dict[str, float] = {}
         self._is_loaded: bool = False
         self._load_error: Optional[str] = None
         self._lock = threading.Lock()
@@ -162,6 +163,19 @@ class HistoricalDataService:
                 self.global_min_date = df["date"].min()
                 self.global_max_date = df["date"].max()
                 self.loaded_file = str(resolved_path.name)
+
+                # Load point-in-time unit prices and cutoff-aware history index
+                from ml.src.point_in_time_price import pit_price_service
+                price_history_path = resolved_path.parent / "pit_sku_price_history.json"
+                sales_path = resolved_path.parent / "clean_gross_sales.csv"
+                try:
+                    pit_price_service.load_index(cache_path=price_history_path, sales_path=sales_path)
+                    self._price_map = pit_price_service._static_prices
+                    print(f"[NEXORA HistoricalDataService] Initialized cutoff-aware PIT price service ({len(pit_price_service._skus_data):,} SKUs).")
+                except Exception as pe:
+                    print(f"[NEXORA HistoricalDataService WARNING] Failed to initialize PIT price service: {pe}")
+                    self._price_map = {}
+
                 self._is_loaded = True
                 self._load_error = None
 
@@ -176,17 +190,45 @@ class HistoricalDataService:
                     raise
                 raise DatasetUnavailableError(f"Failed to load or parse historical sales data: {e}") from e
 
-    def is_ready(self) -> bool:
-        """Returns True if and only if historical data is fully loaded and indexed."""
+    def is_demand_data_ready(self) -> bool:
+        """Returns True if and only if daily demand data is fully loaded and indexed."""
         return bool(self._is_loaded and self.total_skus > 0 and self._load_error is None)
+
+    def is_price_service_ready(self) -> bool:
+        """Returns True if and only if the point-in-time price index is loaded and ready."""
+        try:
+            from ml.src.point_in_time_price import pit_price_service
+            if not pit_price_service.is_loaded and pit_price_service.load_error is None:
+                try:
+                    pit_price_service.ensure_loaded()
+                except Exception:
+                    pass
+            return bool(pit_price_service.is_loaded and pit_price_service.load_error is None)
+        except Exception:
+            return False
+
+    def is_ready(self) -> bool:
+        """Returns True if and only if historical demand data is fully loaded and indexed."""
+        return self.is_demand_data_ready()
 
     def get_status(self) -> Dict[str, Any]:
         """Returns structured subsystem status for readiness and diagnostic probes."""
+        price_ready = self.is_price_service_ready()
+        price_status = None
+        try:
+            from ml.src.point_in_time_price import pit_price_service
+            price_status = pit_price_service.get_status()
+        except Exception as e:
+            price_status = {"ready": False, "error": str(e)}
+
         return {
             "ready": self.is_ready(),
+            "demand_data_ready": self.is_demand_data_ready(),
+            "price_service_ready": price_ready,
             "total_skus": self.total_skus,
             "total_records": self.total_records,
             "dataset_file": self.loaded_file,
+            "price_service": price_status,
             "error": self._load_error
         }
 
@@ -203,11 +245,31 @@ class HistoricalDataService:
         cleaned_sku = stock_code.strip()
         return cleaned_sku in self._sku_records
 
-    def get_features_for_sku(self, stock_code: str) -> Tuple[HistoricalFeatures, Dict[str, Any]]:
-        """Dynamically calculates the 9 lag, rolling, and calendar features for an SKU.
+    def get_unit_price(
+        self,
+        stock_code: str,
+        as_of_date: Optional[Union[datetime.date, str]] = None
+    ) -> float:
+        """Retrieves cutoff-aware historical unit price for an SKU as of observation date T.
+        
+        Guarantees that only transactions strictly before as_of_date contribute to the price,
+        matching the exact Task 12 training contract.
+        """
+        self.ensure_loaded()
+        cleaned_sku = stock_code.strip()
+        from ml.src.point_in_time_price import pit_price_service
+        return pit_price_service.get_price(cleaned_sku, as_of_date=as_of_date)
+
+    def get_features_for_sku(
+        self,
+        stock_code: str,
+        as_of_date: Optional[datetime.date] = None
+    ) -> Tuple[HistoricalFeatures, Dict[str, Any]]:
+        """Dynamically calculates lag, rolling, calendar, and extended features for an SKU.
         
         Features are calculated relative to the latest available historical observation date
-        for that SKU, matching the exact definitions from model training:
+        (or up to the specified `as_of_date`) for that SKU, matching the exact definitions
+        from model training:
         - DayOfWeek, Month, DayOfMonth: Calendar dynamics from observation date t.
         - Lag1: Actual daily demand at t - 1.
         - Lag7: Actual daily demand at t - 7.
@@ -215,9 +277,21 @@ class HistoricalDataService:
         - Lag28: Actual daily demand at t - 28.
         - RollingMean7: Mean daily demand over t - 7 through t - 1 (shifted by 1 day).
         - RollingMean28: Mean daily demand over t - 28 through t - 1 (shifted by 1 day).
+        
+        Extended features (Task 12 experimental):
+        - Lag60: Actual daily demand at t - 60 (falls back to Lag28 if history < 61 days).
+        - RollingMean14: Mean daily demand over t - 14 through t - 1.
+        - RollingMean60: Mean daily demand over t - 60 through t - 1 (falls back to RollingMean28 if history < 61 days).
+        - RollingStd7: Sample standard deviation over t - 7 through t - 1.
+        - RollingStd28: Sample standard deviation over t - 28 through t - 1.
+        - ZeroFraction28: Proportion of zero-demand days over t - 28 through t - 1.
+        - MomentumRatio: RollingMean7 / (RollingMean28 + 1.0).
+        - UnitPrice: Point-in-time SKU unit price.
+        - Has60dHistory: Indicator flag (1.0 if history >= 61 days, else 0.0).
 
         Args:
             stock_code: Unique product SKU.
+            as_of_date: Optional cutoff date. If omitted, uses latest available record.
 
         Returns:
             Tuple[HistoricalFeatures, Dict[str, Any]]:
@@ -238,6 +312,12 @@ class HistoricalDataService:
             )
 
         sku_df = self._sku_records[cleaned_sku]
+
+        if as_of_date is not None:
+            if isinstance(as_of_date, str):
+                as_of_date = datetime.date.fromisoformat(as_of_date)
+            sku_df = sku_df[sku_df["date"] <= as_of_date]
+
         record_count = len(sku_df)
 
         # Minimum history required to compute Lag28 and RollingMean28: 29 continuous days (t - 28 to t)
@@ -262,7 +342,40 @@ class HistoricalDataService:
         lag_14 = float(demands[-15])
         lag_28 = float(demands[-29])
         rolling_mean_7 = round(float(demands[-8:-1].mean()), 4)
+        rolling_mean_14 = round(float(demands[-15:-1].mean()), 4)
         rolling_mean_28 = round(float(demands[-29:-1].mean()), 4)
+
+        # Extended statistics
+        std_7 = np.std(demands[-8:-1], ddof=1)
+        rolling_std_7 = round(float(np.nan_to_num(std_7, nan=0.0)), 4)
+
+        std_28 = np.std(demands[-29:-1], ddof=1)
+        rolling_std_28 = round(float(np.nan_to_num(std_28, nan=0.0)), 4)
+
+        zero_fraction_28 = round(float((demands[-29:-1] == 0).astype(float).mean()), 4)
+        momentum_ratio = round(float(rolling_mean_7 / (rolling_mean_28 + 1.0)), 4)
+
+        # 60-day coverage restoration logic
+        if record_count >= 61:
+            has_60d_history = 1.0
+            lag_60 = float(demands[-61])
+            rolling_mean_60 = round(float(demands[-61:-1].mean()), 4)
+        else:
+            has_60d_history = 0.0
+            lag_60 = lag_28
+            rolling_mean_60 = rolling_mean_28
+
+        # Unit price (cutoff-aware for historical backtesting, latest for forward inference)
+        unit_price: Optional[float] = None
+        if self.is_price_service_ready():
+            try:
+                if as_of_date is not None:
+                    unit_price = round(self.get_unit_price(cleaned_sku, as_of_date=observation_date), 4)
+                else:
+                    unit_price = round(self.get_unit_price(cleaned_sku, as_of_date=None), 4)
+            except Exception:
+                # Graceful fallback: unit_price remains None to maintain failure isolation for production
+                unit_price = None
 
         calendar_dow = int(observation_date.weekday())  # 0=Monday, 6=Sunday
         calendar_month = int(observation_date.month)
@@ -277,7 +390,16 @@ class HistoricalDataService:
             lag_14=lag_14,
             lag_28=lag_28,
             rolling_mean_7=rolling_mean_7,
-            rolling_mean_28=rolling_mean_28
+            rolling_mean_28=rolling_mean_28,
+            lag_60=lag_60,
+            rolling_mean_14=rolling_mean_14,
+            rolling_mean_60=rolling_mean_60,
+            rolling_std_7=rolling_std_7,
+            rolling_std_28=rolling_std_28,
+            zero_fraction_28=zero_fraction_28,
+            momentum_ratio=momentum_ratio,
+            unit_price=unit_price,
+            has_60d_history=has_60d_history
         )
 
         context_metadata = {

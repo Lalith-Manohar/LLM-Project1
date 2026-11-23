@@ -10,6 +10,7 @@ from app.api.routes import api_router
 from app.schemas.forecast import ReadinessResponse, ComponentReadiness
 from app.services.prediction_service import prediction_service
 from app.services.historical_data_service import historical_data_service
+from app.services.experimental_prediction_service import experimental_prediction_service
 
 
 @asynccontextmanager
@@ -28,6 +29,19 @@ async def lifespan(app: FastAPI):
         historical_data_service.load_dataset()
     except Exception as e:
         print(f"[NEXORA Startup ERROR] Historical dataset initialization failed: {e}")
+
+    # 3. Independent Task 12 experimental ML model loading & verification
+    try:
+        experimental_prediction_service.load_models()
+    except Exception as e:
+        print(f"[NEXORA Startup WARNING] Task 12 experimental ML model initialization failed: {e}")
+
+    # 4. Independent point-in-time price service initialization
+    try:
+        from ml.src.point_in_time_price import pit_price_service
+        pit_price_service.ensure_loaded()
+    except Exception as e:
+        print(f"[NEXORA Startup WARNING] Point-in-time price service initialization failed: {e}")
 
     yield
     print("[NEXORA Shutdown] Application shutting down cleanly.")
@@ -50,7 +64,8 @@ app.add_middleware(
         "http://127.0.0.1:5173",
         "http://localhost:3000",
         "http://127.0.0.1:3000",
-        "*",
+        "http://localhost:8000",
+        "http://127.0.0.1:8000",
     ],
     allow_credentials=True,
     allow_methods=["*"],
@@ -104,6 +119,8 @@ def readiness_check(response: Response) -> ReadinessResponse:
     """
     models_status = prediction_service.get_status()
     data_status = historical_data_service.get_status()
+    exp_status = experimental_prediction_service.get_status()
+    exp_component = ComponentReadiness(**exp_status) if (exp_status.get("models_count", 0) > 0 or exp_status.get("ready")) else None
 
     is_ready = bool(models_status["ready"] and data_status["ready"])
     
@@ -114,7 +131,8 @@ def readiness_check(response: Response) -> ReadinessResponse:
             service="backend",
             version=settings.VERSION,
             models=ComponentReadiness(**models_status),
-            historical_data=ComponentReadiness(**data_status)
+            historical_data=ComponentReadiness(**data_status),
+            experimental_models=exp_component
         )
 
     return ReadinessResponse(
@@ -122,7 +140,8 @@ def readiness_check(response: Response) -> ReadinessResponse:
         service="backend",
         version=settings.VERSION,
         models=ComponentReadiness(**models_status),
-        historical_data=ComponentReadiness(**data_status)
+        historical_data=ComponentReadiness(**data_status),
+        experimental_models=exp_component
     )
 
 
