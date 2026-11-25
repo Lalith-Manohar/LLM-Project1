@@ -1,0 +1,12 @@
+$kind: http-request
+description: ""
+url: "{{baseUrl}}/api/v1/forecast"
+method: POST
+body:
+  type: json
+  content: "{\r
+
+    \  \"stock_code\": \"85123A\"\r
+
+    }"
+order: 9000

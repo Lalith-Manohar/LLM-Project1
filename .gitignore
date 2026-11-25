@@ -9,14 +9,31 @@ venv/
 .venv/
 ENV/
 
-# Data & Models (Do not commit datasets or model weights)
+# Testing & Coverage
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Type Checking & Linting
+.mypy_cache/
+.ruff_cache/
+
+# Data & Models (Inference assets tracked; intermediate/scratch datasets ignored)
 backend/ml/data/raw/*
 !backend/ml/data/raw/.gitkeep
 !backend/ml/data/raw/online_retail_II.csv
+
 backend/ml/data/processed/*
 !backend/ml/data/processed/.gitkeep
+!backend/ml/data/processed/daily_product_demand.csv
+
 backend/ml/models/*
 !backend/ml/models/.gitkeep
+!backend/ml/models/models_metadata.json
+!backend/ml/models/demand_model_7d.joblib
+!backend/ml/models/demand_model_15d.joblib
+!backend/ml/models/demand_model_30d.joblib
+!backend/ml/models/demand_model_90d.joblib
 
 # Jupyter Notebook checkpoints
 .ipynb_checkpoints/
@@ -29,6 +46,10 @@ backend/.env
 frontend/node_modules/
 frontend/build/
 frontend/dist/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
 
 # IDE / Editor
 .vscode/

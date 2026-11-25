@@ -212,3 +212,87 @@ This document formally records all major technical and architectural decisions f
   - On-demand lazy model loading (rejected: introduces latency jitter on first request and potential race conditions).
   - Training inside the API request cycle (rejected: strictly prohibited by `AGENTS.md`).
 - **Impact on Other Modules:** Module 7 (Predictive Planner) and Module 8 (Purchase Planning Simulator) can query `/api/v1/forecast/` for multi-horizon demand forecasts. Operational inventory risk calculations can reliably consume the API output.
+
+---
+
+### TD-015: Dual-Hierarchical Retail Forecasting (Store-Wide Macro vs SKU-Level Micro)
+- **Date:** 2026-11-20
+- **Topic:** Forecasting hierarchy distinction and empirical WAPE disparity resolution.
+- **Context:** During model benchmarking on `uni_api_experimental`, external student claims of ~10% WAPE on the UCI Online Retail II dataset were audited against NEXORA's ~50% SKU-level WAPE.
+- **Decision:** Implement and formalize a dual-tier forecasting architecture distinguishing:
+  1. **Tier 1 — Store-Wide (Macro) Demand:** Aggregated daily volume across all 3,922 SKUs. Cancels out intermittent Poisson noise and achieves **8.87% to 13.38% WAPE** across $D_7, D_{15}, D_{30}$.
+  2. **Tier 2 — SKU-Level (Micro) Demand:** Disaggregated demand per individual SKU for inventory replenishment and stockout prevention, where intermittent sparsity dictates a higher theoretical variance floor (~45%–55% WAPE).
+- **Reasoning:** Proves mathematically and empirically that external ~10% WAPE claims correspond to macro store total forecasting, not intermittent SKU forecasting. Exposes both tiers transparently via `/api/v1/forecast/evaluation-comparison` and `/api/v1/forecast/store-wide`.
+- **Alternatives Considered:**
+  - Claiming 10% WAPE on SKU-level by using random train/test splits (rejected: violates chronological causality and causes catastrophic data leakage).
+  - Ignoring the external discrepancy (rejected: leaves students vulnerable during project viva defense).
+- **Impact on Other Modules:** Executives can monitor store-wide macro revenue and inventory turnover; warehouse managers utilize SKU-level predictions for bin restocking.
+
+---
+
+### TD-016: Baseline-Anchored Residual Regressor Formulation for Multi-Horizon Demand
+- **Date:** 2026-11-20
+- **Topic:** Multi-horizon demand model architecture and tree-underfitting resolution.
+- **Context:** Direct regression on multi-horizon cumulative sums ($D_{15}, D_{30}, D_{90}$) suffered from severe negative prediction bias (-25.14% on $D_{90}$) due to decision tree saturation in shallow Random Forests.
+- **Decision:** Formulate forecasting as a baseline-anchored residual decomposition:
+  $$\hat{y} = h \cdot \text{RollingMean} + \hat{r}$$
+  Implemented via `ResidualRegressor`, where the physical moving-average run-rate anchors the forecast, and regularized estimators (`Ridge`) model the residual deviation $\hat{r}$.
+- **Reasoning:**
+  1. Guarantees physical scale consistency across changing operational windows.
+  2. Reduces WAPE from 50.00% to **46.34% on $D_{15}$** (+3.66 pp) and from 48.73% to **45.37% on $D_{30}$** (+3.36 pp).
+  3. Seamlessly integrates with scikit-learn Pipelines and Joblib serialization.
+- **Alternatives Considered:**
+  - Training deeper random forests with 500+ trees (rejected: slow training, memory bloat, and persistent bias during seasonal regime shifts).
+  - Pure moving average without residual adjustments (rejected: misses short-term momentum and price elasticity).
+- **Impact on Other Modules:** Serialized in `backend/ml/models_experimental/` for Phase 2 operational CRUD and predictive purchasing.
+
+---
+
+### TD-017: Chronological Expanding-Window Target Encoding with Horizon Embargo
+- **Date:** 2026-11-20
+- **Topic:** Temporal target leakage elimination in categorical feature encoding.
+- **Context:** Scikit-learn's `TargetEncoder(cv=5)` defaults to `KFold(shuffle=True)`, allowing future targets to contaminate earlier training encodings.
+- **Decision:** Implement `ChronologicalTargetEncoder` which calculates target statistics strictly from historically realized dates $t \le T - (h + 1)$ for any forecast date $T$.
+- **Reasoning:**
+  1. Guarantees 0.0 future perturbation leakage: modifying future targets has zero impact on earlier encodings.
+  2. Applies empirical Bayes smoothing with global historical prior for tail SKUs.
+  3. Out-of-sample / inference rows map to frozen cumulative statistics learned from the full training set.
+- **Alternatives Considered:**
+  - OneHotEncoder top-50 (rejected: 99.3%+ volume lumped into catch-all infrequent bucket).
+  - Shuffled TargetEncoder (rejected: temporal target leakage).
+- **Impact on Other Modules:** Cleanly integrated into experimental pipeline in `backend/ml/src/chronological_encoder.py`.
+
+---
+
+### TD-018: Point-in-Time Historical Unit Price Aggregation & Coverage Restoration
+- **Date:** 2026-11-20
+- **Topic:** Point-in-time price signals and validation sample preservation.
+- **Context:** Global median SKU prices introduced future pricing signals, and dropping rows with missing 60-day features discarded 3,343 rows in $D_{30}$ and 2,329 rows in $D_{90}$.
+- **Decision:**
+  1. Implement `enrich_daily_with_pit_price`, computing SKU price strictly from transactions occurring at $\text{tx\_date} < T$, with expanding global fallback.
+  2. Restore validation coverage by imputing missing `Lag60` and `RollingMean60` with 28-day equivalents and adding `Has60dHistory` indicator.
+  3. Implement `DateGroupedTimeSeriesSplit` ensuring all SKUs on a given date stay in the same fold and enforcing horizon embargo gaps ($\ge h + 1$).
+- **Reasoning:** Preserves 100% of validation rows matching the exact production baseline (42,091 on $D_7$, 57,840 on $D_{15}$, 100,262 on $D_{30}$, 98,157 on $D_{90}$) without row loss or target leakage.
+- **Alternatives Considered:**
+  - Forward-filling full dataset prices without cutoff (rejected: leaks future price regimes into early rows).
+  - Dropping rows with $< 60$ days of history (rejected: causes unequal validation comparisons).
+- **Impact on Other Modules:** Standardized feature preparation pipeline across all experimental models.
+
+---
+
+### TD-019: Full 2-Year Dataset Recovery & Non-Merchandise Service Code Isolation
+- **Date:** 2026-11-20
+- **Topic:** Multi-sheet XLSX-to-CSV recovery, non-merchandise service code isolation, and 2-year time-series expansion.
+- **Context:** The raw dataset `online_retail_II.csv` previously contained only the single year 2010–2011 (541,910 records) due to default active-sheet export behavior from `online_retail_II.xlsx`. The entire first year (`Year 2009-2010`, 525,461 records) was omitted. Additionally, non-merchandise codes (`POST`, `DOT`, `M`, `BANK CHARGES`, `PADS`, `AMAZONFEE`, etc.) were mixed into sales data.
+- **Decision:**
+  1. Ingest both worksheets from `online_retail_II.xlsx` into unified `online_retail_II.csv` totaling exactly 1,067,371 rows with 100% zero-loss reconciliation. Standardize all timestamps to ISO `YYYY-MM-DD HH:MM:SS`. Preserve 1-year backup (`online_retail_II_2010_2011_backup.csv`).
+  2. Isolate non-merchandise service codes into `service_transactions.csv` (4,581 records) during preprocessing and filter them from physical inventory demand training in `sku_level_optimization.py`.
+  3. Re-aggregate continuous daily demand (`daily_product_demand.csv`: 2,292,587 product-days, 4,916 SKUs, 738 calendar days).
+- **Reasoning:**
+  1. Triples time series date span from 125 to 500+ training dates, resolving $D_{90}$ cross-validation embargo constraints.
+  2. Eliminates distortion of inventory replenishment models by non-inventory financial ledger items (postage, bank fees).
+  3. Achieves improved WAPE across all 4 horizons: $D_7$: **53.94%**, $D_{15}$: **44.87%**, $D_{30}$: **44.76%**, $D_{90}$: **51.73%**. Store-wide WAPE drops to 5.61% - 8.87%.
+- **Alternatives Considered:**
+  - Continuing with single-year dataset (rejected: omits half the training observations and holiday seasons).
+  - Forecasting demand for "Bank Charges" and "Postage" as physical inventory (rejected: violates physical store logic).
+- **Impact on Other Modules:** Deepens historical lookup coverage in `historical_data_service` from 374 to 739 days; improves all downstream purchasing and stockout simulation metrics.

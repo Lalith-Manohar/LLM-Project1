@@ -35,6 +35,9 @@ class Settings(BaseSettings):
     # ML Artifacts path relative to backend root directory (backend/ml/models)
     MODELS_DIR: str = str(Path(__file__).resolve().parent.parent.parent / "ml" / "models")
 
+    # Task 12 Experimental ML Artifacts path relative to backend root directory (backend/ml/models_task12)
+    EXPERIMENTAL_MODELS_DIR: str = str(Path(__file__).resolve().parent.parent.parent / "ml" / "models_task12")
+
     model_config = SettingsConfigDict(
         case_sensitive=True,
         env_file=".env",

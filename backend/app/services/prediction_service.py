@@ -9,6 +9,7 @@ handles unseen product SKUs via native infrequent categorical encoding.
 
 import json
 import joblib
+import threading
 import datetime
 from pathlib import Path
 from typing import Dict, List, Optional, Any
@@ -22,6 +23,7 @@ from app.schemas.forecast import (
     HorizonPredictionDetail,
     SUPPORTED_HORIZONS
 )
+from app.services.historical_data_service import historical_data_service
 
 
 class PredictionService:
@@ -32,82 +34,133 @@ class PredictionService:
         self.models: Dict[int, Any] = {}
         self.metadata: Dict[str, Any] = {}
         self.is_loaded: bool = False
+        self.load_error: Optional[str] = None
+        self._lock = threading.Lock()
         self.frequent_skus: set = set()
         self.supported_horizons: List[int] = list(SUPPORTED_HORIZONS)
 
     def load_models(self) -> None:
         """Loads all serialized model binaries and metadata into memory.
         
+        Validates artifact existence, integrity, and usability via dummy inference.
+        
         Raises:
             FileNotFoundError: If required model binaries or metadata are missing.
-            RuntimeError: If model loading fails or artifacts are corrupted.
+            RuntimeError: If model loading fails, artifacts are corrupted, or usability checks fail.
         """
-        print(f"[NEXORA PredictionService] Initializing ML model registry from: {self.models_dir}...")
-        
-        if not self.models_dir.is_dir():
-            raise FileNotFoundError(
-                f"Model directory does not exist: {self.models_dir}. "
-                "Ensure models are trained and saved in backend/ml/models/."
-            )
+        with self._lock:
+            print(f"[NEXORA PredictionService] Initializing ML model registry from: {self.models_dir}...")
+            self.is_loaded = False
+            self.load_error = None
 
-        metadata_path = self.models_dir / "models_metadata.json"
-        if not metadata_path.is_file():
-            raise FileNotFoundError(
-                f"Model metadata manifest missing: {metadata_path}. "
-                "Run 'python backend/ml/src/train.py' to generate model artifacts and metadata."
-            )
+            if not self.models_dir.is_dir():
+                err = f"Model directory does not exist: {self.models_dir.name}"
+                self.load_error = err
+                raise FileNotFoundError(err)
 
-        try:
-            with open(metadata_path, "r", encoding="utf-8") as f:
-                self.metadata = json.load(f)
-        except Exception as e:
-            raise RuntimeError(f"Failed to parse model metadata from {metadata_path}: {e}")
-
-        # Load and validate each horizon model
-        loaded_models = {}
-        for h in self.supported_horizons:
-            model_filename = f"demand_model_{h}d.joblib"
-            model_path = self.models_dir / model_filename
-            
-            if not model_path.is_file():
-                raise FileNotFoundError(
-                    f"Required model artifact missing for horizon D_{h}: {model_path}. "
-                    "Ensure all 4 horizon models are trained and saved."
-                )
+            metadata_path = self.models_dir / "models_metadata.json"
+            if not metadata_path.is_file():
+                err = f"Model metadata manifest missing: {metadata_path.name}"
+                self.load_error = err
+                raise FileNotFoundError(err)
 
             try:
-                pipeline = joblib.load(model_path)
+                with open(metadata_path, "r", encoding="utf-8") as f:
+                    self.metadata = json.load(f)
             except Exception as e:
-                raise RuntimeError(f"Corrupted or invalid model artifact at {model_path}: {e}")
+                err = f"Failed to parse model metadata: {e}"
+                self.load_error = err
+                raise RuntimeError(err)
 
-            if not hasattr(pipeline, "predict"):
-                raise RuntimeError(f"Loaded object for horizon D_{h} does not have a predict method.")
+            # Load, inspect, and usability-test each horizon model
+            loaded_models = {}
+            dummy_eval_df = pd.DataFrame({
+                "StockCode": ["85123A"],
+                "DayOfWeek": [2],
+                "Month": [11],
+                "DayOfMonth": [15],
+                "Lag1": [10.0],
+                "Lag7": [10.0],
+                "Lag14": [10.0],
+                "Lag28": [10.0],
+                "RollingMean7": [10.0],
+                "RollingMean28": [10.0]
+            })
 
-            loaded_models[h] = pipeline
+            for h in self.supported_horizons:
+                model_filename = f"demand_model_{h}d.joblib"
+                model_path = self.models_dir / model_filename
+                
+                if not model_path.is_file():
+                    err = f"Required model artifact missing for horizon D_{h}: {model_filename}"
+                    self.load_error = err
+                    raise FileNotFoundError(err)
 
-        self.models = loaded_models
-        self.is_loaded = True
+                try:
+                    pipeline = joblib.load(model_path)
+                except Exception as e:
+                    err = f"Corrupted or unreadable model artifact for horizon D_{h}: {e}"
+                    self.load_error = err
+                    raise RuntimeError(err)
 
-        # Extract frequent SKUs recognized by OneHotEncoder for informational warnings
-        try:
-            sample_model = self.models[7]
-            preprocessor = sample_model.named_steps.get("preprocessor")
-            if preprocessor:
-                cat_encoder = preprocessor.named_transformers_.get("cat")
-                if cat_encoder and hasattr(cat_encoder, "categories_"):
-                    self.frequent_skus = set(cat_encoder.categories_[0])
-        except Exception:
-            self.frequent_skus = set()
+                if not hasattr(pipeline, "predict"):
+                    err = f"Loaded object for horizon D_{h} does not have a predict method"
+                    self.load_error = err
+                    raise RuntimeError(err)
 
-        print(
-            f"[NEXORA PredictionService] Successfully loaded {len(self.models)} forecasting models "
-            f"([D_7, D_15, D_30, D_90]) into memory."
-        )
+                # Active usability smoke test: verify pipeline execution and finite output
+                try:
+                    test_pred = pipeline.predict(dummy_eval_df)
+                    if len(test_pred) != 1 or not np.isfinite(float(test_pred[0])):
+                        err = f"Model usability test failed for horizon D_{h}: non-finite or invalid output"
+                        self.load_error = err
+                        raise RuntimeError(err)
+                except Exception as e:
+                    err = f"Model usability test failed for horizon D_{h}: {e}"
+                    self.load_error = err
+                    raise RuntimeError(err)
+
+                loaded_models[h] = pipeline
+
+            self.models = loaded_models
+            self.is_loaded = True
+            self.load_error = None
+
+            # Extract frequent SKUs recognized by OneHotEncoder for informational warnings
+            try:
+                sample_model = self.models[7]
+                preprocessor = sample_model.named_steps.get("preprocessor")
+                if preprocessor:
+                    cat_encoder = preprocessor.named_transformers_.get("cat")
+                    if cat_encoder and hasattr(cat_encoder, "categories_"):
+                        self.frequent_skus = set(cat_encoder.categories_[0])
+            except Exception:
+                self.frequent_skus = set()
+
+            print(
+                f"[NEXORA PredictionService] Successfully loaded and verified {len(self.models)} forecasting models "
+                f"([D_7, D_15, D_30, D_90]) into memory."
+            )
+
+    def is_ready(self) -> bool:
+        """Returns True if and only if all 4 models are loaded and verified in memory."""
+        return bool(self.is_loaded and len(self.models) == len(self.supported_horizons) and self.load_error is None)
+
+    def get_status(self) -> Dict[str, Any]:
+        """Returns structured subsystem status for readiness and diagnostic probes."""
+        return {
+            "ready": self.is_ready(),
+            "models_count": len(self.models),
+            "loaded_horizons": sorted(list(self.models.keys())),
+            "error": self.load_error
+        }
 
     def ensure_loaded(self) -> None:
-        """Ensures models are loaded; triggers loading if not already in memory."""
+        """Ensures models are loaded; triggers loading if uninitialized."""
         if not self.is_loaded:
             self.load_models()
+        if not self.is_ready():
+            raise RuntimeError(f"Forecasting models are not ready: {self.load_error or 'uninitialized'}")
 
     def get_forecast(self, request: ForecastRequest) -> ForecastResponse:
         """Executes multi-horizon demand inference for a validated forecast request.
@@ -127,6 +180,17 @@ class PredictionService:
         features = request.features
         requested_horizons = request.horizons or self.supported_horizons
 
+        observation_date: Optional[str] = None
+        history_days: Optional[int] = None
+        is_auto_generated: bool = False
+
+        # When caller does not provide manual features, generate them automatically from CSV dataset
+        if features is None:
+            features, context = historical_data_service.get_features_for_sku(sku)
+            observation_date = context.get("observation_date")
+            history_days = context.get("history_days")
+            is_auto_generated = True
+
         # Construct input DataFrame matching exact feature contract:
         # ['StockCode', 'DayOfWeek', 'Month', 'DayOfMonth', 'Lag1', 'Lag7', 'Lag14', 'Lag28', 'RollingMean7', 'RollingMean28']
         input_data = {
@@ -143,8 +207,13 @@ class PredictionService:
         }
         X_df = pd.DataFrame(input_data)
 
-        # Informational warnings
+        # Informational warnings and context
         warnings = []
+        if is_auto_generated and observation_date:
+            warnings.append(
+                f"Historical demand features automatically generated from {history_days} daily records "
+                f"up to observation date {observation_date} (UCI Online Retail II dataset)."
+            )
         if self.frequent_skus and sku not in self.frequent_skus:
             warnings.append(
                 f"StockCode '{sku}' is outside the top-50 training categories; "
@@ -201,7 +270,10 @@ class PredictionService:
             warnings=warnings,
             status="success",
             total_predicted_demand=primary_val,
-            horizon_days=primary_h if len(requested_horizons) == 1 else None
+            horizon_days=primary_h if len(requested_horizons) == 1 else None,
+            observation_date=observation_date,
+            history_days=history_days,
+            is_auto_generated=is_auto_generated
         )
 
     def get_supported_horizons(self) -> Dict[str, Any]:

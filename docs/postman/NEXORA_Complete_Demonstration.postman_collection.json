@@ -1,0 +1,990 @@
+{
+  "info": {
+    "_postman_id": "nexora-complete-demo-v1",
+    "name": "NEXORA Complete API Demonstration Suite (Forecasting & Inventory)",
+    "description": "# NEXORA \u2014 Academic & Technical Demonstration Suite\n\nThis Postman collection provides a complete, end-to-end evaluation suite for the NEXORA Retail Management & Intelligence Web Platform. It demonstrates multi-horizon demand forecasting, rigorous API error handling, and explainable inventory replenishment recommendations.\n\n### Real-World Operational Workflow:\n1. **Health & Readiness:** Verify that the FastAPI backend process, machine learning models, and historical sales datasets are online.\n2. **Demand Forecasting:** Submit product SKUs to evaluate predicted customer demand across 7, 15, 30, and 90-day operational windows.\n3. **Inventory Replenishment:** Enter on-hand stock and supplier lead times to calculate exact replenishment quantities with transparent formulas.\n4. **Error & Boundary Validation:** Verify robust validation handling for unknown products (404), insufficient history (422), and negative stock (422).\n\n### Core Decision Support Formula:\n- `Coverage Window = Lead Time Days + Review Period Days`\n- `Forecast Demand = Multi-Horizon Interpolated Demand across Coverage Window`\n- `Daily Demand Rate = Forecast Demand / Coverage Window`\n- `Safety Stock = Daily Demand Rate * Safety Stock Days`\n- `Target Stock = Forecast Demand + Safety Stock`\n- `Recommended Purchase Quantity = max(0, Target Stock - Current Stock)`\n\n**Note:** NEXORA provides empirical decision support recommendations for warehouse managers. It does not unilaterally place automated orders with external vendors.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://127.0.0.1:8000",
+      "type": "string"
+    },
+    {
+      "key": "testSku1",
+      "value": "85123A",
+      "type": "string"
+    },
+    {
+      "key": "testSku2",
+      "value": "22423",
+      "type": "string"
+    },
+    {
+      "key": "unknownSku",
+      "value": "NON_EXISTENT_SKU_99999",
+      "type": "string"
+    },
+    {
+      "key": "insufficientHistorySku",
+      "value": "20877",
+      "type": "string"
+    },
+    {
+      "key": "currentStock",
+      "value": "50.0",
+      "type": "string"
+    },
+    {
+      "key": "leadTimeDays",
+      "value": "7",
+      "type": "string"
+    },
+    {
+      "key": "reviewPeriodDays",
+      "value": "7",
+      "type": "string"
+    },
+    {
+      "key": "safetyStockDays",
+      "value": "3.0",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "01. Liveness Probe (GET /health)",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "ngrok-skip-browser-warning",
+            "value": "69420",
+            "type": "text"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/health",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "health"
+          ]
+        },
+        "description": "Verifies that the FastAPI application process is alive and responding."
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Status code is 200', function () { pm.response.to.have.status(200); });",
+              "pm.test('Status is healthy', function () { var jsonData = pm.response.json(); pm.expect(jsonData.status).to.eql('healthy'); });",
+              "pm.test('Service is backend', function () { var jsonData = pm.response.json(); pm.expect(jsonData.service).to.eql('backend'); });",
+              "pm.test('Response time is under 2000ms', function () { pm.expect(pm.response.responseTime).to.be.below(2000); });"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ]
+    },
+    {
+      "name": "02. Readiness Probe (GET /ready)",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "ngrok-skip-browser-warning",
+            "value": "69420",
+            "type": "text"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/ready",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "ready"
+          ]
+        },
+        "description": "Probes whether machine learning model pipelines and historical datasets are indexed and ready for inference."
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Status code is 200', function () { pm.response.to.have.status(200); });",
+              "pm.test('System status is ready', function () { var jsonData = pm.response.json(); pm.expect(jsonData.status).to.eql('ready'); });",
+              "pm.test('Models subsystem is ready', function () { var jsonData = pm.response.json(); pm.expect(jsonData.models.ready).to.be.true; });",
+              "pm.test('Historical data is ready', function () { var jsonData = pm.response.json(); pm.expect(jsonData.historical_data.ready).to.be.true; });"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ]
+    },
+    {
+      "name": "03. API Readiness (GET /api/v1/ready)",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "ngrok-skip-browser-warning",
+            "value": "69420",
+            "type": "text"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/ready",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "v1",
+            "ready"
+          ]
+        },
+        "description": "API v1 prefix route alias confirming subsystem readiness under the /api/v1/ routing namespace."
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Status code is 200', function () { pm.response.to.have.status(200); });",
+              "pm.test('System status is ready', function () { var jsonData = pm.response.json(); pm.expect(jsonData.status).to.eql('ready'); });",
+              "pm.test('Subsystems verified ready', function () { var jsonData = pm.response.json(); pm.expect(jsonData.models.ready).to.be.true; pm.expect(jsonData.historical_data.ready).to.be.true; });"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ]
+    },
+    {
+      "name": "04. Supported Forecast Horizons (GET /api/v1/forecast/horizons)",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "ngrok-skip-browser-warning",
+            "value": "69420",
+            "type": "text"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/forecast/horizons",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "v1",
+            "forecast",
+            "horizons"
+          ]
+        },
+        "description": "Returns the business definitions and supported forecast horizons (7, 15, 30, and 90 days)."
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Status code is 200', function () { pm.response.to.have.status(200); });",
+              "pm.test('Supported horizons match [7, 15, 30, 90]', function () { var jsonData = pm.response.json(); pm.expect(jsonData.supported_horizons_days).to.eql([7, 15, 30, 90]); });",
+              "pm.test('Horizon definitions present', function () { var jsonData = pm.response.json(); pm.expect(jsonData.horizon_definitions).to.have.property('7'); pm.expect(jsonData.horizon_definitions).to.have.property('30'); });"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ]
+    },
+    {
+      "name": "05. Valid Forecast \u2014 Short-Term (POST /api/v1/forecast/predict)",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "ngrok-skip-browser-warning",
+            "value": "69420",
+            "type": "text"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json",
+            "type": "text"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/forecast/predict",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "v1",
+            "forecast",
+            "predict"
+          ]
+        },
+        "description": "Submits high-volume SKU {{testSku1}} requesting exclusively the 7-day operational replenishment horizon.",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"stock_code\": \"{{testSku1}}\",\n  \"horizons\": [\n    7\n  ]\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Status code is 200', function () { pm.response.to.have.status(200); });",
+              "pm.test('Returns predictions dictionary', function () { var jsonData = pm.response.json(); pm.expect(jsonData).to.have.property('predictions'); pm.expect(jsonData.predictions).to.have.property('7'); });",
+              "pm.test('7-day prediction is non-negative', function () { var jsonData = pm.response.json(); pm.expect(jsonData.predictions['7']).to.be.at.least(0); });",
+              "pm.test('Stock code echoes correctly', function () { var jsonData = pm.response.json(); pm.expect(jsonData.stock_code).to.eql(pm.collectionVariables.get('testSku1')); });"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ]
+    },
+    {
+      "name": "06. Valid Forecast \u2014 Multi-Horizon (POST /api/v1/forecast/predict)",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "ngrok-skip-browser-warning",
+            "value": "69420",
+            "type": "text"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json",
+            "type": "text"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/forecast/predict",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "v1",
+            "forecast",
+            "predict"
+          ]
+        },
+        "description": "Submits SKU {{testSku1}} requesting all four standard horizons (7, 15, 30, and 90 days).",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"stock_code\": \"{{testSku1}}\",\n  \"horizons\": [\n    7,\n    15,\n    30,\n    90\n  ]\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Status code is 200', function () { pm.response.to.have.status(200); });",
+              "pm.test('All four horizons predicted', function () { var jsonData = pm.response.json(); pm.expect(jsonData.predictions).to.have.property('7'); pm.expect(jsonData.predictions).to.have.property('15'); pm.expect(jsonData.predictions).to.have.property('30'); pm.expect(jsonData.predictions).to.have.property('90'); });",
+              "pm.test('All horizon predictions non-negative', function () { var jsonData = pm.response.json(); ['7', '15', '30', '90'].forEach(function(h) { pm.expect(jsonData.predictions[h]).to.be.at.least(0); }); });"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ]
+    },
+    {
+      "name": "07. Second Product Forecast (POST /api/v1/forecast/predict)",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "ngrok-skip-browser-warning",
+            "value": "69420",
+            "type": "text"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json",
+            "type": "text"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/forecast/predict",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "v1",
+            "forecast",
+            "predict"
+          ]
+        },
+        "description": "Submits a second verified commercial SKU {{testSku2}} to demonstrate multi-product catalog generalization.",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"stock_code\": \"{{testSku2}}\",\n  \"horizons\": [\n    7,\n    15,\n    30,\n    90\n  ]\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Status code is 200', function () { pm.response.to.have.status(200); });",
+              "pm.test('Stock code matches second SKU', function () { var jsonData = pm.response.json(); pm.expect(jsonData.stock_code).to.eql(pm.collectionVariables.get('testSku2')); });",
+              "pm.test('Predictions returned successfully', function () { var jsonData = pm.response.json(); pm.expect(jsonData.predictions['7']).to.be.at.least(0); pm.expect(jsonData.predictions['30']).to.be.at.least(0); });"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ]
+    },
+    {
+      "name": "08. Unknown SKU Error (POST /api/v1/forecast/predict)",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "ngrok-skip-browser-warning",
+            "value": "69420",
+            "type": "text"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json",
+            "type": "text"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/forecast/predict",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "v1",
+            "forecast",
+            "predict"
+          ]
+        },
+        "description": "Submits nonexistent SKU {{unknownSku}} to demonstrate proper HTTP 404 catalog not found error handling.",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"stock_code\": \"{{unknownSku}}\",\n  \"horizons\": [\n    7,\n    15,\n    30,\n    90\n  ]\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Status code is 404', function () { pm.response.to.have.status(404); });",
+              "pm.test('Detail indicates SKU not found', function () { var jsonData = pm.response.json(); pm.expect(jsonData.detail.toLowerCase()).to.include('not found'); });"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ]
+    },
+    {
+      "name": "09. Genuine Insufficient History Error (POST /api/v1/forecast/predict)",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "ngrok-skip-browser-warning",
+            "value": "69420",
+            "type": "text"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json",
+            "type": "text"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/forecast/predict",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "v1",
+            "forecast",
+            "predict"
+          ]
+        },
+        "description": "Submits SKU {{insufficientHistorySku}} (which has only 9 calendar days of sales history in the catalog) to demonstrate HTTP 422 validation failure.",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"stock_code\": \"{{insufficientHistorySku}}\",\n  \"horizons\": [\n    7,\n    15,\n    30,\n    90\n  ]\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Status code is 422', function () { pm.response.to.have.status(422); });",
+              "pm.test('Detail explains insufficient historical sales data', function () { var jsonData = pm.response.json(); pm.expect(jsonData.detail).to.include('Insufficient historical sales data'); });"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ]
+    },
+    {
+      "name": "10. Invalid Request Validation (POST /api/v1/forecast/predict)",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "ngrok-skip-browser-warning",
+            "value": "69420",
+            "type": "text"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json",
+            "type": "text"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/forecast/predict",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "v1",
+            "forecast",
+            "predict"
+          ]
+        },
+        "description": "Submits an unsupported forecasting horizon [999] to demonstrate schema validation rejection.",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"stock_code\": \"{{testSku1}}\",\n  \"horizons\": [\n    999\n  ]\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Status code is 422', function () { pm.response.to.have.status(422); });",
+              "pm.test('Error reports unsupported horizon', function () { var jsonData = pm.response.json(); pm.expect(JSON.stringify(jsonData)).to.include('Unsupported forecast horizon'); });"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ]
+    },
+    {
+      "name": "11. Missing Required Field (POST /api/v1/forecast/predict)",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "ngrok-skip-browser-warning",
+            "value": "69420",
+            "type": "text"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json",
+            "type": "text"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/forecast/predict",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "v1",
+            "forecast",
+            "predict"
+          ]
+        },
+        "description": "Sends an empty JSON payload omitting mandatory field stock_code to demonstrate Pydantic validation failure.",
+        "body": {
+          "mode": "raw",
+          "raw": "{}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Status code is 422', function () { pm.response.to.have.status(422); });",
+              "pm.test('Validation detail reports missing stock_code', function () { var jsonData = pm.response.json(); pm.expect(JSON.stringify(jsonData)).to.include('stock_code'); });"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ]
+    },
+    {
+      "name": "12. Invalid Endpoint / Not Found (GET /api/v1/nonexistent-endpoint-xyz)",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "ngrok-skip-browser-warning",
+            "value": "69420",
+            "type": "text"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/nonexistent-endpoint-xyz",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "v1",
+            "nonexistent-endpoint-xyz"
+          ]
+        },
+        "description": "Requests a deliberately nonexistent API endpoint to demonstrate HTTP 404 routing error response."
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Status code is 404', function () { pm.response.to.have.status(404); });",
+              "pm.test('Detail indicates route not found', function () { var jsonData = pm.response.json(); pm.expect(jsonData.detail.toLowerCase()).to.include('not found'); });"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Inventory Purchase Recommendations",
+      "description": "Endpoints for calculating explainable inventory replenishment directives, target stock levels, and purchase orders based on lead times, review cycles, and safety stock days.",
+      "item": [
+        {
+          "name": "I01. Stock Purchase Recommendation \u2014 Low Stock",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "ngrok-skip-browser-warning",
+                "value": "69420",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/inventory/recommend",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "inventory",
+                "recommend"
+              ]
+            },
+            "description": "Submits SKU {{testSku1}} with low current stock (50 units), demonstrating a positive purchase recommendation and risk alert.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"stock_code\": \"{{testSku1}}\",\n  \"current_stock\": \"{{currentStock}}\",\n  \"lead_time_days\": \"{{leadTimeDays}}\",\n  \"review_period_days\": \"{{reviewPeriodDays}}\",\n  \"safety_stock_days\": \"{{safetyStockDays}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200', function () { pm.response.to.have.status(200); });",
+                  "pm.test('Recommended purchase quantity is positive', function () { var jsonData = pm.response.json(); pm.expect(jsonData.recommended_purchase_quantity).to.be.above(0); });",
+                  "pm.test('Stock condition indicates risk', function () { var jsonData = pm.response.json(); pm.expect(['CRITICAL', 'ELEVATED']).to.include(jsonData.stock_condition); });",
+                  "pm.test('Calculation explanation present', function () { var jsonData = pm.response.json(); pm.expect(jsonData.calculation_explanation).to.include('Coverage window of 14 days'); });"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "I02. Stock Purchase Recommendation \u2014 Sufficient Stock",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "ngrok-skip-browser-warning",
+                "value": "69420",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/inventory/recommend",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "inventory",
+                "recommend"
+              ]
+            },
+            "description": "Submits SKU {{testSku1}} with abundant current stock (50,000 units), demonstrating a purchase recommendation of exactly 0 and SAFE status.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"stock_code\": \"{{testSku1}}\",\n  \"current_stock\": 50000.0,\n  \"lead_time_days\": 7,\n  \"review_period_days\": 7,\n  \"safety_stock_days\": 3.0\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200', function () { pm.response.to.have.status(200); });",
+                  "pm.test('Recommended purchase quantity is exactly 0', function () { var jsonData = pm.response.json(); pm.expect(jsonData.recommended_purchase_quantity).to.eql(0); });",
+                  "pm.test('Stock condition is SAFE', function () { var jsonData = pm.response.json(); pm.expect(jsonData.stock_condition).to.eql('SAFE'); });",
+                  "pm.test('Recommendation states no reorder required', function () { var jsonData = pm.response.json(); pm.expect(jsonData.recommendation).to.include('No reorder required'); });"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "I03. Stock Purchase Recommendation \u2014 Zero Stock",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "ngrok-skip-browser-warning",
+                "value": "69420",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/inventory/recommend",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "inventory",
+                "recommend"
+              ]
+            },
+            "description": "Submits SKU {{testSku1}} with zero on-hand stock, demonstrating that recommended purchase quantity equals target stock.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"stock_code\": \"{{testSku1}}\",\n  \"current_stock\": 0.0,\n  \"lead_time_days\": 7,\n  \"review_period_days\": 7,\n  \"safety_stock_days\": 3.0\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200', function () { pm.response.to.have.status(200); });",
+                  "pm.test('Purchase quantity equals target stock', function () { var jsonData = pm.response.json(); pm.expect(jsonData.recommended_purchase_quantity).to.eql(jsonData.target_stock); });",
+                  "pm.test('Stock condition is CRITICAL', function () { var jsonData = pm.response.json(); pm.expect(jsonData.stock_condition).to.eql('CRITICAL'); });"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "I04. Stock Purchase Recommendation \u2014 Different Lead Time",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "ngrok-skip-browser-warning",
+                "value": "69420",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/inventory/recommend",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "inventory",
+                "recommend"
+              ]
+            },
+            "description": "Submits SKU {{testSku1}} with an extended 14-day supplier lead time (21-day total coverage), demonstrating how lead time increases target stock.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"stock_code\": \"{{testSku1}}\",\n  \"current_stock\": 200.0,\n  \"lead_time_days\": 14,\n  \"review_period_days\": 7,\n  \"safety_stock_days\": 3.0\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200', function () { pm.response.to.have.status(200); });",
+                  "pm.test('Coverage period equals 21 days', function () { var jsonData = pm.response.json(); pm.expect(jsonData.coverage_period_days).to.eql(21); });",
+                  "pm.test('Forecast demand reflects 21-day coverage', function () { var jsonData = pm.response.json(); pm.expect(jsonData.forecast_demand).to.be.above(0); });",
+                  "pm.test('Purchase quantity calculated non-negative', function () { var jsonData = pm.response.json(); pm.expect(jsonData.recommended_purchase_quantity).to.be.at.least(0); });"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "I05. Invalid Stock Quantity",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "ngrok-skip-browser-warning",
+                "value": "69420",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/inventory/recommend",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "inventory",
+                "recommend"
+              ]
+            },
+            "description": "Submits negative current stock (-50) to demonstrate schema validation failure (HTTP 422).",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"stock_code\": \"{{testSku1}}\",\n  \"current_stock\": -50.0,\n  \"lead_time_days\": 7,\n  \"review_period_days\": 7\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 422', function () { pm.response.to.have.status(422); });",
+                  "pm.test('Validation error mentions current_stock', function () { var jsonData = pm.response.json(); pm.expect(JSON.stringify(jsonData)).to.include('current_stock'); });"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "I06. Unknown SKU Replenishment",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "ngrok-skip-browser-warning",
+                "value": "69420",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/inventory/recommend",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "inventory",
+                "recommend"
+              ]
+            },
+            "description": "Submits unknown SKU {{unknownSku}} to demonstrate HTTP 404 catalog not found error handling in inventory recommendation.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"stock_code\": \"{{unknownSku}}\",\n  \"current_stock\": 100.0,\n  \"lead_time_days\": 7,\n  \"review_period_days\": 7\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 404', function () { pm.response.to.have.status(404); });",
+                  "pm.test('Detail mentions SKU not found', function () { var jsonData = pm.response.json(); pm.expect(jsonData.detail.toLowerCase()).to.include('not found'); });"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "I07. Insufficient History for Replenishment",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "ngrok-skip-browser-warning",
+                "value": "69420",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/inventory/recommend",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "inventory",
+                "recommend"
+              ]
+            },
+            "description": "Submits SKU {{insufficientHistorySku}} (only 9 calendar days) to demonstrate HTTP 422 error handling in inventory recommendation.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"stock_code\": \"{{insufficientHistorySku}}\",\n  \"current_stock\": 100.0,\n  \"lead_time_days\": 7,\n  \"review_period_days\": 7\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 422', function () { pm.response.to.have.status(422); });",
+                  "pm.test('Detail mentions insufficient historical sales data', function () { var jsonData = pm.response.json(); pm.expect(jsonData.detail).to.include('Insufficient historical sales data'); });"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,338 @@
+{
+  "project": "NEXORA \u2013 AI-Powered Retail Management & Intelligence System",
+  "milestone": "Phase 1 (Task 5 Model Training & Serialization)",
+  "dataset_reference": "ml_feature_dataset.csv",
+  "total_dataset_rows": 1074653,
+  "unique_skus": 3922,
+  "training_timestamp": "2026-11-17 01:06:35",
+  "python_version": "3.11.9 (tags/v3.11.9:de54cf5, Apr  2 2024, 10:12:12) [MSC v.1938 64 bit (AMD64)]",
+  "scikit_learn_version": "1.9.1",
+  "feature_columns": [
+    "StockCode",
+    "DayOfWeek",
+    "Month",
+    "DayOfMonth",
+    "Lag1",
+    "Lag7",
+    "Lag14",
+    "Lag28",
+    "RollingMean7",
+    "RollingMean28"
+  ],
+  "categorical_columns": [
+    "StockCode"
+  ],
+  "numerical_columns": [
+    "DayOfWeek",
+    "Month",
+    "DayOfMonth",
+    "Lag1",
+    "Lag7",
+    "Lag14",
+    "Lag28",
+    "RollingMean7",
+    "RollingMean28"
+  ],
+  "encoding_strategy": "OneHotEncoder(max_categories=50, handle_unknown='infrequent_if_exist', sparse_output=False)",
+  "temporal_target_leakage": "None (OneHotEncoder operates strictly on category names without target access)",
+  "unseen_sku_handling": "Maps automatically to infrequent category indicator (scikit-learn native)",
+  "backtesting_strategy": "Single chronological out-of-time holdout per horizon with strict purge/embargo gap",
+  "purge_embargo_rule": "t_train + H < val_start (strict target-window leakage isolation)",
+  "baseline_model": "Weekly-Average Demand-Rate Baseline: y_hat = max(0, H * RollingMean7)",
+  "models": {
+    "D_7": {
+      "horizon_days": 7,
+      "selected_model": "Linear Regression",
+      "model_file": "demand_model_7d.joblib",
+      "split_metadata": {
+        "horizon": 7,
+        "train_samples": 884219,
+        "val_samples": 42091,
+        "train_start_date": "2010-12-29",
+        "train_end_date": "2011-11-07",
+        "train_cutoff": "2011-11-07",
+        "val_start_date": "2011-11-15",
+        "val_end_date": "2011-12-02",
+        "embargo_gap_days": 8,
+        "is_leakage_free": true
+      },
+      "best_metrics": {
+        "model_name": "Linear Regression Pipeline (Ridge alpha=1.0)",
+        "algorithm": "Ridge Linear Regression (OneHot top-50 + StandardScaler)",
+        "fit_time_sec": 1.709,
+        "pred_time_sec": 0.0323,
+        "mae": 37.4318,
+        "rmse": 92.5686,
+        "wape": 55.654,
+        "hyperparameters": {
+          "alpha": 1.0,
+          "max_categories": 50
+        }
+      },
+      "candidate_model_comparison": {
+        "Seasonal Naive": {
+          "model_name": "Weekly-Average Demand-Rate Baseline (Seasonal Naive)",
+          "algorithm": "Seasonal Naive (Weekly Demand Scaled)",
+          "fit_time_sec": 0.001,
+          "pred_time_sec": 0.001,
+          "mae": 44.474,
+          "rmse": 115.7454,
+          "wape": 66.1245,
+          "hyperparameters": {
+            "horizon": 7
+          }
+        },
+        "Linear Regression": {
+          "model_name": "Linear Regression Pipeline (Ridge alpha=1.0)",
+          "algorithm": "Ridge Linear Regression (OneHot top-50 + StandardScaler)",
+          "fit_time_sec": 1.709,
+          "pred_time_sec": 0.0323,
+          "mae": 37.4318,
+          "rmse": 92.5686,
+          "wape": 55.654,
+          "hyperparameters": {
+            "alpha": 1.0,
+            "max_categories": 50
+          }
+        },
+        "Random Forest": {
+          "model_name": "Random Forest Regressor Pipeline",
+          "algorithm": "Random Forest (OneHot top-50, n_estimators=25, max_depth=10)",
+          "fit_time_sec": 23.4,
+          "pred_time_sec": 0.0659,
+          "mae": 48.9813,
+          "rmse": 140.5037,
+          "wape": 72.8259,
+          "hyperparameters": {
+            "n_estimators": 25,
+            "max_depth": 10,
+            "max_categories": 50,
+            "random_state": 42
+          }
+        }
+      }
+    },
+    "D_15": {
+      "horizon_days": 15,
+      "selected_model": "Random Forest",
+      "model_file": "demand_model_15d.joblib",
+      "split_metadata": {
+        "horizon": 15,
+        "train_samples": 816930,
+        "val_samples": 57840,
+        "train_start_date": "2010-12-29",
+        "train_end_date": "2011-10-16",
+        "train_cutoff": "2011-10-16",
+        "val_start_date": "2011-11-01",
+        "val_end_date": "2011-11-24",
+        "embargo_gap_days": 16,
+        "is_leakage_free": true
+      },
+      "best_metrics": {
+        "model_name": "Random Forest Regressor Pipeline",
+        "algorithm": "Random Forest (OneHot top-50, n_estimators=25, max_depth=10)",
+        "fit_time_sec": 20.583,
+        "pred_time_sec": 0.0776,
+        "mae": 72.9252,
+        "rmse": 217.4885,
+        "wape": 50.0048,
+        "hyperparameters": {
+          "n_estimators": 25,
+          "max_depth": 10,
+          "max_categories": 50,
+          "random_state": 42
+        }
+      },
+      "candidate_model_comparison": {
+        "Seasonal Naive": {
+          "model_name": "Weekly-Average Demand-Rate Baseline (Seasonal Naive)",
+          "algorithm": "Seasonal Naive (Weekly Demand Scaled)",
+          "fit_time_sec": 0.001,
+          "pred_time_sec": 0.0012,
+          "mae": 86.868,
+          "rmse": 238.3332,
+          "wape": 59.5654,
+          "hyperparameters": {
+            "horizon": 15
+          }
+        },
+        "Linear Regression": {
+          "model_name": "Linear Regression Pipeline (Ridge alpha=1.0)",
+          "algorithm": "Ridge Linear Regression (OneHot top-50 + StandardScaler)",
+          "fit_time_sec": 1.265,
+          "pred_time_sec": 0.0409,
+          "mae": 74.2055,
+          "rmse": 184.6175,
+          "wape": 50.8827,
+          "hyperparameters": {
+            "alpha": 1.0,
+            "max_categories": 50
+          }
+        },
+        "Random Forest": {
+          "model_name": "Random Forest Regressor Pipeline",
+          "algorithm": "Random Forest (OneHot top-50, n_estimators=25, max_depth=10)",
+          "fit_time_sec": 20.583,
+          "pred_time_sec": 0.0776,
+          "mae": 72.9252,
+          "rmse": 217.4885,
+          "wape": 50.0048,
+          "hyperparameters": {
+            "n_estimators": 25,
+            "max_depth": 10,
+            "max_categories": 50,
+            "random_state": 42
+          }
+        }
+      }
+    },
+    "D_30": {
+      "horizon_days": 30,
+      "selected_model": "Random Forest",
+      "model_file": "demand_model_30d.joblib",
+      "split_metadata": {
+        "horizon": 30,
+        "train_samples": 678252,
+        "val_samples": 100262,
+        "train_start_date": "2010-12-29",
+        "train_end_date": "2011-08-31",
+        "train_cutoff": "2011-08-31",
+        "val_start_date": "2011-10-01",
+        "val_end_date": "2011-11-09",
+        "embargo_gap_days": 31,
+        "is_leakage_free": true
+      },
+      "best_metrics": {
+        "model_name": "Random Forest Regressor Pipeline",
+        "algorithm": "Random Forest (OneHot top-50, n_estimators=25, max_depth=10)",
+        "fit_time_sec": 17.293,
+        "pred_time_sec": 0.1066,
+        "mae": 125.0314,
+        "rmse": 406.2522,
+        "wape": 48.7296,
+        "hyperparameters": {
+          "n_estimators": 25,
+          "max_depth": 10,
+          "max_categories": 50,
+          "random_state": 42
+        }
+      },
+      "candidate_model_comparison": {
+        "Seasonal Naive": {
+          "model_name": "Weekly-Average Demand-Rate Baseline (Seasonal Naive)",
+          "algorithm": "Seasonal Naive (Weekly Demand Scaled)",
+          "fit_time_sec": 0.001,
+          "pred_time_sec": 0.001,
+          "mae": 159.0215,
+          "rmse": 509.0589,
+          "wape": 61.9769,
+          "hyperparameters": {
+            "horizon": 30
+          }
+        },
+        "Linear Regression": {
+          "model_name": "Linear Regression Pipeline (Ridge alpha=1.0)",
+          "algorithm": "Ridge Linear Regression (OneHot top-50 + StandardScaler)",
+          "fit_time_sec": 0.986,
+          "pred_time_sec": 0.0696,
+          "mae": 134.4925,
+          "rmse": 403.8248,
+          "wape": 52.417,
+          "hyperparameters": {
+            "alpha": 1.0,
+            "max_categories": 50
+          }
+        },
+        "Random Forest": {
+          "model_name": "Random Forest Regressor Pipeline",
+          "algorithm": "Random Forest (OneHot top-50, n_estimators=25, max_depth=10)",
+          "fit_time_sec": 17.293,
+          "pred_time_sec": 0.1066,
+          "mae": 125.0314,
+          "rmse": 406.2522,
+          "wape": 48.7296,
+          "hyperparameters": {
+            "n_estimators": 25,
+            "max_depth": 10,
+            "max_categories": 50,
+            "random_state": 42
+          }
+        }
+      }
+    },
+    "D_90": {
+      "horizon_days": 90,
+      "selected_model": "Random Forest",
+      "model_file": "demand_model_90d.joblib",
+      "split_metadata": {
+        "horizon": 90,
+        "train_samples": 320428,
+        "val_samples": 98157,
+        "train_start_date": "2010-12-29",
+        "train_end_date": "2011-05-02",
+        "train_cutoff": "2011-05-02",
+        "val_start_date": "2011-08-01",
+        "val_end_date": "2011-09-10",
+        "embargo_gap_days": 91,
+        "is_leakage_free": true
+      },
+      "best_metrics": {
+        "model_name": "Random Forest Regressor Pipeline",
+        "algorithm": "Random Forest (OneHot top-50, n_estimators=25, max_depth=10)",
+        "fit_time_sec": 6.589,
+        "pred_time_sec": 0.1076,
+        "mae": 343.3591,
+        "rmse": 890.1797,
+        "wape": 53.2187,
+        "hyperparameters": {
+          "n_estimators": 25,
+          "max_depth": 10,
+          "max_categories": 50,
+          "random_state": 42
+        }
+      },
+      "candidate_model_comparison": {
+        "Seasonal Naive": {
+          "model_name": "Weekly-Average Demand-Rate Baseline (Seasonal Naive)",
+          "algorithm": "Seasonal Naive (Weekly Demand Scaled)",
+          "fit_time_sec": 0.001,
+          "pred_time_sec": 0.0015,
+          "mae": 458.6808,
+          "rmse": 1253.707,
+          "wape": 71.0929,
+          "hyperparameters": {
+            "horizon": 90
+          }
+        },
+        "Linear Regression": {
+          "model_name": "Linear Regression Pipeline (Ridge alpha=1.0)",
+          "algorithm": "Ridge Linear Regression (OneHot top-50 + StandardScaler)",
+          "fit_time_sec": 0.457,
+          "pred_time_sec": 0.0599,
+          "mae": 358.9292,
+          "rmse": 925.343,
+          "wape": 55.6319,
+          "hyperparameters": {
+            "alpha": 1.0,
+            "max_categories": 50
+          }
+        },
+        "Random Forest": {
+          "model_name": "Random Forest Regressor Pipeline",
+          "algorithm": "Random Forest (OneHot top-50, n_estimators=25, max_depth=10)",
+          "fit_time_sec": 6.589,
+          "pred_time_sec": 0.1076,
+          "mae": 343.3591,
+          "rmse": 890.1797,
+          "wape": 53.2187,
+          "hyperparameters": {
+            "n_estimators": 25,
+            "max_depth": 10,
+            "max_categories": 50,
+            "random_state": 42
+          }
+        }
+      }
+    }
+  }
+}

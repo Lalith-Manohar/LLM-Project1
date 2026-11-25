@@ -1,0 +1,21 @@
+$kind: http-request
+name: 5. Unknown SKU Error Test (POST /api/v1/forecast/predict)
+description: |-
+  Submits an invalid / unrecognized SKU identifier.
+  Expected: HTTP 404 Not Found.
+url: "{{baseUrl}}/api/v1/forecast/predict"
+method: POST
+headers:
+  - key: Content-Type
+    value: application/json
+  - key: ngrok-skip-browser-warning
+    value: "69420"
+    description: Bypasses the ngrok free-tier browser warning interstitial page.
+body:
+  type: json
+  content: |-
+    {
+      "stock_code": "NON_EXISTENT_SKU_99999"
+    }
+examples: ./.resources/5. Unknown SKU Error Test (POST -api-v1-forecast-predict).resources/examples
+order: 5000
