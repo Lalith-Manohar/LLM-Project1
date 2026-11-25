@@ -1,33 +1,36 @@
-# NEXORA – Database Schema Specification
+# NEXORA — Database Schema Specification
 
 - **Project:** NEXORA – AI-Powered Retail Management & Intelligence System
-- **Document Version:** 2.0 (Technical Blueprint v2.2 & `DDR-01`–`DDR-10` Alignment)
+- **Document Version:** 2.1 (Integrity & Consistency Corrections)
 - **Updated:** 26 November 2026
 - **Target Engine:** MySQL 8.x (`InnoDB`, `utf8mb4`, SQLAlchemy 2.x + Alembic)
 - **Authoritative References:**
   - [NEXORA — Technical Blueprint v1.0.md](NEXORA%20%E2%80%94%20Technical%20Blueprint%20v1.0.md) (`Version 2.2 (Design Decision Resolution)`)
   - [FEATURES_STATUS.md](FEATURES_STATUS.md) (`Version 2.3`)
   - [NEXORA — Application Functionality & System Workflow Guide.md](NEXORA%20%E2%80%94%20Application%20Functionality%20%26%20System%20Workflow%20Guide.md) (`Version 1.0`)
+  - [API_DOCUMENTATION.md](API_DOCUMENTATION.md)
+
+### Document Version History
+
+| Version | Date | Summary |
+| :---: | :---: | :--- |
+| `1.0` | Nov 2026 | Legacy draft claiming 19 tables (22 DDL definitions) with RBAC (`roles`, `permissions`, `role_permissions`, `users`), `activity_logs`, `inventory_alerts`, and default 7-day lead times. |
+| `2.0` | 26 Nov 2026 | Architectural overhaul aligned with Technical Blueprint v2.2 & `DDR-01`–`DDR-10`: removed 4 RBAC tables, replaced auth with 4 UI-only workspaces, expanded to 40 InnoDB tables across 9 schema groups. |
+| **`2.1`** | **26 Nov 2026** | **Integrity & Consistency Corrections:** Unified fractional `DECIMAL(14, 4)` operational quantities; added composite `UNIQUE`/`FOREIGN KEY` cross-table parent-line integrity; replaced `(supplier_id, product_id)` overwrite risk with effective-dated `supplier_products` history + generated single-active/single-preferred uniqueness + PO line snapshots; standardized UI workspace provenance; separated PO workflow app validation from DB storage; aligned `operational_settings` to native MySQL `JSON`; strengthened receipt, shipment, return, demand-adjustment, lifecycle, and `audit_outbox` outage boundaries. |
 
 > [!WARNING]
 > **Implementation Status — `PLANNED` (Zero Live MySQL Tables on `main`):**
-> No live MySQL database tables, SQLAlchemy ORM model classes, or Alembic migrations currently exist on branch `main`. Currently implemented persistence/serving consists solely of offline Phase 1 UCI CSV pipelines, committed `.joblib` model artifacts, and stateless FastAPI inference/recommendation routes. All **40 tables** specified below represent the approved target relational schema across Modules **`M01`–`M18`** and Supporting Capabilities **`SYS-01`–`SYS-04`**.
+> No live MySQL database tables, SQLAlchemy ORM model classes, or Alembic migrations exist on branch `main`. Currently implemented persistence/serving consists solely of offline Phase 1 UCI CSV pipelines, committed `.joblib` model artifacts, and stateless FastAPI forecast/inventory recommendation routes. All **40 tables** specified below represent the planned target relational schema across Modules **`M01`–`M18`** and Supporting Capabilities **`SYS-01`–`SYS-04`**.
 
 ---
 
 ## 1. Database Architecture & Entity-Relationship Diagrams
 
 ### 1.1 Schema Modernization Scope & Old RBAC Removal
-The previous draft schema (`v1.0`) documented a claimed `19`-table design (actually `22` SQL definitions) anchored on traditional user authentication (`roles`, `permissions`, `role_permissions`, `users` with `password_hash`) and `user_id` foreign keys. Per **Technical Blueprint v2.2**, NEXORA **has no login, passwords, sessions, JWT authentication, or server-enforced RBAC**.
-
-All authentication and RBAC structures have been retired from this schema:
+Per **Technical Blueprint v2.2**, NEXORA **has no authentication, login, passwords, sessions, JWTs, or server-enforced RBAC**. All authentication and RBAC structures from `v1.0` (`roles`, `permissions`, `role_permissions`, `users`, `password_hash`, `user_id` FKs) are retired and omitted:
 - **Removed Entities (`4`):** `roles`, `permissions`, `role_permissions`, `users`.
-- **Workspace UI Context Model (`SYS-01`):** Operational interfaces organize navigation and workflow governance across four UI-only workspaces:
-  1. `store_manager` (**Store Manager (Admin)**)
-  2. `inventory_staff` (**Inventory Staff**)
-  3. `purchase_manager` (**Purchase Manager**)
-  4. `finance_staff` (**Finance Staff**)
-- **Workspace Attribution vs. Verified Identity:** Operational, governance, and audit records capture non-authenticated provenance fields (`selected_workspace`, `action_source`, and optional caller-supplied `operator_ref`), **never** claiming cryptographic identity verification or endpoint access security. Future multi-user authentication remains outside the current approved scope.
+- **Workspace UI Context Model (`SYS-01`):** Page 2 organizes views and workflow governance across four UI-only workspaces (`store_manager`, `inventory_staff`, `purchase_manager`, `finance_staff`).
+- **Context vs. Verified Identity:** `selected_workspace`, `action_source`, and optional caller-supplied `operator_ref` provide non-authenticated provenance context only—**never** cryptographic identity verification, session state, or endpoint security authorization. Any future authenticated-user system remains explicitly outside current scope.
 
 ### 1.2 Overview Entity-Relationship Diagram
 
@@ -83,7 +86,6 @@ erDiagram
     PRODUCTS ||--o{ TRANSACTION_ITEMS : sold_in
     PRODUCTS ||--o{ INVOICE_ITEMS : invoiced_in
     PRODUCTS ||--o{ RETURN_ITEMS : returned_in
-    PRODUCTS ||--o{ SHIPMENT_ITEMS : shipped_in
 
     ORDERS ||--|{ ORDER_ITEMS : contains
     ORDERS ||--o{ ORDER_FULFILLMENTS : executes
@@ -93,20 +95,34 @@ erDiagram
     ORDERS ||--o{ SHIPMENTS : splits_into
     ORDER_FULFILLMENTS ||--o{ SHIPMENTS : prepares
     SHIPMENTS ||--|{ SHIPMENT_ITEMS : allocates
-    ORDER_ITEMS ||--o{ SHIPMENT_ITEMS : fulfills_parcel
-    SHIPMENTS ||--o{ PACKING_SLIPS : generates
+    ORDER_ITEMS ||--o{ SHIPMENT_ITEMS : ships_line
+    ORDER_FULFILLMENT_ITEMS ||--o{ SHIPMENT_ITEMS : links_batch_line
+    SHIPMENTS ||--{ PACKING_SLIPS : generates
     SHIPMENTS ||--o{ SHIPMENT_EVENTS : tracks
 
-    ORDERS ||--o{ RETURNS : links
+    ORDERS ||--o{ TRANSACTIONS : realizes_sale
+    ORDER_FULFILLMENTS ||--o{ TRANSACTIONS : settles_batch
+    TRANSACTIONS ||--|{ TRANSACTION_ITEMS : itemizes
+    ORDER_ITEMS ||--o{ TRANSACTION_ITEMS : billed_sale_line
+
+    ORDERS ||--o{ INVOICES : generates
+    ORDER_FULFILLMENTS ||--o{ INVOICES : invoices_batch
+    INVOICES ||--|{ INVOICE_ITEMS : includes
+    ORDER_ITEMS ||--o{ INVOICE_ITEMS : links_order_line
+    INVOICES ||--o{ PAYMENTS : paid_by
+    INVOICES ||--o{ CREDIT_NOTES : credited_by
+
+    ORDERS ||--o{ RETURNS : links_order
+    TRANSACTIONS ||--o{ RETURNS : links_sale
+    INVOICES ||--o{ RETURNS : links_invoice
     RETURNS ||--|{ RETURN_ITEMS : specifies
     ORDER_ITEMS ||--o{ RETURN_ITEMS : returns_from
     RETURNS ||--o| CREDIT_NOTES : issues_credit
-    INVOICES ||--o{ CREDIT_NOTES : credited_by
-    INVOICES ||--|{ INVOICE_ITEMS : includes
-    INVOICES ||--o{ PAYMENTS : paid_by
 ```
 
-### 1.4 Domain ER View B — Inventory, Procurement (`DDR-09`), ML Demand (`DDR-06`) & Governance (`DDR-08`/`DDR-10`)
+*(Note: `order_fulfillment_items` and `shipment_items` derive `product_id` strictly from their required `order_items` parent without duplicating `product_id` columns.)*
+
+### 1.4 Domain ER View B — Inventory, Sourcing (`DDR-07`), Procurement (`DDR-09`), ML Demand (`DDR-06`) & Governance (`DDR-08`/`DDR-10`)
 
 ```mermaid
 erDiagram
@@ -120,6 +136,7 @@ erDiagram
     SUPPLIERS ||--o{ PURCHASE_ORDERS : vendor_on
     PURCHASE_ORDERS ||--|{ PURCHASE_ORDER_ITEMS : orders
     PRODUCTS ||--o{ PURCHASE_ORDER_ITEMS : replenished_in
+    SUPPLIER_PRODUCTS ||--o{ PURCHASE_ORDER_ITEMS : versions_terms
     PURCHASE_ORDERS ||--o{ PURCHASE_ORDER_APPROVALS : audits_review
     PURCHASE_ORDERS ||--o{ PURCHASE_ORDER_RECEIPTS : accepts_delivery
     PURCHASE_ORDER_RECEIPTS ||--|{ PURCHASE_ORDER_RECEIPT_ITEMS : records_qty
@@ -128,21 +145,25 @@ erDiagram
     ORDERS ||--o{ DEMAND_ADJUSTMENTS : adjusts
     ORDER_ITEMS ||--o{ DEMAND_ADJUSTMENTS : reverses_demand
     RETURNS ||--o{ DEMAND_ADJUSTMENTS : triggers_excess_adj
+    PRODUCTS ||--o{ DEMAND_ADJUSTMENTS : indexes_sku
     PRODUCTS ||--o{ DEMAND_QUARANTINE : flags_invalid
     PRODUCTS ||--o{ DAILY_DEMAND_OBSERVATIONS : feeds_ml
     MODEL_RUNS ||--o{ FORECASTS : trains
     PRODUCTS ||--o{ FORECASTS : forecasts
     PRODUCTS ||--o{ PRODUCT_LIFECYCLE_SNAPSHOTS : classifies
     PRODUCTS ||--o{ ANOMALY_EVENTS : detects
+    PRODUCTS ||--o{ ALERTS : scopes_sku
     ANOMALY_EVENTS ||--o{ ALERTS : notifies
     PURCHASE_ORDERS ||--o{ ALERTS : escalates
 ```
 
+*(Note: `purchase_order_receipt_items` derives `product_id` directly from `purchase_order_items`. Three configuration/audit tables—`operational_settings`, `audit_logs`, and `audit_outbox`—are intentionally standalone without operational parent foreign keys.)*
+
 ---
 
-## 2. Relational Schema Groups & Architecture Mapping
+## 2. Relational Schema Groups & Provenance Architecture
 
-The **40 InnoDB tables** organize across nine architectural groups covering all **18 Core Modules (`M01`–`M18`)** and **4 Supporting System Capabilities (`SYS-01`–`SYS-04`)**, plus `operational_settings` and supplementary normalization tables (`order_fulfillment_items`, `purchase_order_approvals`, `purchase_order_receipts`, `purchase_order_receipt_items`, `daily_demand_observations`) explicitly preserving full history and auditability:
+The **40 InnoDB tables** organize across nine domain groups covering all **18 Core Modules (`M01`–`M18`)** and **4 Supporting System Capabilities (`SYS-01`–`SYS-04`)**:
 
 | Schema Group | Modules / Capabilities | Tables Included (`40` Total) | Key Design Decisions Covered |
 | :--- | :--- | :--- | :--- |
@@ -156,47 +177,57 @@ The **40 InnoDB tables** organize across nine architectural groups covering all 
 | **3.8 Demand ML, Lifecycle & Anomalies** | `M07`, `M08`, `M12`, `M13`, `M14`, `M15`, `SYS-03` | `demand_adjustments`, `demand_quarantine`, `daily_demand_observations`, `model_runs`, `forecasts`, `product_lifecycle_snapshots`, `anomaly_events`, `alerts` | `DDR-01`, `DDR-06`, `DDR-08`, `DDR-09` |
 | **3.9 Centralized Audit & Outbox** | `SYS-02`, `SYS-04` | `audit_logs`, `audit_outbox` | `DDR-10` |
 
-### 2.1 Attribution Columns Across Tables (`SYS-01` & `DDR-10` — No Auth RBAC)
-Because NEXORA excludes user accounts and authentication, tables never contain `users.id` foreign keys or credential columns. Instead:
-- **`selected_workspace`** (`ENUM('store_manager', 'inventory_staff', 'purchase_manager', 'finance_staff')`, nullable on system/batch rows) records the UI workspace selected when an operation ran (`X-NEXORA-Workspace`).
-- **`action_source`** (`ENUM('UI', 'API', 'SYSTEM', 'ML_ENGINE')`) records invocation origin.
-- **`operator_ref`** (`VARCHAR(64) NULL`) optionally records caller-supplied reference strings (explicitly supplied during governance/config changes when available; `NULL` when omitted; never treated as authenticated identity).
+### 2.1 Standardized Non-Authenticated Workspace Provenance (`SYS-01` & `DDR-10`)
+NEXORA uses one consistent non-authenticated provenance column triad wherever operations or state transitions are tracked:
+- **`selected_workspace`:** `ENUM('store_manager', 'inventory_staff', 'purchase_manager', 'finance_staff') NULL` — captures the active Page 2 UI workspace (`X-NEXORA-Workspace`). Remains `NULL` for headless API, scheduled batch, CLI seed, or system-generated rows. **Strictly UI navigation context, never authorization.**
+- **`action_source`:** `ENUM('UI', 'API', 'SYSTEM', 'ML_ENGINE') NOT NULL` — cleanly distinguishes human UI-triggered operations (`'UI'`), direct REST/CLI calls (`'API'`), background/automated system jobs (`'SYSTEM'`), and offline ML pipelines (`'ML_ENGINE'`).
+- **`operator_ref`:** `VARCHAR(64) NULL` — optional non-authenticated attribution token supplied explicitly by callers on workflow/governance mutations; defaults to `NULL` and **never implies verified user identity, login, or credentials**.
+
+| Provenance Category | Tables Covered | Schema Representation |
+| :--- | :--- | :--- |
+| **Full Mutation Provenance Triad (`selected_workspace`, `action_source`, `operator_ref`)** | `operational_settings`, `categories`, `products`, `uom_conversions`, `suppliers`, `supplier_products`, `customers`, `orders`, `order_fulfillments`, `transactions`, `inventory_movements`, `purchase_order_approvals`, `purchase_order_receipts`, `invoices`, `payments`, `returns`, `credit_notes`, `shipments`, `packing_slips`, `shipment_events`, `demand_adjustments`, `demand_quarantine`, `forecasts`, `product_lifecycle_snapshots`, `audit_logs` | Stored directly with standardized column names and enums. Master entities (`categories`..`customers`, `operational_settings`) record latest mutating provenance while complete mutation history lives in `audit_logs`. |
+| **Dual-Stage Workflow Provenance (`created_*` + `reviewed_*`)** | `purchase_orders`, `alerts` | `purchase_orders` tracks `created_workspace`/`created_action_source`/`created_operator_ref` and `reviewed_workspace`/`reviewed_action_source`/`reviewed_operator_ref`. `alerts` tracks `created_source`, `acknowledged_workspace`/`acknowledged_operator_ref`, and `resolved_workspace`/`resolved_operator_ref`. |
+| **System / Empirical / Aggregated Tables (`action_source` or none where parent-owned)** | `model_runs`, `anomaly_events`, `daily_demand_observations`, `inventory`, `audit_outbox`, plus the 8 child line tables (`order_items`, `order_fulfillment_items`, `transaction_items`, `purchase_order_items`, `purchase_order_receipt_items`, `invoice_items`, `return_items`, `shipment_items`) | `model_runs` & `anomaly_events` carry `action_source` (`ML_ENGINE`/`SYSTEM`/`API`); `daily_demand_observations` aggregates pre-attributed confirmed orders; `inventory` delegates provenance to `inventory_movements`; `audit_outbox` preserves provenance in its `payload` JSON; child line tables inherit provenance from their parent transaction headers without redundant duplication. |
 
 ---
 
-## 3. Complete Table Definitions (MySQL 8.x `InnoDB`)
+## 3. Complete Table Definitions & Precision Standards (MySQL 8.x `InnoDB`)
 
 > [!NOTE]
-> **Schema Conventions:**
-> - **Data Types:** Identifiers use `BIGINT UNSIGNED` (`AUTO_INCREMENT` PKs). Money uses `DECIMAL(10, 2)` (unit prices/costs) or `DECIMAL(12, 2)` (subtotals, tax, totals, payments, credits, limits). Precision weights/UoM conversions use `DECIMAL(12, 6)` or `DECIMAL(14, 4)`. Booleans use `BOOLEAN` (`TINYINT(1)` alias in MySQL 8.x). Zero `FLOAT` or `DOUBLE` columns exist.
-> - **Master Data vs. Snapshot Fields:** Master tables (`products`, `suppliers`, `customers`, `operational_settings`) hold mutable current reference values (`is_active`, `current_unit_price`, `tax_rate`). Transactional child/document tables (`order_items`, `purchase_orders`, `invoices`, `credit_notes`, `demand_adjustments`, `product_lifecycle_snapshots`, `anomaly_events`) capture **immutable point-in-time snapshots** (`unit_price`, `base_uom_conversion_factor`, `tax_rate`, `billing_snapshot`, `applied_tier1_limit`) so subsequent master/config edits never rewrite history.
-> - **Referential Integrity Default:** Parent-child operational and financial FKs enforce `ON DELETE RESTRICT` so historical records cannot be dropped silently.
+> **Precision, UoM & Integrity Standards (`v2.1`):**
+> - **Quantity Domains & `DECIMAL(14, 4)` Policy:**
+>   1. **Transaction / Document Line Quantity** (`order_items.quantity`, `purchase_order_items.ordered_quantity`, `invoice_items.quantity`, `return_items.quantity`, `shipment_items.quantity`, etc.): stored in `DECIMAL(14, 4)` in the line's recorded UoM (`uom_code`).
+>   2. **Conversion Factor** (`uom_conversions.conversion_to_base`, `order_items.base_uom_conversion_factor`, `demand_adjustments.base_uom_conversion_factor`): stored in `DECIMAL(12, 6)`.
+>   3. **Base-UoM Converted Quantity** (`order_items.base_uom_quantity`, `base_uom_fulfilled_quantity`, `demand_adjustments.base_uom_quantity_delta`, `daily_demand_observations.*_base_uom_qty`): stored in **`DECIMAL(14, 4)`** in `products.base_uom`.
+>   4. **Warehouse Physical & Reserved Stock** (`inventory.current_quantity`, `reserved_quantity`, `minimum_stock`, and `inventory_movements.*_quantity`): stored in **`DECIMAL(14, 4)`** in **`products.base_uom`** so live stock and ML base-UoM demand share identical fixed-point precision without integer truncation or floating-point error.
+>   5. **Integer Non-Quantity Counts:** Calendar/day spans (`lead_time_days`, `horizon_days`, `sku_age_days`, `days_since_last_sale`), revision numbers, retry counts, and order counts remain `INT` / `INT UNSIGNED`.
+> - **Monetary Types:** Unit prices/costs use `DECIMAL(10, 2)`; financial totals, subtotals, taxes, payments, credits, and PO limits use `DECIMAL(12, 2)`. Zero `FLOAT` or `DOUBLE` columns exist.
+> - **Rounding & Unresolved Precision Rule:** Converting `quantity × conversion_to_base` uses fixed-point decimal arithmetic. **Silent rounding that creates or removes physical inventory is prohibited.** Per-SKU discrete-integer vs. fractional unit enforcement and residual sub-`0.0001` rounding policies are documented as an explicit deferred application policy in **Section 9.2**.
+> - **Parent-Child Integrity:** All FKs use `ON DELETE RESTRICT` across business history; composite `UNIQUE` + composite `FOREIGN KEY` constraints enforce parent transaction consistency at DB level wherever MySQL 8.x InnoDB permits.
 
 ---
 
 ### 3.1 Group 1 — Centralized Settings
 
 #### `operational_settings`
-- **Purpose:** Centralized, bounded configuration store governing default currency, store tax rate (`DDR-04`), lifecycle & hybrid anomaly bounds (`DDR-08`), and procurement Tier 1 spending limits / anti-split windows (`DDR-09`), with reset-to-default and Tier 1 fail-closed auditing (`DDR-10`).
+- **Purpose:** Centralized, bounded configuration store governing operational currency (`'INR'`), store tax rate (`DDR-04`), lifecycle & anomaly bounds (`DDR-08`), and PO Tier 1 approval limit / anti-split rolling window (`DDR-09`).
 - **Primary Key:** `id` (`BIGINT UNSIGNED`).
 - **Foreign Keys:** None.
-- **Unique Constraints:** `uq_operational_settings_key` (`setting_key`).
-- **Snapshot vs. Master:** Current live master configuration; changes apply prospectively only while transactional rows and `audit_logs` preserve historical values.
-- **Referential Integrity & Deletion:** System-seeded settings rows must never be deleted during normal operations; updated via Tier 1 audited Store Manager (`Admin`) actions.
+- **Value Representation & Validation:** `setting_value` and `default_value` use native MySQL `JSON NOT NULL` so scalar numbers (`18.00`), integers (`7`), booleans (`true`), strings (`"INR"`), and structured escalation JSON objects are validated natively as well-formed JSON at DB level. Application services enforce `value_type` compatibility (`DECIMAL`/`INTEGER` bounds checking against `min_bound`/`max_bound`, `422` on violation), prospective-only effect, and Tier 1 `audit_logs` capture (`before_values` / `after_values`). Only approved Blueprint settings keys are seeded; arbitrary unapproved parameters are forbidden.
 
 ```sql
 CREATE TABLE operational_settings (
     id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
     setting_key VARCHAR(100) NOT NULL,
-    setting_value VARCHAR(255) NOT NULL,
-    default_value VARCHAR(255) NOT NULL,
+    setting_value JSON NOT NULL,
+    default_value JSON NOT NULL,
     min_bound DECIMAL(14, 4) NULL,
     max_bound DECIMAL(14, 4) NULL,
     value_type ENUM('DECIMAL', 'INTEGER', 'STRING', 'BOOLEAN', 'JSON') NOT NULL,
     domain ENUM('finance', 'lifecycle', 'anomaly', 'procurement', 'inventory') NOT NULL,
     description VARCHAR(255) NOT NULL,
-    updated_workspace ENUM('store_manager', 'inventory_staff', 'purchase_manager', 'finance_staff') NULL,
-    updated_source ENUM('UI', 'API', 'SYSTEM', 'ML_ENGINE') NOT NULL DEFAULT 'SYSTEM',
+    selected_workspace ENUM('store_manager', 'inventory_staff', 'purchase_manager', 'finance_staff') NULL,
+    action_source ENUM('UI', 'API', 'SYSTEM', 'ML_ENGINE') NOT NULL DEFAULT 'SYSTEM',
     operator_ref VARCHAR(64) NULL,
     updated_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),
     CONSTRAINT uq_operational_settings_key UNIQUE (setting_key),
@@ -205,19 +236,18 @@ CREATE TABLE operational_settings (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 ```
 
-*Core Seeded Configuration Keys:* `default_operational_currency` (`'INR'`), `store_tax_rate` (`DECIMAL`, bounds `0.00`–`50.00`), `po_tier1_approval_limit` (`DECIMAL`, `> 0`), `po_split_window_days` (`INTEGER`, `1`–`90`), `po_split_count_threshold` (`INTEGER`, `>= 2`), `lifecycle_hysteresis_windows` (`INTEGER`), `lifecycle_inactivity_days` (`INTEGER`), `anomaly_rolling_window_days` (`INTEGER`), `anomaly_z_threshold` (`DECIMAL`), `anomaly_price_variance_pct` (`DECIMAL`).
+*Approved Seeded Keys:* `default_operational_currency` (`"INR"`), `store_tax_rate` (`DECIMAL`, `0.00`–`50.00`), `po_tier1_approval_limit` (`DECIMAL`, `> 0`), `po_split_window_days` (`INTEGER`, `1`–`90`), `po_split_count_threshold` (`INTEGER`, `>= 2`), `lifecycle_hysteresis_windows` (`INTEGER`), `lifecycle_inactivity_days` (`INTEGER`), `anomaly_rolling_window_days` (`INTEGER`), `anomaly_z_threshold` (`DECIMAL`), `anomaly_price_variance_pct` (`DECIMAL`).
 
 ---
 
 ### 3.2 Group 2 — Retail Foundation, UoM Conversions & Sourcing (`M01`–`M03`)
 
 #### `categories`
-- **Purpose:** Product catalog grouping taxonomy (`M01`) supporting catalog filtering, BI aggregation (`M06`), and seasonality analysis (`M07`).
+- **Purpose:** Product catalog categories (`M01`).
 - **Primary Key:** `id` (`BIGINT UNSIGNED`).
 - **Foreign Keys:** None.
 - **Unique Constraints:** `uq_categories_name` (`name`).
-- **Snapshot vs. Master:** Live catalog metadata.
-- **Referential Integrity & Deletion:** Soft-deactivate via `is_active = FALSE`; referenced categories cannot be hard-deleted (`ON DELETE RESTRICT` on `products.category_id`).
+- **Deletion Behaviour:** Soft-deactivate via `is_active = FALSE` (`ON DELETE RESTRICT` on children).
 
 ```sql
 CREATE TABLE categories (
@@ -225,6 +255,9 @@ CREATE TABLE categories (
     name VARCHAR(100) NOT NULL,
     description VARCHAR(255) NULL,
     is_active BOOLEAN NOT NULL DEFAULT TRUE,
+    selected_workspace ENUM('store_manager', 'inventory_staff', 'purchase_manager', 'finance_staff') NULL,
+    action_source ENUM('UI', 'API', 'SYSTEM', 'ML_ENGINE') NOT NULL DEFAULT 'UI',
+    operator_ref VARCHAR(64) NULL,
     created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     CONSTRAINT uq_categories_name UNIQUE (name),
@@ -233,13 +266,12 @@ CREATE TABLE categories (
 ```
 
 #### `products`
-- **Purpose:** Authoritative master catalog of SKUs (`M01`), unit prices (`INR` operational default), base unit of measure (`base_uom`), UCI provenance indicator, and current `DDR-08` lifecycle stage—strictly decoupled from volatile warehouse counts (`inventory`).
+- **Purpose:** Master SKU catalog (`M01`), holding base pricing (`INR` operational default), canonical `base_uom`, UCI provenance flag, and current cached `DDR-08` `lifecycle_stage` synchronized alongside immutable `product_lifecycle_snapshots`.
 - **Primary Key:** `id` (`BIGINT UNSIGNED`).
 - **Foreign Keys:** `category_id` → `categories(id)` (`ON DELETE RESTRICT`).
 - **Unique Constraints:** `uq_products_stock_code` (`stock_code`).
-- **Check Constraints:** `current_unit_price >= 0.00`, valid `lifecycle_stage` enum (`'Introduction'`, `'Growth'`, `'Maturity'`, `'Decline'`, `'Discontinued'`).
-- **Snapshot vs. Master:** Live commercial master data; price edits update future drafts only without mutating existing orders/invoices/sales.
-- **Referential Integrity & Deletion:** Hard deletion blocked once referenced; use `is_active = FALSE` (soft-deactivation). `lifecycle_stage = 'Discontinued'` requires an explicit authorized manual change (`DDR-08`).
+- **Check Constraints:** `current_unit_price >= 0.00`.
+- **Snapshot vs. Master:** Master data; price updates affect future drafts only.
 
 ```sql
 CREATE TABLE products (
@@ -253,6 +285,9 @@ CREATE TABLE products (
     lifecycle_stage ENUM('Introduction', 'Growth', 'Maturity', 'Decline', 'Discontinued') NOT NULL DEFAULT 'Introduction',
     is_uci_baseline BOOLEAN NOT NULL DEFAULT FALSE,
     is_active BOOLEAN NOT NULL DEFAULT TRUE,
+    selected_workspace ENUM('store_manager', 'inventory_staff', 'purchase_manager', 'finance_staff') NULL,
+    action_source ENUM('UI', 'API', 'SYSTEM', 'ML_ENGINE') NOT NULL DEFAULT 'UI',
+    operator_ref VARCHAR(64) NULL,
     created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     CONSTRAINT uq_products_stock_code UNIQUE (stock_code),
@@ -265,13 +300,12 @@ CREATE TABLE products (
 ```
 
 #### `uom_conversions`
-- **Purpose:** Stores historically traceable, product-specific Unit-of-Measure conversion factors (`uom_code` → `products.base_uom`) supporting B2B case/pack ordering and accurate ML base-unit demand aggregation (`DDR-06`, `M01`, `M05`, `M12`).
+- **Purpose:** Effective-dated, product-specific UoM conversion multipliers (`uom_code` → `products.base_uom`) supporting `DDR-06` base-unit order conversion and ML traceability.
 - **Primary Key:** `id` (`BIGINT UNSIGNED`).
 - **Foreign Keys:** `product_id` → `products(id)` (`ON DELETE RESTRICT`).
 - **Unique Constraints:** `uq_uom_product_code_eff` (`product_id`, `uom_code`, `effective_from`).
 - **Check Constraints:** `conversion_to_base > 0.000000`, `effective_to IS NULL OR effective_to >= effective_from`.
-- **Snapshot vs. Master:** Versioned effective-date rules; inactive or superseded rows are preserved permanently so historical `order_items` and demand aggregates remain verifiable.
-- **Referential Integrity & Deletion:** Retain permanently (`ON DELETE RESTRICT`); deactivate expired mappings via `is_active = FALSE` and `effective_to`.
+- **Deletion Behaviour:** Versioned and retained permanently; expired rules close via `is_active = FALSE` and `effective_to`.
 
 ```sql
 CREATE TABLE uom_conversions (
@@ -282,6 +316,9 @@ CREATE TABLE uom_conversions (
     effective_from DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     effective_to DATETIME NULL,
     is_active BOOLEAN NOT NULL DEFAULT TRUE,
+    selected_workspace ENUM('store_manager', 'inventory_staff', 'purchase_manager', 'finance_staff') NULL,
+    action_source ENUM('UI', 'API', 'SYSTEM', 'ML_ENGINE') NOT NULL DEFAULT 'UI',
+    operator_ref VARCHAR(64) NULL,
     created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT uq_uom_product_code_eff UNIQUE (product_id, uom_code, effective_from),
     CONSTRAINT fk_uom_product FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE RESTRICT,
@@ -292,12 +329,10 @@ CREATE TABLE uom_conversions (
 ```
 
 #### `suppliers`
-- **Purpose:** Vendor directory (`M02`) providing vendor contact profiles and optional supplier-level fallback `lead_time_days` when product-specific `supplier_products.lead_time_days` is unset (`DDR-01`, `DDR-07`).
+- **Purpose:** Vendor master directory (`M02`) supplying fallback `lead_time_days` when `supplier_products.lead_time_days` is unset (`DDR-01`, `DDR-07`).
 - **Primary Key:** `id` (`BIGINT UNSIGNED`).
 - **Foreign Keys:** None.
-- **Check Constraints:** `lead_time_days IS NULL OR (lead_time_days BETWEEN 1 AND 365)` (strictly nullable; **never fabricated** with a synthetic default when unknown per `DDR-01`).
-- **Snapshot vs. Master:** Live vendor master data; historical POs and historical `supplier_products` mappings remain unchanged if vendor details change later.
-- **Referential Integrity & Deletion:** Soft-deactivate via `is_active = FALSE`; referenced suppliers cannot be deleted (`ON DELETE RESTRICT`).
+- **Check Constraints:** `lead_time_days IS NULL OR (lead_time_days BETWEEN 1 AND 365)` (nullable; never fabricated).
 
 ```sql
 CREATE TABLE suppliers (
@@ -309,6 +344,9 @@ CREATE TABLE suppliers (
     address TEXT NULL,
     lead_time_days INT NULL,
     is_active BOOLEAN NOT NULL DEFAULT TRUE,
+    selected_workspace ENUM('store_manager', 'inventory_staff', 'purchase_manager', 'finance_staff') NULL,
+    action_source ENUM('UI', 'API', 'SYSTEM', 'ML_ENGINE') NOT NULL DEFAULT 'UI',
+    operator_ref VARCHAR(64) NULL,
     created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     CONSTRAINT chk_suppliers_lt CHECK (lead_time_days IS NULL OR (lead_time_days BETWEEN 1 AND 365)),
@@ -316,14 +354,14 @@ CREATE TABLE suppliers (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 ```
 
-#### `supplier_products`
-- **Purpose:** Explicit many-to-many supplier-product sourcing table (`DDR-07`) holding supplier SKU part numbers, vendor purchase prices (`DECIMAL`), product-specific lead times (`DDR-01` primary priority), minimum order quantities (MOQs), preferred vendor indicators, and soft-deactivation history.
-- **Primary Key:** `id` (`BIGINT UNSIGNED`).
-- **Foreign Keys:** `supplier_id` → `suppliers(id)` (`ON DELETE RESTRICT`), `product_id` → `products(id)` (`ON DELETE RESTRICT`).
-- **Unique Constraints:** `uq_supplier_product_pair` (`supplier_id`, `product_id`).
-- **Check Constraints:** `purchase_price >= 0.00`, `lead_time_days IS NULL OR (lead_time_days BETWEEN 1 AND 365)`, `minimum_order_quantity >= 1`.
-- **Snapshot vs. Master:** Master sourcing contract terms; deactivated pairs (`is_active = FALSE`) **must be retained permanently** for historical cost and anomaly comparison (`M15`, `DDR-07`, `DDR-09`).
-- **Referential Integrity & Deletion:** Soft-deactivate (`is_active = FALSE`); never hard-deleted once historical POs or cost references exist.
+#### `supplier_products` *(Versioned Historical Sourcing — `DDR-07`)*
+- **Purpose:** Effective-dated many-to-many supplier-product sourcing catalog (`DDR-07`) holding vendor SKU code, `purchase_price`, product-specific `lead_time_days` (`DDR-01` primary), `minimum_order_quantity`, preferred vendor flag, and permanent history of superseded/inactive sourcing terms.
+- **Historical Versioning Strategy (Least-Complex Immutable Design):** Instead of overwriting terms in place (which would destroy past price/LT/MOQ evidence) or adding a duplicate archive table, updates to sourcing terms close the prior active row (`is_active = FALSE`, `is_preferred = FALSE`, `effective_to = NOW(6)`) and insert a new active row (`is_active = TRUE`, `effective_to = NULL`). Old `purchase_order_items` retain their FK `supplier_product_id` directly to the exact historical version row (plus point-in-time snapshots).
+- **Database-Enforced Uniqueness Rules (via MySQL 8.x Stored Generated Columns):**
+  1. `uq_sp_one_active_pair` (`active_supplier_id`, `active_product_id`): guarantees at most **one** active mapping (`is_active = TRUE`) per `(supplier_id, product_id)` while permitting unlimited closed (`is_active = FALSE`) historical versions.
+  2. `uq_sp_one_active_preferred` (`active_preferred_product_id`): guarantees at most **one** active preferred supplier mapping (`is_active = TRUE AND is_preferred = TRUE`) per `product_id`.
+  3. `uq_sp_id_sup_prod` (`id`, `supplier_id`, `product_id`): enables composite FK validation from `purchase_order_items`.
+- **Determining Current Preferred Active Mapping:** Application queries `WHERE product_id = ? AND is_active = TRUE AND is_preferred = TRUE` (`uq_sp_one_active_preferred` returns `0` or `1` row deterministically); if none is preferred, operator selects among active rows or falls back to `suppliers.lead_time_days` (`UNAVAILABLE` if both null per `DDR-01`).
 
 ```sql
 CREATE TABLE supplier_products (
@@ -334,28 +372,45 @@ CREATE TABLE supplier_products (
     purchase_price DECIMAL(10, 2) NOT NULL,
     currency_code CHAR(3) NOT NULL DEFAULT 'INR',
     lead_time_days INT NULL,
-    minimum_order_quantity INT NOT NULL DEFAULT 1,
+    minimum_order_quantity DECIMAL(14, 4) NOT NULL DEFAULT 1.0000,
+    uom_code VARCHAR(32) NOT NULL DEFAULT 'unit',
     is_preferred BOOLEAN NOT NULL DEFAULT FALSE,
     is_active BOOLEAN NOT NULL DEFAULT TRUE,
+    effective_from DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+    effective_to DATETIME(6) NULL,
+    active_supplier_id BIGINT UNSIGNED GENERATED ALWAYS AS (
+        IF(is_active = TRUE, supplier_id, NULL)
+    ) STORED,
+    active_product_id BIGINT UNSIGNED GENERATED ALWAYS AS (
+        IF(is_active = TRUE, product_id, NULL)
+    ) STORED,
+    active_preferred_product_id BIGINT UNSIGNED GENERATED ALWAYS AS (
+        IF(is_active = TRUE AND is_preferred = TRUE, product_id, NULL)
+    ) STORED,
+    selected_workspace ENUM('store_manager', 'inventory_staff', 'purchase_manager', 'finance_staff') NULL,
+    action_source ENUM('UI', 'API', 'SYSTEM', 'ML_ENGINE') NOT NULL DEFAULT 'UI',
+    operator_ref VARCHAR(64) NULL,
     created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-    CONSTRAINT uq_supplier_product_pair UNIQUE (supplier_id, product_id),
+    CONSTRAINT uq_sp_one_active_pair UNIQUE (active_supplier_id, active_product_id),
+    CONSTRAINT uq_sp_one_active_preferred UNIQUE (active_preferred_product_id),
+    CONSTRAINT uq_sp_id_sup_prod UNIQUE (id, supplier_id, product_id),
     CONSTRAINT fk_sp_supplier FOREIGN KEY (supplier_id) REFERENCES suppliers(id) ON DELETE RESTRICT,
     CONSTRAINT fk_sp_product FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE RESTRICT,
     CONSTRAINT chk_sp_price CHECK (purchase_price >= 0.00),
     CONSTRAINT chk_sp_lt CHECK (lead_time_days IS NULL OR (lead_time_days BETWEEN 1 AND 365)),
-    CONSTRAINT chk_sp_moq CHECK (minimum_order_quantity >= 1),
-    INDEX idx_sp_product_pref_active (product_id, is_preferred, is_active),
+    CONSTRAINT chk_sp_moq CHECK (minimum_order_quantity > 0.0000),
+    CONSTRAINT chk_sp_pref_requires_active CHECK (is_preferred = FALSE OR is_active = TRUE),
+    CONSTRAINT chk_sp_effective_window CHECK (effective_to IS NULL OR effective_to >= effective_from),
+    INDEX idx_sp_product_history (product_id, supplier_id, effective_from),
     INDEX idx_sp_supplier_active (supplier_id, is_active)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 ```
 
 #### `customers`
-- **Purpose:** Manually entered customer directory (`M03`) supporting operational B2B/store orders (`M05`), invoice generation (`M17`), and internal dispatch destinations (`M18`), cleanly avoiding automated address scraping from historical UCI records (`EXCL-08`).
+- **Purpose:** Manually maintained customer master directory (`M03`, `EXCL-08`).
 - **Primary Key:** `id` (`BIGINT UNSIGNED`).
-- **Foreign Keys:** None.
-- **Snapshot vs. Master:** Mutable customer master profile; completed invoices freeze a `billing_snapshot` JSON copy and shipments freeze `shipping_address` text so profile updates never mutate past financial or shipping documents.
-- **Referential Integrity & Deletion:** Soft-deactivate via `is_active = FALSE`; referenced customers cannot be deleted (`ON DELETE RESTRICT`).
+- **Snapshot vs. Master:** Master record; `invoices` freeze `billing_snapshot` JSON and `shipments` freeze `shipping_address`.
 
 ```sql
 CREATE TABLE customers (
@@ -371,6 +426,9 @@ CREATE TABLE customers (
     postal_code VARCHAR(20) NOT NULL,
     country VARCHAR(100) NOT NULL DEFAULT 'India',
     is_active BOOLEAN NOT NULL DEFAULT TRUE,
+    selected_workspace ENUM('store_manager', 'inventory_staff', 'purchase_manager', 'finance_staff') NULL,
+    action_source ENUM('UI', 'API', 'SYSTEM', 'ML_ENGINE') NOT NULL DEFAULT 'UI',
+    operator_ref VARCHAR(64) NULL,
     created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     INDEX idx_customers_name_active (customer_name, is_active),
@@ -384,13 +442,10 @@ CREATE TABLE customers (
 ### 3.3 Group 3 — Orders, Reservations, Fulfilment & Sales (`M04`, `M05`, `M06`)
 
 #### `orders`
-- **Purpose:** Controls the customer/B2B order lifecycle (`M05`), separating unconfirmed requests (`draft`/`pending`) from validated confirmed demand (`confirmed`), idempotent partial/full fulfillment (`partially_fulfilled`/`fulfilled`), and `cancelled`. Establishes confirmed B2B demand timed strictly by `requested_delivery_date` (or `DATE(created_at)` when immediate) (`DDR-03`, `DDR-05`, `DDR-06`).
+- **Purpose:** Customer/B2B order lifecycle (`M05`, `DDR-03`, `DDR-05`, `DDR-06`). Drafts reserve `0` stock; confirmation strictly validates `Available Stock >= line base_uom_quantity` before locking `inventory.reserved_quantity` and establishing confirmed B2B demand timed by `requested_delivery_date` (or `DATE(created_at)` for immediate fulfilment). Insufficient-stock confirmations fail atomically (`409`) without bypassing validation or creating sales.
 - **Primary Key:** `id` (`BIGINT UNSIGNED`).
 - **Foreign Keys:** `customer_id` → `customers(id)` (`ON DELETE RESTRICT`).
 - **Unique Constraints:** `uq_orders_number` (`order_number`).
-- **Check Constraints:** `subtotal >= 0.00`, valid `order_status` & `order_demand_type` enums.
-- **Censoring Rule (`DDR-06`):** Order confirmation strictly validates `Available Stock >= quantity`; insufficient stock blocks confirmation (`409`) without bypassing validation. `is_censored_demand` identifies constrained demand observations for downstream ML/anomaly awareness (`M12`, `M15`) rather than permitting unbacked order confirmation or auto-creating sales.
-- **Referential Integrity & Deletion:** Never deleted once recorded; lifecycle closes via `cancelled` or completion.
 
 ```sql
 CREATE TABLE orders (
@@ -406,6 +461,7 @@ CREATE TABLE orders (
     subtotal DECIMAL(12, 2) NOT NULL DEFAULT 0.00,
     notes TEXT NULL,
     selected_workspace ENUM('store_manager', 'inventory_staff', 'purchase_manager', 'finance_staff') NULL,
+    action_source ENUM('UI', 'API', 'SYSTEM', 'ML_ENGINE') NOT NULL DEFAULT 'UI',
     operator_ref VARCHAR(64) NULL,
     confirmed_at DATETIME NULL,
     cancelled_at DATETIME NULL,
@@ -421,43 +477,41 @@ CREATE TABLE orders (
 ```
 
 #### `order_items`
-- **Purpose:** Individual SKU order lines tracking requested/confirmed `quantity`, cumulative `fulfilled_quantity` across multiple partial batches (`DDR-05`), and point-in-time `uom_code` / `base_uom_conversion_factor` snapshots (`DDR-06`).
-- **Primary Key:** `id` (`BIGINT UNSIGNED`).
-- **Foreign Keys:** `order_id` → `orders(id)`, `product_id` → `products(id)` (`ON DELETE RESTRICT`).
-- **Check Constraints:** `quantity > 0`, `0 <= fulfilled_quantity <= quantity`, `base_uom_conversion_factor > 0`, `base_uom_quantity > 0`, `unit_price >= 0.00`, `line_total >= 0.00`.
-- **Snapshot vs. Master:** `unit_price`, `uom_code`, `base_uom_conversion_factor`, and `base_uom_quantity` freeze values at order confirmation/entry so later catalog or UoM edits never rewrite existing order economics or historical demand conversions.
+- **Purpose:** Line items capturing requested/confirmed `quantity` in recorded `uom_code`, cumulative `fulfilled_quantity` (`<= quantity`), and frozen base-UoM equivalents (`base_uom_conversion_factor`, `base_uom_quantity`, `base_uom_fulfilled_quantity`).
+- **Composite Parent Keys Exposed:** `uq_oi_order_item` (`order_id`, `id`) and `uq_oi_order_item_prod` (`order_id`, `id`, `product_id`) allow downstream fulfilment, shipment, invoice, return, and demand-adjustment lines to enforce exact parent-order and product consistency in DDL.
+- **Check Constraints:** `quantity > 0`, `0 <= fulfilled_quantity <= quantity`, `0 <= base_uom_fulfilled_quantity <= base_uom_quantity`, `base_uom_conversion_factor > 0`.
 
 ```sql
 CREATE TABLE order_items (
     id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
     order_id BIGINT UNSIGNED NOT NULL,
     product_id BIGINT UNSIGNED NOT NULL,
-    quantity INT NOT NULL,
-    fulfilled_quantity INT NOT NULL DEFAULT 0,
     uom_code VARCHAR(32) NOT NULL DEFAULT 'unit',
+    quantity DECIMAL(14, 4) NOT NULL,
+    fulfilled_quantity DECIMAL(14, 4) NOT NULL DEFAULT 0.0000,
     base_uom_conversion_factor DECIMAL(12, 6) NOT NULL DEFAULT 1.000000,
     base_uom_quantity DECIMAL(14, 4) NOT NULL,
+    base_uom_fulfilled_quantity DECIMAL(14, 4) NOT NULL DEFAULT 0.0000,
     unit_price DECIMAL(10, 2) NOT NULL,
     line_total DECIMAL(12, 2) NOT NULL,
+    CONSTRAINT uq_oi_order_item UNIQUE (order_id, id),
+    CONSTRAINT uq_oi_order_item_prod UNIQUE (order_id, id, product_id),
     CONSTRAINT fk_order_items_order FOREIGN KEY (order_id) REFERENCES orders(id) ON DELETE RESTRICT,
     CONSTRAINT fk_order_items_product FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE RESTRICT,
-    CONSTRAINT chk_oi_qty CHECK (quantity > 0),
-    CONSTRAINT chk_oi_fulfilled CHECK (fulfilled_quantity >= 0 AND fulfilled_quantity <= quantity),
+    CONSTRAINT chk_oi_qty CHECK (quantity > 0.0000),
+    CONSTRAINT chk_oi_fulfilled CHECK (fulfilled_quantity >= 0.0000 AND fulfilled_quantity <= quantity),
     CONSTRAINT chk_oi_uom_factor CHECK (base_uom_conversion_factor > 0.000000),
     CONSTRAINT chk_oi_base_qty CHECK (base_uom_quantity > 0.0000),
+    CONSTRAINT chk_oi_base_fulfilled CHECK (base_uom_fulfilled_quantity >= 0.0000 AND base_uom_fulfilled_quantity <= base_uom_quantity),
     CONSTRAINT chk_oi_price CHECK (unit_price >= 0.00),
     CONSTRAINT chk_oi_total CHECK (line_total >= 0.00),
-    INDEX idx_oi_order (order_id),
     INDEX idx_oi_product (product_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 ```
 
 #### `order_fulfillments`
-- **Purpose:** Records each distinct fulfillment batch executed against an order (`1:N` batches per order), enforcing **idempotent stock deduction (`DDR-05`)** via unique `idempotency_key` so retries or double-clicks can never deduct `Physical` or `Reserved` stock twice.
-- **Primary Key:** `id` (`BIGINT UNSIGNED`).
-- **Foreign Keys:** `order_id` → `orders(id)` (`ON DELETE RESTRICT`).
-- **Unique Constraints:** `uq_fulfillments_number` (`fulfillment_number`), `uq_fulfillments_idempotency` (`idempotency_key`).
-- **Referential Integrity & Deletion:** Immutable execution record (`ON DELETE RESTRICT`).
+- **Purpose:** Batch headers executing idempotent partial or full fulfilment (`DDR-05`).
+- **Composite Parent Key Exposed:** `uq_of_order_id` (`order_id`, `id`) enforces same-order integrity on `order_fulfillment_items`, `shipments`, `invoices`, and `transactions`.
 
 ```sql
 CREATE TABLE order_fulfillments (
@@ -467,45 +521,45 @@ CREATE TABLE order_fulfillments (
     idempotency_key VARCHAR(128) NOT NULL,
     fulfillment_status ENUM('completed', 'reversed') NOT NULL DEFAULT 'completed',
     selected_workspace ENUM('store_manager', 'inventory_staff', 'purchase_manager', 'finance_staff') NULL,
+    action_source ENUM('UI', 'API', 'SYSTEM', 'ML_ENGINE') NOT NULL DEFAULT 'UI',
     operator_ref VARCHAR(64) NULL,
     notes VARCHAR(255) NULL,
     fulfilled_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
     CONSTRAINT uq_fulfillments_number UNIQUE (fulfillment_number),
     CONSTRAINT uq_fulfillments_idempotency UNIQUE (idempotency_key),
+    CONSTRAINT uq_of_order_id UNIQUE (order_id, id),
     CONSTRAINT fk_fulfillments_order FOREIGN KEY (order_id) REFERENCES orders(id) ON DELETE RESTRICT,
     INDEX idx_fulfillments_order_time (order_id, fulfilled_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 ```
 
 #### `order_fulfillment_items`
-- **Purpose:** Line-level quantities physically fulfilled inside a specific `order_fulfillments` batch, directly anchoring cumulative `order_items.fulfilled_quantity`, `inventory_movements` deductions, and `1:N` split `shipment_items` allocation (`DDR-05`).
-- **Primary Key:** `id` (`BIGINT UNSIGNED`).
-- **Foreign Keys:** `order_fulfillment_id` → `order_fulfillments(id)`, `order_item_id` → `order_items(id)`, `product_id` → `products(id)` (`ON DELETE RESTRICT`).
-- **Unique Constraints:** `uq_fulfill_batch_item` (`order_fulfillment_id`, `order_item_id`).
-- **Check Constraints:** `quantity_fulfilled > 0`.
+- **Purpose:** Line-level batch quantities fulfilled per `order_fulfillments` header (`DDR-05`), deriving `product_id` strictly from `order_items` without redundant column duplication.
+- **Database-Enforced Cross-Table Consistency:** Composite FKs `fk_ofi_fulfill_order` `(order_id, order_fulfillment_id)` and `fk_ofi_item_order` `(order_id, order_item_id)` **guarantee at DB level** that a fulfilment item cannot reference an order item from a different order than its parent fulfilment header.
+- **Composite Key Exposed:** `uq_ofi_ship_link` (`order_id`, `order_fulfillment_id`, `order_item_id`, `id`) binds `shipment_items` back to the exact order, batch, and line.
 
 ```sql
 CREATE TABLE order_fulfillment_items (
     id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    order_id BIGINT UNSIGNED NOT NULL,
     order_fulfillment_id BIGINT UNSIGNED NOT NULL,
     order_item_id BIGINT UNSIGNED NOT NULL,
-    product_id BIGINT UNSIGNED NOT NULL,
-    quantity_fulfilled INT NOT NULL,
-    CONSTRAINT uq_fulfill_batch_item UNIQUE (order_fulfillment_id, order_item_id),
-    CONSTRAINT fk_ofi_fulfillment FOREIGN KEY (order_fulfillment_id) REFERENCES order_fulfillments(id) ON DELETE RESTRICT,
-    CONSTRAINT fk_ofi_order_item FOREIGN KEY (order_item_id) REFERENCES order_items(id) ON DELETE RESTRICT,
-    CONSTRAINT fk_ofi_product FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE RESTRICT,
-    CONSTRAINT chk_ofi_qty CHECK (quantity_fulfilled > 0),
+    quantity_fulfilled DECIMAL(14, 4) NOT NULL,
+    base_uom_quantity_fulfilled DECIMAL(14, 4) NOT NULL,
+    CONSTRAINT uq_ofi_batch_item UNIQUE (order_fulfillment_id, order_item_id),
+    CONSTRAINT uq_ofi_ship_link UNIQUE (order_id, order_fulfillment_id, order_item_id, id),
+    CONSTRAINT fk_ofi_order FOREIGN KEY (order_id) REFERENCES orders(id) ON DELETE RESTRICT,
+    CONSTRAINT fk_ofi_fulfill_order FOREIGN KEY (order_id, order_fulfillment_id) REFERENCES order_fulfillments(order_id, id) ON DELETE RESTRICT,
+    CONSTRAINT fk_ofi_item_order FOREIGN KEY (order_id, order_item_id) REFERENCES order_items(order_id, id) ON DELETE RESTRICT,
+    CONSTRAINT chk_ofi_qty CHECK (quantity_fulfilled > 0.0000),
+    CONSTRAINT chk_ofi_base_qty CHECK (base_uom_quantity_fulfilled > 0.0000),
     INDEX idx_ofi_order_item (order_item_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 ```
 
 #### `transactions` *(Realized Commercial Sales)*
-- **Purpose:** Immutable commercial sales registry (`M04`) unifying read-only historical UCI baselines (`source_origin = 'uci_historical'`, `GBP`) with live store sales (`source_origin = 'operational'`, `INR` default per `DDR-04`), strictly isolating stream classes (`standard`, `cancellation`, `return`, `exceptional`) and keeping realized sales/revenue distinct from `orders` confirmed demand timing (`DDR-06`).
-- **Primary Key:** `id` (`BIGINT UNSIGNED`).
-- **Foreign Keys:** `order_id` → `orders(id)` (nullable for UCI / counter sales), `order_fulfillment_id` → `order_fulfillments(id)` (nullable), `customer_id` → `customers(id)` (nullable for historical UCI rows lacking customer IDs) — all `ON DELETE RESTRICT`.
-- **Snapshot vs. Master:** Freezes transaction currency, applied tax rate/amount (`DDR-04`), and status permanently; reversals change status/compensating entries without destroying historical rows.
-- **Referential Integrity & Deletion:** Permanently retained (`ON DELETE RESTRICT`).
+- **Purpose:** Immutable realized sales registry (`M04`), separating `uci_historical` (`GBP`) from `operational` (`INR`, `DDR-04`), isolating streams (`standard`, `cancellation`, `return`, `exceptional`), and never double-deducting inventory (`DDR-05`).
+- **Database-Enforced Cross-Table Consistency:** Composite `fk_trans_fulfill_order` `(order_id, order_fulfillment_id)` + `CHECK (order_fulfillment_id IS NULL OR order_id IS NOT NULL)` prevents linking a batch belonging to another order; single-column `fk_trans_order` validates `order_id` even when `order_fulfillment_id IS NULL`.
 
 ```sql
 CREATE TABLE transactions (
@@ -525,11 +579,14 @@ CREATE TABLE transactions (
     total_amount DECIMAL(12, 2) NOT NULL,
     status ENUM('completed', 'cancelled', 'reversed') NOT NULL DEFAULT 'completed',
     selected_workspace ENUM('store_manager', 'inventory_staff', 'purchase_manager', 'finance_staff') NULL,
+    action_source ENUM('UI', 'API', 'SYSTEM', 'ML_ENGINE') NOT NULL DEFAULT 'UI',
     operator_ref VARCHAR(64) NULL,
     created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT uq_trans_id_order UNIQUE (id, order_id),
     CONSTRAINT fk_trans_order FOREIGN KEY (order_id) REFERENCES orders(id) ON DELETE RESTRICT,
-    CONSTRAINT fk_trans_fulfillment FOREIGN KEY (order_fulfillment_id) REFERENCES order_fulfillments(id) ON DELETE RESTRICT,
+    CONSTRAINT fk_trans_fulfill_order FOREIGN KEY (order_id, order_fulfillment_id) REFERENCES order_fulfillments(order_id, id) ON DELETE RESTRICT,
     CONSTRAINT fk_trans_customer FOREIGN KEY (customer_id) REFERENCES customers(id) ON DELETE RESTRICT,
+    CONSTRAINT chk_trans_fulfill_needs_order CHECK (order_fulfillment_id IS NULL OR order_id IS NOT NULL),
     CONSTRAINT chk_trans_tax_rate CHECK (tax_rate >= 0.00),
     INDEX idx_trans_invoice (invoice_number),
     INDEX idx_trans_date_origin (transaction_date, source_origin, transaction_type),
@@ -540,24 +597,25 @@ CREATE TABLE transactions (
 ```
 
 #### `transaction_items`
-- **Purpose:** Line-item sale amounts preserving exact `unit_price` (`DECIMAL(10, 2)`) and `line_total` (`DECIMAL(12, 2)`). Allows negative values strictly for historical UCI `'cancellation'` / `'return'` / `'exceptional'` (`Adjust bad debt`) stream fidelity while operational services enforce positive unit prices on `'standard'` commercial sales.
-- **Primary Key:** `id` (`BIGINT UNSIGNED`).
-- **Foreign Keys:** `transaction_id` → `transactions(id)`, `order_item_id` → `order_items(id)` (nullable), `product_id` → `products(id)` (`ON DELETE RESTRICT`).
-- **Check Constraints:** `quantity <> 0`.
+- **Purpose:** Immutable commercial line amounts (`DECIMAL`). When referencing an `order_item_id`, enforces parent `order_id` and `product_id` consistency via composite FKs.
+- **Check Constraints:** `quantity <> 0.0000`, `order_item_id IS NULL OR order_id IS NOT NULL`. *(Allows negative quantities/unit prices strictly for UCI historical `cancellation`/`return`/`exceptional` ingestion; operational services reject non-positive commercial prices.)*
 
 ```sql
 CREATE TABLE transaction_items (
     id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
     transaction_id BIGINT UNSIGNED NOT NULL,
+    order_id BIGINT UNSIGNED NULL,
     order_item_id BIGINT UNSIGNED NULL,
     product_id BIGINT UNSIGNED NOT NULL,
-    quantity INT NOT NULL,
+    quantity DECIMAL(14, 4) NOT NULL,
     unit_price DECIMAL(10, 2) NOT NULL,
     line_total DECIMAL(12, 2) NOT NULL,
     CONSTRAINT fk_ti_transaction FOREIGN KEY (transaction_id) REFERENCES transactions(id) ON DELETE RESTRICT,
-    CONSTRAINT fk_ti_order_item FOREIGN KEY (order_item_id) REFERENCES order_items(id) ON DELETE RESTRICT,
+    CONSTRAINT fk_ti_trans_order FOREIGN KEY (transaction_id, order_id) REFERENCES transactions(id, order_id) ON DELETE RESTRICT,
+    CONSTRAINT fk_ti_oi_order_prod FOREIGN KEY (order_id, order_item_id, product_id) REFERENCES order_items(order_id, id, product_id) ON DELETE RESTRICT,
     CONSTRAINT fk_ti_product FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE RESTRICT,
-    CONSTRAINT chk_ti_qty_nonzero CHECK (quantity <> 0),
+    CONSTRAINT chk_ti_oi_needs_order CHECK (order_item_id IS NULL OR order_id IS NOT NULL),
+    CONSTRAINT chk_ti_qty_nonzero CHECK (quantity <> 0.0000),
     INDEX idx_ti_transaction (transaction_id),
     INDEX idx_ti_product (product_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
@@ -568,74 +626,58 @@ CREATE TABLE transaction_items (
 ### 3.4 Group 4 — Inventory Control & Immutable Movement Ledger (`M09`, `M10`)
 
 #### `inventory`
-- **Purpose:** Authoritative live MySQL stock state (`1:1` per product, `M09`), cleanly separating **`Physical Stock`** (`current_quantity`), **`Reserved Stock`** (`reserved_quantity`), and derived **`Available Stock`** (`current_quantity - reserved_quantity`), paired with safety parameters (`minimum_stock`, `safety_factor = 1.20` default per `DDR-01`).
-- **Primary Key:** `id` (`BIGINT UNSIGNED`).
-- **Foreign Keys:** `product_id` → `products(id)` (`ON DELETE RESTRICT`).
-- **Unique Constraints:** `uq_inventory_product` (`product_id`).
-- **Check Constraints (`DDR-03`):**
-  - `current_quantity >= 0` (`Physical Stock >= 0`)
-  - `reserved_quantity >= 0` (`Reserved Stock >= 0`)
-  - `reserved_quantity <= current_quantity` (`Available Stock >= 0`)
-  - `minimum_stock >= 0`
-  - `safety_factor >= 1.00`
-- **Derived Metrics (Computed / SQL View — Never Stored Duplicate Columns):**
+- **Purpose:** Authoritative live MySQL stock state (`1:1` per SKU, `M09`), holding `Physical Stock` (`current_quantity`) and `Reserved Stock` (`reserved_quantity`) strictly in `products.base_uom` (`DECIMAL(14, 4)`), plus safety settings (`minimum_stock`, `safety_factor = 1.20` default per `DDR-01`).
+- **Derived Metrics (Computed Dynamically / View — Never Duplicated):**
   - `Available Stock = current_quantity - reserved_quantity` (`DDR-03`)
-  - `Incoming Stock = SUM(GREATEST(0, ordered_quantity - received_quantity))` strictly across `purchase_orders.order_status IN ('approved', 'partially_received')` (`DDR-02`)
+  - `Incoming Stock = SUM(GREATEST(0.0000, ordered_quantity - received_quantity))` in base UoM strictly from `purchase_orders.order_status IN ('approved', 'partially_received')` (`DDR-02`)
   - `Projected Available Stock = Available Stock + Incoming Stock` (`DDR-02`, `DDR-03`)
 
 ```sql
 CREATE TABLE inventory (
     id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
     product_id BIGINT UNSIGNED NOT NULL,
-    current_quantity INT NOT NULL DEFAULT 0,
-    reserved_quantity INT NOT NULL DEFAULT 0,
-    minimum_stock INT NOT NULL DEFAULT 10,
+    current_quantity DECIMAL(14, 4) NOT NULL DEFAULT 0.0000,
+    reserved_quantity DECIMAL(14, 4) NOT NULL DEFAULT 0.0000,
+    minimum_stock DECIMAL(14, 4) NOT NULL DEFAULT 10.0000,
     safety_factor DECIMAL(4, 2) NOT NULL DEFAULT 1.20,
     updated_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),
     CONSTRAINT uq_inventory_product UNIQUE (product_id),
     CONSTRAINT fk_inventory_product FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE RESTRICT,
-    CONSTRAINT chk_inv_phys_nonneg CHECK (current_quantity >= 0),
-    CONSTRAINT chk_inv_res_nonneg CHECK (reserved_quantity >= 0),
+    CONSTRAINT chk_inv_phys_nonneg CHECK (current_quantity >= 0.0000),
+    CONSTRAINT chk_inv_res_nonneg CHECK (reserved_quantity >= 0.0000),
     CONSTRAINT chk_inv_avail_nonneg CHECK (reserved_quantity <= current_quantity),
-    CONSTRAINT chk_inv_min_stock CHECK (minimum_stock >= 0),
+    CONSTRAINT chk_inv_min_stock CHECK (minimum_stock >= 0.0000),
     CONSTRAINT chk_inv_safety_factor CHECK (safety_factor >= 1.00)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 ```
 
 #### `inventory_movements`
-- **Purpose:** Immutable append-only warehouse physical delta ledger (`M10`) recording every unit change (`adjustment`, `purchase_receipt`, `sale_fulfillment`, `return_restock`, `damaged`), chaining before/after balances atomically inside the same InnoDB transaction that updates `inventory.current_quantity`. Replaces the obsolete `created_by -> users(id)` FK with UI workspace/source attribution (`selected_workspace`, `action_source`, optional `operator_ref`).
-- **Primary Key:** `id` (`BIGINT UNSIGNED`).
-- **Foreign Keys:** `product_id` → `products(id)` (`ON DELETE RESTRICT`).
-- **Check Constraints:**
-  - `quantity_delta <> 0`
-  - `previous_quantity >= 0` and `resulting_quantity >= 0`
-  - `resulting_quantity = previous_quantity + quantity_delta`
-  - Directional sign enforcement (`purchase_receipt` & `return_restock` `> 0`; `sale_fulfillment` & `damaged` `< 0`).
-- **Referential Integrity & Deletion:** Permanently append-only (`UPDATE`/`DELETE` forbidden by API & DB operations).
+- **Purpose:** Immutable append-only warehouse delta ledger (`M10`) recording every physical unit delta in `products.base_uom` (`DECIMAL(14, 4)`) inside the exact ACID transaction mutating `inventory.current_quantity`.
+- **Check Constraints:** Exact balance math (`resulting_quantity = previous_quantity + quantity_delta >= 0.0000`), non-zero delta, and signed direction rules per `movement_type`.
 
 ```sql
 CREATE TABLE inventory_movements (
     id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
     product_id BIGINT UNSIGNED NOT NULL,
     movement_type ENUM('adjustment', 'purchase_receipt', 'sale_fulfillment', 'return_restock', 'damaged') NOT NULL,
-    quantity_delta INT NOT NULL,
-    previous_quantity INT NOT NULL,
-    resulting_quantity INT NOT NULL,
+    quantity_delta DECIMAL(14, 4) NOT NULL,
+    previous_quantity DECIMAL(14, 4) NOT NULL,
+    resulting_quantity DECIMAL(14, 4) NOT NULL,
     reference_type ENUM('onboarding', 'manual', 'order', 'purchase_order', 'return') NOT NULL,
     reference_id BIGINT UNSIGNED NULL,
     reason VARCHAR(255) NULL,
     selected_workspace ENUM('store_manager', 'inventory_staff', 'purchase_manager', 'finance_staff') NULL,
-    action_source ENUM('UI', 'API', 'SYSTEM') NOT NULL DEFAULT 'UI',
+    action_source ENUM('UI', 'API', 'SYSTEM', 'ML_ENGINE') NOT NULL DEFAULT 'UI',
     operator_ref VARCHAR(64) NULL,
     created_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
     CONSTRAINT fk_im_product FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE RESTRICT,
-    CONSTRAINT chk_im_delta_nonzero CHECK (quantity_delta <> 0),
-    CONSTRAINT chk_im_prev_nonneg CHECK (previous_quantity >= 0),
-    CONSTRAINT chk_im_res_nonneg CHECK (resulting_quantity >= 0),
+    CONSTRAINT chk_im_delta_nonzero CHECK (quantity_delta <> 0.0000),
+    CONSTRAINT chk_im_prev_nonneg CHECK (previous_quantity >= 0.0000),
+    CONSTRAINT chk_im_res_nonneg CHECK (resulting_quantity >= 0.0000),
     CONSTRAINT chk_im_math CHECK (resulting_quantity = previous_quantity + quantity_delta),
     CONSTRAINT chk_im_sign CHECK (
-        (movement_type NOT IN ('purchase_receipt', 'return_restock') OR quantity_delta > 0) AND
-        (movement_type NOT IN ('sale_fulfillment', 'damaged') OR quantity_delta < 0)
+        (movement_type NOT IN ('purchase_receipt', 'return_restock') OR quantity_delta > 0.0000) AND
+        (movement_type NOT IN ('sale_fulfillment', 'damaged') OR quantity_delta < 0.0000)
     ),
     INDEX idx_im_product_time (product_id, created_at),
     INDEX idx_im_type_time (movement_type, created_at),
@@ -648,13 +690,9 @@ CREATE TABLE inventory_movements (
 ### 3.5 Group 5 — Procurement, Tiered Approvals & Receipts (`M11`, `DDR-02`, `DDR-09`)
 
 #### `purchase_orders`
-- **Purpose:** Governs supplier Purchase Orders (`M11`) across `draft`, `submitted`, `approved`, `rejected`, `partially_received`, `received`, and `cancelled`, enforcing `DDR-02` (`Incoming Stock` filtered strictly to `approved` & `partially_received`), `DDR-09` dual-control escalation metadata (`approval_tier`, `escalation_required`, `split_review_flagged`, `applied_tier1_limit`), post-approval edit invalidation, and `EXCL-03` zero auto-dispatch. Replaces `created_by`/`approved_by -> users(id)` with workspace governance columns.
-- **Primary Key:** `id` (`BIGINT UNSIGNED`).
-- **Foreign Keys:** `supplier_id` → `suppliers(id)` (`ON DELETE RESTRICT`).
-- **Unique Constraints:** `uq_po_number` (`po_number`).
-- **Check Constraints:** `total_cost >= 0.00`, `applied_tier1_limit IS NULL OR applied_tier1_limit > 0.00`.
-- **Snapshot vs. Master:** `applied_tier1_limit` snapshots the Tier 1 approval limit evaluated at review time so subsequent changes to `operational_settings.po_tier1_approval_limit` never retroactively invalidate existing approved POs (`DDR-09`).
-- **Referential Integrity & Deletion:** Retain permanently once submitted, approved, rejected, or received (`ON DELETE RESTRICT`).
+- **Purpose:** Supplier Purchase Order header (`M11`) enforcing `DDR-02` (`Incoming Stock` derived solely from `approved` & `partially_received` POs), `DDR-09` dual-control governance snapshots (`approval_tier`, `applied_tier1_limit`, `escalation_required`, `split_review_flagged`), and `EXCL-03` (zero automated vendor dispatch).
+- **Workflow Boundary:** `created_workspace` / `reviewed_workspace` / `*_operator_ref` provide UI attribution only—never verified user security; workflow gating runs inside locked application approval transactions (Section 6).
+- **Composite Parent Keys Exposed:** `uq_po_sup_id` (`supplier_id`, `id`) binds PO lines to the supplier's historical sourcing mapping version.
 
 ```sql
 CREATE TABLE purchase_orders (
@@ -671,15 +709,18 @@ CREATE TABLE purchase_orders (
     escalation_required BOOLEAN NOT NULL DEFAULT FALSE,
     escalation_reason VARCHAR(255) NULL,
     split_review_flagged BOOLEAN NOT NULL DEFAULT FALSE,
-    created_workspace ENUM('store_manager', 'inventory_staff', 'purchase_manager', 'finance_staff') NOT NULL DEFAULT 'purchase_manager',
+    created_workspace ENUM('store_manager', 'inventory_staff', 'purchase_manager', 'finance_staff') NULL,
+    created_action_source ENUM('UI', 'API', 'SYSTEM', 'ML_ENGINE') NOT NULL DEFAULT 'UI',
     created_operator_ref VARCHAR(64) NULL,
     reviewed_workspace ENUM('store_manager', 'inventory_staff', 'purchase_manager', 'finance_staff') NULL,
+    reviewed_action_source ENUM('UI', 'API', 'SYSTEM', 'ML_ENGINE') NULL,
     reviewed_operator_ref VARCHAR(64) NULL,
     review_notes TEXT NULL,
     reviewed_at DATETIME(6) NULL,
     created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     CONSTRAINT uq_po_number UNIQUE (po_number),
+    CONSTRAINT uq_po_sup_id UNIQUE (supplier_id, id),
     CONSTRAINT fk_po_supplier FOREIGN KEY (supplier_id) REFERENCES suppliers(id) ON DELETE RESTRICT,
     CONSTRAINT chk_po_total CHECK (total_cost >= 0.00),
     CONSTRAINT chk_po_limit CHECK (applied_tier1_limit IS NULL OR applied_tier1_limit > 0.00),
@@ -689,42 +730,47 @@ CREATE TABLE purchase_orders (
 ```
 
 #### `purchase_order_items`
-- **Purpose:** PO SKU lines tracking `ordered_quantity`, cumulative `received_quantity` across partial/full receipts, point-in-time `unit_cost`, and `line_total`. Feeds `Incoming Stock = SUM(ordered_quantity - received_quantity)` when parent `order_status IN ('approved', 'partially_received')` (`DDR-02`).
-- **Primary Key:** `id` (`BIGINT UNSIGNED`).
-- **Foreign Keys:** `purchase_order_id` → `purchase_orders(id)`, `product_id` → `products(id)` (`ON DELETE RESTRICT`).
-- **Check Constraints:** `ordered_quantity > 0`, `0 <= received_quantity <= ordered_quantity`, `unit_cost >= 0.00`, `line_total >= 0.00`.
+- **Purpose:** PO SKU lines (`DECIMAL(14, 4)` quantities, `ordered_quantity` & `received_quantity` stored cleanly in `products.base_uom` or UoM-aligned base units, `0 <= received_quantity <= ordered_quantity`). Links optionally to exact historical `supplier_products` version (`supplier_product_id`) while freezing point-in-time `unit_cost`, `supplier_product_code_snapshot`, `lead_time_days_snapshot`, and `moq_snapshot` (`DDR-07`).
+- **Database-Enforced Cross-Table Consistency:** `fk_poi_po_sup` `(supplier_id, purchase_order_id)` matches `purchase_orders(supplier_id, id)` and `fk_poi_sp_ver` `(supplier_product_id, supplier_id, product_id)` guarantees any linked sourcing row belongs to the exact same supplier and SKU! `uq_poi_po_item` `(purchase_order_id, id)` enforces same-PO receipt linkage.
 
 ```sql
 CREATE TABLE purchase_order_items (
     id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
     purchase_order_id BIGINT UNSIGNED NOT NULL,
+    supplier_id BIGINT UNSIGNED NOT NULL,
     product_id BIGINT UNSIGNED NOT NULL,
-    ordered_quantity INT NOT NULL,
-    received_quantity INT NOT NULL DEFAULT 0,
+    supplier_product_id BIGINT UNSIGNED NULL,
+    supplier_product_code_snapshot VARCHAR(64) NULL,
+    lead_time_days_snapshot INT NULL,
+    moq_snapshot DECIMAL(14, 4) NULL,
+    ordered_quantity DECIMAL(14, 4) NOT NULL,
+    received_quantity DECIMAL(14, 4) NOT NULL DEFAULT 0.0000,
     unit_cost DECIMAL(10, 2) NOT NULL,
     line_total DECIMAL(12, 2) NOT NULL,
+    CONSTRAINT uq_poi_po_item UNIQUE (purchase_order_id, id),
     CONSTRAINT fk_poi_po FOREIGN KEY (purchase_order_id) REFERENCES purchase_orders(id) ON DELETE RESTRICT,
+    CONSTRAINT fk_poi_po_sup FOREIGN KEY (supplier_id, purchase_order_id) REFERENCES purchase_orders(supplier_id, id) ON DELETE RESTRICT,
     CONSTRAINT fk_poi_product FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE RESTRICT,
-    CONSTRAINT chk_poi_ordered CHECK (ordered_quantity > 0),
-    CONSTRAINT chk_poi_received CHECK (received_quantity >= 0 AND received_quantity <= ordered_quantity),
+    CONSTRAINT fk_poi_sp_ver FOREIGN KEY (supplier_product_id, supplier_id, product_id) REFERENCES supplier_products(id, supplier_id, product_id) ON DELETE RESTRICT,
+    CONSTRAINT chk_poi_ordered CHECK (ordered_quantity > 0.0000),
+    CONSTRAINT chk_poi_received CHECK (received_quantity >= 0.0000 AND received_quantity <= ordered_quantity),
     CONSTRAINT chk_poi_cost CHECK (unit_cost >= 0.00),
     CONSTRAINT chk_poi_total CHECK (line_total >= 0.00),
-    INDEX idx_poi_po (purchase_order_id),
-    INDEX idx_poi_product (product_id)
+    CONSTRAINT chk_poi_lt_snap CHECK (lead_time_days_snapshot IS NULL OR (lead_time_days_snapshot BETWEEN 1 AND 365)),
+    CONSTRAINT chk_poi_moq_snap CHECK (moq_snapshot IS NULL OR moq_snapshot > 0.0000),
+    INDEX idx_poi_product (product_id),
+    INDEX idx_poi_sp (supplier_product_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 ```
 
 #### `purchase_order_approvals`
-- **Purpose:** Append-only approval & governance history (`DDR-09`) preserving every `submitted`, `escalated`, `approved`, `rejected`, `invalidated`, and `cancelled` decision—guaranteeing earlier rejections, escalation triggers, or invalidated Tier 1 approvals remain traceable if a PO is later amended and re-submitted.
-- **Primary Key:** `id` (`BIGINT UNSIGNED`).
-- **Foreign Keys:** `purchase_order_id` → `purchase_orders(id)` (`ON DELETE RESTRICT`).
-- **Snapshot vs. Master:** Snapshots `po_total_cost` and `tier1_limit_snapshot` evaluated at that event.
-- **Referential Integrity & Deletion:** Permanently append-only (`ON DELETE RESTRICT`).
+- **Purpose:** Append-only PO review/governance ledger (`DDR-09`) preserving every `submitted`, `escalated`, `approved`, `rejected`, `invalidated`, and `cancelled` event plus optional `idempotency_key` (`UNIQUE`) for safe retry/duplicate-click suppression. Cannot be deleted (`ON DELETE RESTRICT`).
 
 ```sql
 CREATE TABLE purchase_order_approvals (
     id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
     purchase_order_id BIGINT UNSIGNED NOT NULL,
+    idempotency_key VARCHAR(128) NULL,
     decision_event ENUM('submitted', 'escalated', 'approved', 'rejected', 'invalidated', 'cancelled') NOT NULL,
     approval_tier ENUM('tier1_routine', 'tier2_store_manager') NULL,
     po_total_cost DECIMAL(12, 2) NOT NULL,
@@ -733,8 +779,10 @@ CREATE TABLE purchase_order_approvals (
     split_review_flagged BOOLEAN NOT NULL DEFAULT FALSE,
     review_notes TEXT NULL,
     selected_workspace ENUM('store_manager', 'inventory_staff', 'purchase_manager', 'finance_staff') NULL,
+    action_source ENUM('UI', 'API', 'SYSTEM', 'ML_ENGINE') NOT NULL DEFAULT 'UI',
     operator_ref VARCHAR(64) NULL,
     event_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+    CONSTRAINT uq_poa_idempotency UNIQUE (idempotency_key),
     CONSTRAINT fk_poa_po FOREIGN KEY (purchase_order_id) REFERENCES purchase_orders(id) ON DELETE RESTRICT,
     CONSTRAINT chk_poa_total CHECK (po_total_cost >= 0.00),
     INDEX idx_poa_po_time (purchase_order_id, event_at)
@@ -742,10 +790,7 @@ CREATE TABLE purchase_order_approvals (
 ```
 
 #### `purchase_order_receipts`
-- **Purpose:** Header log of each physical supplier delivery batch against an `approved` or `partially_received` PO (`M11`), supporting multiple partial deliveries and idempotent submission (`DDR-02`, `DDR-10`).
-- **Primary Key:** `id` (`BIGINT UNSIGNED`).
-- **Foreign Keys:** `purchase_order_id` → `purchase_orders(id)` (`ON DELETE RESTRICT`).
-- **Unique Constraints:** `uq_por_number` (`receipt_number`), `uq_por_idempotency` (`idempotency_key`).
+- **Purpose:** Delivery receipt header (`M11`, `DDR-02`) with unique `idempotency_key` preventing duplicate receipt submissions. Exposes `uq_por_po_id` (`purchase_order_id`, `id`) for child line enforcement.
 
 ```sql
 CREATE TABLE purchase_order_receipts (
@@ -755,34 +800,33 @@ CREATE TABLE purchase_order_receipts (
     idempotency_key VARCHAR(128) NOT NULL,
     notes VARCHAR(255) NULL,
     selected_workspace ENUM('store_manager', 'inventory_staff', 'purchase_manager', 'finance_staff') NULL,
+    action_source ENUM('UI', 'API', 'SYSTEM', 'ML_ENGINE') NOT NULL DEFAULT 'UI',
     operator_ref VARCHAR(64) NULL,
     received_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
     CONSTRAINT uq_por_number UNIQUE (receipt_number),
     CONSTRAINT uq_por_idempotency UNIQUE (idempotency_key),
+    CONSTRAINT uq_por_po_id UNIQUE (purchase_order_id, id),
     CONSTRAINT fk_por_po FOREIGN KEY (purchase_order_id) REFERENCES purchase_orders(id) ON DELETE RESTRICT,
     INDEX idx_por_po_time (purchase_order_id, received_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 ```
 
 #### `purchase_order_receipt_items`
-- **Purpose:** Line-level supplier receipt quantities matching each delivery batch (`purchase_order_receipts`) to `purchase_order_items` and downstream `inventory_movements` (`purchase_receipt`).
-- **Primary Key:** `id` (`BIGINT UNSIGNED`).
-- **Foreign Keys:** `receipt_id` → `purchase_order_receipts(id)`, `purchase_order_item_id` → `purchase_order_items(id)`, `product_id` → `products(id)` (`ON DELETE RESTRICT`).
-- **Unique Constraints:** `uq_pori_receipt_item` (`receipt_id`, `purchase_order_item_id`).
-- **Check Constraints:** `quantity_received > 0`.
+- **Purpose:** Received line quantities (`DECIMAL(14, 4)`), deriving `product_id` directly from `purchase_order_items` without column duplication.
+- **Database-Enforced Cross-Table Consistency:** Composite FKs `fk_pori_receipt_po` `(purchase_order_id, receipt_id)` and `fk_pori_item_po` `(purchase_order_id, purchase_order_item_id)` strictly enforce that a receipt item belongs to the exact same `purchase_order_id` as both its receipt header and PO line.
 
 ```sql
 CREATE TABLE purchase_order_receipt_items (
     id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    purchase_order_id BIGINT UNSIGNED NOT NULL,
     receipt_id BIGINT UNSIGNED NOT NULL,
     purchase_order_item_id BIGINT UNSIGNED NOT NULL,
-    product_id BIGINT UNSIGNED NOT NULL,
-    quantity_received INT NOT NULL,
+    quantity_received DECIMAL(14, 4) NOT NULL,
     CONSTRAINT uq_pori_receipt_item UNIQUE (receipt_id, purchase_order_item_id),
-    CONSTRAINT fk_pori_receipt FOREIGN KEY (receipt_id) REFERENCES purchase_order_receipts(id) ON DELETE RESTRICT,
-    CONSTRAINT fk_pori_poi FOREIGN KEY (purchase_order_item_id) REFERENCES purchase_order_items(id) ON DELETE RESTRICT,
-    CONSTRAINT fk_pori_product FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE RESTRICT,
-    CONSTRAINT chk_pori_qty CHECK (quantity_received > 0),
+    CONSTRAINT fk_pori_po FOREIGN KEY (purchase_order_id) REFERENCES purchase_orders(id) ON DELETE RESTRICT,
+    CONSTRAINT fk_pori_receipt_po FOREIGN KEY (purchase_order_id, receipt_id) REFERENCES purchase_order_receipts(purchase_order_id, id) ON DELETE RESTRICT,
+    CONSTRAINT fk_pori_item_po FOREIGN KEY (purchase_order_id, purchase_order_item_id) REFERENCES purchase_order_items(purchase_order_id, id) ON DELETE RESTRICT,
+    CONSTRAINT chk_pori_qty CHECK (quantity_received > 0.0000),
     INDEX idx_pori_poi (purchase_order_item_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 ```
@@ -792,12 +836,8 @@ CREATE TABLE purchase_order_receipt_items (
 ### 3.6 Group 6 — Billing, Finance & Return Intelligence (`M16`, `M17`, `DDR-04`)
 
 #### `invoices`
-- **Purpose:** Immutable customer invoice accounting ledger (`M17`) supporting `INR` operational default (`DDR-04`), centrally configured historical `tax_rate` snapshots, frozen customer `billing_snapshot` JSON, payment collection tracking (`amount_paid`), and credit-note reconciliation. Excludes external tax/e-way bill portal APIs (`EXCL-01`) and never overrides `M12` demand timing (`DDR-06`).
-- **Primary Key:** `id` (`BIGINT UNSIGNED`).
-- **Foreign Keys:** `order_id` → `orders(id)` (nullable), `order_fulfillment_id` → `order_fulfillments(id)` (nullable), `customer_id` → `customers(id)` (`ON DELETE RESTRICT`).
-- **Unique Constraints:** `uq_invoices_number` (`invoice_number`).
-- **Check Constraints:** `subtotal >= 0.00`, `tax_rate >= 0.00`, `tax_amount >= 0.00`, `grand_total >= 0.00`, `amount_paid >= 0.00`, `amount_paid <= grand_total`.
-- **Snapshot vs. Master:** `billing_snapshot`, `currency_code`, `tax_rate`, `tax_amount`, `subtotal`, and `grand_total` are frozen at creation and must never mutate if `operational_settings` (`store_tax_rate`) or `customers` change later.
+- **Purpose:** Immutable `INR`-default customer billing ledger (`M17`, `DDR-04`, `EXCL-01`), freezing `billing_snapshot`, `currency_code`, `tax_rate`, and `tax_amount` at issuance.
+- **Database-Enforced Cross-Table Consistency:** Composite `fk_inv_fulfill_order` `(order_id, order_fulfillment_id)` + `CHECK (order_fulfillment_id IS NULL OR order_id IS NOT NULL)` guarantees that any linked fulfilment belongs strictly to `invoices.order_id`. Exposes `uq_inv_id_order` (`id`, `order_id`) for `invoice_items` enforcement.
 
 ```sql
 CREATE TABLE invoices (
@@ -816,12 +856,15 @@ CREATE TABLE invoices (
     amount_paid DECIMAL(12, 2) NOT NULL DEFAULT 0.00,
     payment_status ENUM('unpaid', 'partially_paid', 'paid', 'partially_credited', 'refunded') NOT NULL DEFAULT 'unpaid',
     selected_workspace ENUM('store_manager', 'inventory_staff', 'purchase_manager', 'finance_staff') NULL,
+    action_source ENUM('UI', 'API', 'SYSTEM', 'ML_ENGINE') NOT NULL DEFAULT 'UI',
     operator_ref VARCHAR(64) NULL,
     created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT uq_invoices_number UNIQUE (invoice_number),
+    CONSTRAINT uq_inv_id_order UNIQUE (id, order_id),
     CONSTRAINT fk_inv_order FOREIGN KEY (order_id) REFERENCES orders(id) ON DELETE RESTRICT,
-    CONSTRAINT fk_inv_fulfillment FOREIGN KEY (order_fulfillment_id) REFERENCES order_fulfillments(id) ON DELETE RESTRICT,
+    CONSTRAINT fk_inv_fulfill_order FOREIGN KEY (order_id, order_fulfillment_id) REFERENCES order_fulfillments(order_id, id) ON DELETE RESTRICT,
     CONSTRAINT fk_inv_customer FOREIGN KEY (customer_id) REFERENCES customers(id) ON DELETE RESTRICT,
+    CONSTRAINT chk_inv_fulfill_needs_order CHECK (order_fulfillment_id IS NULL OR order_id IS NOT NULL),
     CONSTRAINT chk_inv_subtotal CHECK (subtotal >= 0.00),
     CONSTRAINT chk_inv_tax_rate CHECK (tax_rate >= 0.00),
     CONSTRAINT chk_inv_tax_amt CHECK (tax_amount >= 0.00),
@@ -834,25 +877,25 @@ CREATE TABLE invoices (
 ```
 
 #### `invoice_items`
-- **Purpose:** Immutable billed line items freezing product `description` and `unit_price` (`DECIMAL(10, 2)`) at invoice issuance (`DDR-04`).
-- **Primary Key:** `id` (`BIGINT UNSIGNED`).
-- **Foreign Keys:** `invoice_id` → `invoices(id)`, `order_item_id` → `order_items(id)` (nullable), `product_id` → `products(id)` (`ON DELETE RESTRICT`).
-- **Check Constraints:** `quantity > 0`, `unit_price >= 0.00`, `line_total >= 0.00`.
+- **Purpose:** Immutable billed line items (`DECIMAL(14, 4)` quantities, frozen `unit_price`). Retains `product_id` (`NOT NULL`) to support standalone manual invoices (`order_item_id IS NULL`) while composite FKs `(invoice_id, order_id)` and `(order_id, order_item_id, product_id)` guarantee at DB level that whenever `order_item_id` is referenced, it belongs to the invoice's order and SKU.
 
 ```sql
 CREATE TABLE invoice_items (
     id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
     invoice_id BIGINT UNSIGNED NOT NULL,
+    order_id BIGINT UNSIGNED NULL,
     order_item_id BIGINT UNSIGNED NULL,
     product_id BIGINT UNSIGNED NOT NULL,
     description VARCHAR(255) NOT NULL,
-    quantity INT NOT NULL,
+    quantity DECIMAL(14, 4) NOT NULL,
     unit_price DECIMAL(10, 2) NOT NULL,
     line_total DECIMAL(12, 2) NOT NULL,
     CONSTRAINT fk_ii_invoice FOREIGN KEY (invoice_id) REFERENCES invoices(id) ON DELETE RESTRICT,
-    CONSTRAINT fk_ii_order_item FOREIGN KEY (order_item_id) REFERENCES order_items(id) ON DELETE RESTRICT,
+    CONSTRAINT fk_ii_inv_order FOREIGN KEY (invoice_id, order_id) REFERENCES invoices(id, order_id) ON DELETE RESTRICT,
+    CONSTRAINT fk_ii_oi_order_prod FOREIGN KEY (order_id, order_item_id, product_id) REFERENCES order_items(order_id, id, product_id) ON DELETE RESTRICT,
     CONSTRAINT fk_ii_product FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE RESTRICT,
-    CONSTRAINT chk_ii_qty CHECK (quantity > 0),
+    CONSTRAINT chk_ii_oi_needs_order CHECK (order_item_id IS NULL OR order_id IS NOT NULL),
+    CONSTRAINT chk_ii_qty CHECK (quantity > 0.0000),
     CONSTRAINT chk_ii_price CHECK (unit_price >= 0.00),
     CONSTRAINT chk_ii_total CHECK (line_total >= 0.00),
     INDEX idx_ii_invoice (invoice_id),
@@ -861,10 +904,7 @@ CREATE TABLE invoice_items (
 ```
 
 #### `payments`
-- **Purpose:** Manual payment collection ledger (`M17`) linked to parent `invoices` without external payment gateways, storing manual settlement types (`cash`, `card_manual`, `bank_transfer`, `cheque`, `other`) without card PANs or CVVs (`DDR-04`, `DDR-10`).
-- **Primary Key:** `id` (`BIGINT UNSIGNED`).
-- **Foreign Keys:** `invoice_id` → `invoices(id)` (`ON DELETE RESTRICT`).
-- **Check Constraints:** `amount > 0.00`.
+- **Purpose:** Manual payment collection records (`M17`, no gateways or card PANs/CVVs).
 
 ```sql
 CREATE TABLE payments (
@@ -877,6 +917,7 @@ CREATE TABLE payments (
     payment_date DATE NOT NULL,
     notes VARCHAR(255) NULL,
     selected_workspace ENUM('store_manager', 'inventory_staff', 'purchase_manager', 'finance_staff') NULL,
+    action_source ENUM('UI', 'API', 'SYSTEM', 'ML_ENGINE') NOT NULL DEFAULT 'UI',
     operator_ref VARCHAR(64) NULL,
     created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT fk_pay_invoice FOREIGN KEY (invoice_id) REFERENCES invoices(id) ON DELETE RESTRICT,
@@ -886,16 +927,13 @@ CREATE TABLE payments (
 ```
 
 #### `returns`
-- **Purpose:** Operational customer return intake (`M16`) referencing parent fulfilled orders/sales/invoices, coordinating over-return enforcement, stock restock/damage disposition, `DDR-06` net-demand adjustments, and credit notes (`DDR-10` Tier 1 atomic).
-- **Primary Key:** `id` (`BIGINT UNSIGNED`).
-- **Foreign Keys:** `order_id` → `orders(id)` (nullable), `sale_id` → `transactions(id)` (nullable), `invoice_id` → `invoices(id)` (nullable) — `ON DELETE RESTRICT`.
-- **Unique Constraints:** `uq_returns_number` (`return_number`).
-- **Check Constraints:** At least one parent reference (`order_id IS NOT NULL OR sale_id IS NOT NULL OR invoice_id IS NOT NULL`), `total_refund_amount >= 0.00`.
+- **Purpose:** Operational customer return intake (`M16`), linking back to `orders`, `transactions` (`sale_id`), and/or `invoices` with unique `idempotency_key` preventing duplicate return submissions (`4.3`). Exposes `uq_ret_id_order` (`id`, `order_id`) for `return_items` and `demand_adjustments`.
 
 ```sql
 CREATE TABLE returns (
     id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
     return_number VARCHAR(64) NOT NULL,
+    idempotency_key VARCHAR(128) NULL,
     order_id BIGINT UNSIGNED NULL,
     sale_id BIGINT UNSIGNED NULL,
     invoice_id BIGINT UNSIGNED NULL,
@@ -903,10 +941,13 @@ CREATE TABLE returns (
     currency_code CHAR(3) NOT NULL DEFAULT 'INR',
     total_refund_amount DECIMAL(12, 2) NOT NULL DEFAULT 0.00,
     selected_workspace ENUM('store_manager', 'inventory_staff', 'purchase_manager', 'finance_staff') NULL,
+    action_source ENUM('UI', 'API', 'SYSTEM', 'ML_ENGINE') NOT NULL DEFAULT 'UI',
     operator_ref VARCHAR(64) NULL,
     created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     completed_at DATETIME NULL,
     CONSTRAINT uq_returns_number UNIQUE (return_number),
+    CONSTRAINT uq_returns_idempotency UNIQUE (idempotency_key),
+    CONSTRAINT uq_ret_id_order UNIQUE (id, order_id),
     CONSTRAINT fk_ret_order FOREIGN KEY (order_id) REFERENCES orders(id) ON DELETE RESTRICT,
     CONSTRAINT fk_ret_sale FOREIGN KEY (sale_id) REFERENCES transactions(id) ON DELETE RESTRICT,
     CONSTRAINT fk_ret_invoice FOREIGN KEY (invoice_id) REFERENCES invoices(id) ON DELETE RESTRICT,
@@ -919,27 +960,30 @@ CREATE TABLE returns (
 ```
 
 #### `return_items`
-- **Purpose:** Item-level return quantities enforcing `DDR-06` **`return_classification`** (`excess_stock` vs. `defective` / `damaged` / `other`) separately from warehouse **`disposition`** (`restock` vs. `damaged`). Only `disposition = 'restock'` increments sellable `inventory.current_quantity`; strictly `return_classification = 'excess_stock'` generates `demand_adjustments` rows (`defective`/`damaged` returns issue refunds/credits without deducting original customer demand).
-- **Primary Key:** `id` (`BIGINT UNSIGNED`).
-- **Foreign Keys:** `return_id` → `returns(id)`, `order_item_id` → `order_items(id)` (nullable), `product_id` → `products(id)` (`ON DELETE RESTRICT`).
-- **Check Constraints:** `quantity > 0`, `unit_price >= 0.00`, `line_refund >= 0.00`.
+- **Purpose:** Item-level return lines (`DECIMAL(14, 4)`), separating `DDR-06` `return_classification` (`excess_stock` vs `defective`/`damaged`/`other`) from warehouse `disposition` (`restock` vs `damaged`). Only `disposition = 'restock'` increments sellable `inventory.current_quantity`; strictly `return_classification = 'excess_stock'` feeds `demand_adjustments` (`defective`/`damaged` never reduce demand).
+- **Database-Enforced Cross-Table Consistency:** Composite FKs `(return_id, order_id)` → `returns(id, order_id)` and `(order_id, order_item_id, product_id)` → `order_items(order_id, id, product_id)` plus `CHECK (order_item_id IS NULL OR order_id IS NOT NULL)` guarantee that any order-linked return item matches its return header's `order_id` and `product_id`.
 
 ```sql
 CREATE TABLE return_items (
     id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
     return_id BIGINT UNSIGNED NOT NULL,
+    order_id BIGINT UNSIGNED NULL,
     order_item_id BIGINT UNSIGNED NULL,
     product_id BIGINT UNSIGNED NOT NULL,
-    quantity INT NOT NULL,
+    quantity DECIMAL(14, 4) NOT NULL,
+    base_uom_quantity DECIMAL(14, 4) NOT NULL,
     unit_price DECIMAL(10, 2) NOT NULL,
     line_refund DECIMAL(12, 2) NOT NULL,
     return_classification ENUM('excess_stock', 'defective', 'damaged', 'other') NOT NULL,
     disposition ENUM('restock', 'damaged') NOT NULL,
     reason VARCHAR(255) NOT NULL,
     CONSTRAINT fk_ri_return FOREIGN KEY (return_id) REFERENCES returns(id) ON DELETE RESTRICT,
-    CONSTRAINT fk_ri_order_item FOREIGN KEY (order_item_id) REFERENCES order_items(id) ON DELETE RESTRICT,
+    CONSTRAINT fk_ri_ret_order FOREIGN KEY (return_id, order_id) REFERENCES returns(id, order_id) ON DELETE RESTRICT,
+    CONSTRAINT fk_ri_oi_order_prod FOREIGN KEY (order_id, order_item_id, product_id) REFERENCES order_items(order_id, id, product_id) ON DELETE RESTRICT,
     CONSTRAINT fk_ri_product FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE RESTRICT,
-    CONSTRAINT chk_ri_qty CHECK (quantity > 0),
+    CONSTRAINT chk_ri_oi_needs_order CHECK (order_item_id IS NULL OR order_id IS NOT NULL),
+    CONSTRAINT chk_ri_qty CHECK (quantity > 0.0000),
+    CONSTRAINT chk_ri_base_qty CHECK (base_uom_quantity > 0.0000),
     CONSTRAINT chk_ri_price CHECK (unit_price >= 0.00),
     CONSTRAINT chk_ri_refund CHECK (line_refund >= 0.00),
     INDEX idx_ri_return (return_id),
@@ -949,11 +993,7 @@ CREATE TABLE return_items (
 ```
 
 #### `credit_notes`
-- **Purpose:** Immutable financial credit adjustments (`M17`) offsetting issued `invoices` (linked optionally to completed `returns`), enforcing cumulative credits `<= invoice.grand_total` inside Tier 1 atomic transactions (`DDR-04`, `DDR-10`).
-- **Primary Key:** `id` (`BIGINT UNSIGNED`).
-- **Foreign Keys:** `invoice_id` → `invoices(id)`, `return_id` → `returns(id)` (nullable) — `ON DELETE RESTRICT`.
-- **Unique Constraints:** `uq_cn_number` (`credit_note_number`).
-- **Check Constraints:** `amount > 0.00`.
+- **Purpose:** Immutable credit adjustments offsetting parent `invoices` (linked optionally to completed `returns`). Application transaction enforces `SUM(credit_notes.amount) <= invoice.grand_total` (`4.3`).
 
 ```sql
 CREATE TABLE credit_notes (
@@ -965,6 +1005,7 @@ CREATE TABLE credit_notes (
     amount DECIMAL(12, 2) NOT NULL,
     reason TEXT NOT NULL,
     selected_workspace ENUM('store_manager', 'inventory_staff', 'purchase_manager', 'finance_staff') NULL,
+    action_source ENUM('UI', 'API', 'SYSTEM', 'ML_ENGINE') NOT NULL DEFAULT 'UI',
     operator_ref VARCHAR(64) NULL,
     created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT uq_cn_number UNIQUE (credit_note_number),
@@ -981,11 +1022,7 @@ CREATE TABLE credit_notes (
 ### 3.7 Group 7 — Internal Shipping & Split Delivery (`M18`, `DDR-05`, `EXCL-02`)
 
 #### `shipments`
-- **Purpose:** Internal parcel preparation and dispatch tracking (`M18`), supporting **`1:N` split shipments per customer order (`DDR-05`)** anchored cleanly to `orders` (and optionally to a specific `order_fulfillments` batch and `invoices`), without any external carrier API credentials (`EXCL-02`).
-- **Primary Key:** `id` (`BIGINT UNSIGNED`).
-- **Foreign Keys:** `order_id` → `orders(id)`, `order_fulfillment_id` → `order_fulfillments(id)` (nullable), `invoice_id` → `invoices(id)` (nullable) — `ON DELETE RESTRICT`.
-- **Unique Constraints:** `uq_shipments_number` (`shipment_number`).
-- **Snapshot vs. Master:** `shipping_address` is frozen at shipment creation from order/customer delivery address so later address edits do not alter dispatched parcels.
+- **Purpose:** Internal parcel preparation and dispatch tracking (`M18`, `DDR-05`, `EXCL-02`), supporting `1:N` split shipments per order. Composite `fk_ship_fulfill_order` `(order_id, order_fulfillment_id)` guarantees any batch reference belongs strictly to `shipments.order_id`. Exposes `uq_ship_order_id` (`order_id`, `id`) for `shipment_items`.
 
 ```sql
 CREATE TABLE shipments (
@@ -999,11 +1036,14 @@ CREATE TABLE shipments (
     shipping_status ENUM('pending', 'packed', 'dispatched', 'delivered', 'cancelled') NOT NULL DEFAULT 'pending',
     internal_tracking_ref VARCHAR(100) NULL,
     selected_workspace ENUM('store_manager', 'inventory_staff', 'purchase_manager', 'finance_staff') NULL,
+    action_source ENUM('UI', 'API', 'SYSTEM', 'ML_ENGINE') NOT NULL DEFAULT 'UI',
+    operator_ref VARCHAR(64) NULL,
     created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     CONSTRAINT uq_shipments_number UNIQUE (shipment_number),
+    CONSTRAINT uq_ship_order_id UNIQUE (order_id, id),
     CONSTRAINT fk_ship_order FOREIGN KEY (order_id) REFERENCES orders(id) ON DELETE RESTRICT,
-    CONSTRAINT fk_ship_fulfillment FOREIGN KEY (order_fulfillment_id) REFERENCES order_fulfillments(id) ON DELETE RESTRICT,
+    CONSTRAINT fk_ship_fulfill_order FOREIGN KEY (order_id, order_fulfillment_id) REFERENCES order_fulfillments(order_id, id) ON DELETE RESTRICT,
     CONSTRAINT fk_ship_invoice FOREIGN KEY (invoice_id) REFERENCES invoices(id) ON DELETE RESTRICT,
     INDEX idx_shipments_order_status (order_id, shipping_status),
     INDEX idx_shipments_fulfillment (order_fulfillment_id)
@@ -1011,35 +1051,32 @@ CREATE TABLE shipments (
 ```
 
 #### `shipment_items`
-- **Purpose:** Parcel line-item quantities assigning fulfilled units to independent split shipments (`DDR-05`). Service-layer invariant guarantees `SUM(non-cancelled shipment_items.quantity)` per `order_item_id` never exceeds `order_items.fulfilled_quantity <= order_items.quantity`.
-- **Primary Key:** `id` (`BIGINT UNSIGNED`).
-- **Foreign Keys:** `shipment_id` → `shipments(id)`, `order_item_id` → `order_items(id)`, `order_fulfillment_item_id` → `order_fulfillment_items(id)` (nullable), `product_id` → `products(id)` (`ON DELETE RESTRICT`).
-- **Unique Constraints:** `uq_ship_item_line` (`shipment_id`, `order_item_id`).
-- **Check Constraints:** `quantity > 0`.
+- **Purpose:** Parcel line-item quantities (`DECIMAL(14, 4)`), deriving `product_id` directly from `order_items` without column duplication (`3.2` Requirement 7).
+- **Database-Enforced Cross-Table Consistency:** Composite FKs `fk_si_ship_order` `(order_id, shipment_id)`, `fk_si_oi` `(order_id, order_item_id)`, and `fk_si_ofi` `(order_id, order_fulfillment_id, order_item_id, order_fulfillment_item_id)` guarantee header, batch, fulfilment line, and order line all belong to the identical `order_id`.
 
 ```sql
 CREATE TABLE shipment_items (
     id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    order_id BIGINT UNSIGNED NOT NULL,
     shipment_id BIGINT UNSIGNED NOT NULL,
     order_item_id BIGINT UNSIGNED NOT NULL,
+    order_fulfillment_id BIGINT UNSIGNED NULL,
     order_fulfillment_item_id BIGINT UNSIGNED NULL,
-    product_id BIGINT UNSIGNED NOT NULL,
-    quantity INT NOT NULL,
+    quantity DECIMAL(14, 4) NOT NULL,
     CONSTRAINT uq_ship_item_line UNIQUE (shipment_id, order_item_id),
-    CONSTRAINT fk_si_shipment FOREIGN KEY (shipment_id) REFERENCES shipments(id) ON DELETE RESTRICT,
-    CONSTRAINT fk_si_order_item FOREIGN KEY (order_item_id) REFERENCES order_items(id) ON DELETE RESTRICT,
-    CONSTRAINT fk_si_ofi FOREIGN KEY (order_fulfillment_item_id) REFERENCES order_fulfillment_items(id) ON DELETE RESTRICT,
-    CONSTRAINT fk_si_product FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE RESTRICT,
-    CONSTRAINT chk_si_qty CHECK (quantity > 0),
-    INDEX idx_si_order_item (order_item_id)
+    CONSTRAINT fk_si_order FOREIGN KEY (order_id) REFERENCES orders(id) ON DELETE RESTRICT,
+    CONSTRAINT fk_si_ship_order FOREIGN KEY (order_id, shipment_id) REFERENCES shipments(order_id, id) ON DELETE RESTRICT,
+    CONSTRAINT fk_si_oi FOREIGN KEY (order_id, order_item_id) REFERENCES order_items(order_id, id) ON DELETE RESTRICT,
+    CONSTRAINT fk_si_ofi FOREIGN KEY (order_id, order_fulfillment_id, order_item_id, order_fulfillment_item_id) REFERENCES order_fulfillment_items(order_id, order_fulfillment_id, order_item_id, id) ON DELETE RESTRICT,
+    CONSTRAINT chk_si_ofi_pair CHECK ((order_fulfillment_item_id IS NULL) = (order_fulfillment_id IS NULL)),
+    CONSTRAINT chk_si_qty CHECK (quantity > 0.0000),
+    INDEX idx_si_order_item (order_item_id),
+    INDEX idx_si_ofi (order_fulfillment_item_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 ```
 
 #### `packing_slips`
-- **Purpose:** Internal digital packing checklist issuance log (`M18`), retaining generated slip numbers and revision numbers without carrier external calls (`EXCL-02`).
-- **Primary Key:** `id` (`BIGINT UNSIGNED`).
-- **Foreign Keys:** `shipment_id` → `shipments(id)` (`ON DELETE RESTRICT`).
-- **Unique Constraints:** `uq_ps_number` (`slip_number`), `uq_ps_ship_rev` (`shipment_id`, `revision_no`).
+- **Purpose:** Internal warehouse packing slip log (`M18`, `EXCL-02`).
 
 ```sql
 CREATE TABLE packing_slips (
@@ -1048,6 +1085,7 @@ CREATE TABLE packing_slips (
     slip_number VARCHAR(64) NOT NULL,
     revision_no INT NOT NULL DEFAULT 1,
     selected_workspace ENUM('store_manager', 'inventory_staff', 'purchase_manager', 'finance_staff') NULL,
+    action_source ENUM('UI', 'API', 'SYSTEM', 'ML_ENGINE') NOT NULL DEFAULT 'UI',
     operator_ref VARCHAR(64) NULL,
     generated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT uq_ps_number UNIQUE (slip_number),
@@ -1058,9 +1096,7 @@ CREATE TABLE packing_slips (
 ```
 
 #### `shipment_events`
-- **Purpose:** Append-only status transition timeline for each internal split shipment (`pending` → `packed` → `dispatched` → `delivered`, or pre-dispatch `cancelled`).
-- **Primary Key:** `id` (`BIGINT UNSIGNED`).
-- **Foreign Keys:** `shipment_id` → `shipments(id)` (`ON DELETE RESTRICT`).
+- **Purpose:** Append-only parcel transition log (`pending` → `packed` → `dispatched` → `delivered`, or pre-dispatch `cancelled`).
 
 ```sql
 CREATE TABLE shipment_events (
@@ -1069,6 +1105,7 @@ CREATE TABLE shipment_events (
     status ENUM('pending', 'packed', 'dispatched', 'delivered', 'cancelled') NOT NULL,
     notes VARCHAR(255) NULL,
     selected_workspace ENUM('store_manager', 'inventory_staff', 'purchase_manager', 'finance_staff') NULL,
+    action_source ENUM('UI', 'API', 'SYSTEM', 'ML_ENGINE') NOT NULL DEFAULT 'UI',
     operator_ref VARCHAR(64) NULL,
     event_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
     CONSTRAINT fk_se_shipment FOREIGN KEY (shipment_id) REFERENCES shipments(id) ON DELETE RESTRICT,
@@ -1081,11 +1118,8 @@ CREATE TABLE shipment_events (
 ### 3.8 Group 8 — Demand Data, ML Integration, Lifecycle & Anomaly Intelligence (`M08`, `M12`, `M14`, `M15`, `SYS-03`, `DDR-06`, `DDR-08`)
 
 #### `demand_adjustments`
-- **Purpose:** Append-only B2B net-demand subtraction ledger (`DDR-06`) linking strictly **`excess_stock` returns** and **full / unfulfilled order cancellations** directly to `(order_id, order_item_id)` to adjust net demand cleanly without altering original confirmed order rows and **preventing duplicate subtractions** via `adjustment_key`. `defective`/`damaged` returns are never inserted into `demand_adjustments`.
-- **Primary Key:** `id` (`BIGINT UNSIGNED`).
-- **Foreign Keys:** `order_id` → `orders(id)`, `order_item_id` → `order_items(id)`, `return_id` → `returns(id)` (nullable), `product_id` → `products(id)` (`ON DELETE RESTRICT`).
-- **Unique Constraints:** `uq_da_key` (`adjustment_key` — e.g., `'return:<return_id>:<order_item_id>'` or `'cancel:<order_id>:<order_item_id>'`), `uq_da_return_item` (`return_id`, `order_item_id`).
-- **Check Constraints:** `quantity_delta < 0`, `base_uom_conversion_factor > 0`, `base_uom_quantity_delta < 0`.
+- **Purpose:** Append-only net-demand reduction ledger (`DDR-06`) recording strictly **`excess_stock` returns** and **full / open-line order cancellations** tied to original `(order_id, order_item_id)` without altering confirmed `orders` rows and never subtracting `defective`/`damaged` returns (`4.4`).
+- **Database-Enforced Cross-Table Consistency:** `fk_da_oi_prod` `(order_id, order_item_id, product_id)` and `fk_da_ret_order` `(return_id, order_id)` ensure return adjustments match both order and product cleanly; `uq_da_key` and `uq_da_return_item` enforce idempotency.
 
 ```sql
 CREATE TABLE demand_adjustments (
@@ -1096,19 +1130,19 @@ CREATE TABLE demand_adjustments (
     return_id BIGINT UNSIGNED NULL,
     product_id BIGINT UNSIGNED NOT NULL,
     adjustment_reason ENUM('excess_stock_return', 'full_cancellation', 'partial_open_cancellation') NOT NULL,
-    quantity_delta INT NOT NULL,
+    quantity_delta DECIMAL(14, 4) NOT NULL,
     base_uom_conversion_factor DECIMAL(12, 6) NOT NULL,
     base_uom_quantity_delta DECIMAL(14, 4) NOT NULL,
     effective_date DATE NOT NULL,
     selected_workspace ENUM('store_manager', 'inventory_staff', 'purchase_manager', 'finance_staff') NULL,
+    action_source ENUM('UI', 'API', 'SYSTEM', 'ML_ENGINE') NOT NULL DEFAULT 'UI',
+    operator_ref VARCHAR(64) NULL,
     created_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
     CONSTRAINT uq_da_key UNIQUE (adjustment_key),
     CONSTRAINT uq_da_return_item UNIQUE (return_id, order_item_id),
-    CONSTRAINT fk_da_order FOREIGN KEY (order_id) REFERENCES orders(id) ON DELETE RESTRICT,
-    CONSTRAINT fk_da_order_item FOREIGN KEY (order_item_id) REFERENCES order_items(id) ON DELETE RESTRICT,
-    CONSTRAINT fk_da_return FOREIGN KEY (return_id) REFERENCES returns(id) ON DELETE RESTRICT,
-    CONSTRAINT fk_da_product FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE RESTRICT,
-    CONSTRAINT chk_da_qty_neg CHECK (quantity_delta < 0),
+    CONSTRAINT fk_da_oi_prod FOREIGN KEY (order_id, order_item_id, product_id) REFERENCES order_items(order_id, id, product_id) ON DELETE RESTRICT,
+    CONSTRAINT fk_da_ret_order FOREIGN KEY (return_id, order_id) REFERENCES returns(id, order_id) ON DELETE RESTRICT,
+    CONSTRAINT chk_da_qty_neg CHECK (quantity_delta < 0.0000),
     CONSTRAINT chk_da_factor_pos CHECK (base_uom_conversion_factor > 0.000000),
     CONSTRAINT chk_da_base_neg CHECK (base_uom_quantity_delta < 0.0000),
     INDEX idx_da_order_item (order_id, order_item_id),
@@ -1117,10 +1151,7 @@ CREATE TABLE demand_adjustments (
 ```
 
 #### `demand_quarantine`
-- **Purpose:** Pre-aggregation validation staging table (`DDR-06`) holding malformed B2B/historical demand inputs (schema errors, missing UoM conversions, invalid dates/SKUs, extreme anomalous quantities) with structured diagnostics instead of silently discarding rows.
-- **Primary Key:** `id` (`BIGINT UNSIGNED`).
-- **Foreign Keys:** `product_id` → `products(id)` (nullable when SKU lookup failed) (`ON DELETE RESTRICT`).
-- **Note on Resolution Semantics:** Detailed resolution/reprocessing workflow mechanics beyond `pending_review` / `resolved` / `rejected` tracking belong to Phase 4 ML-pipeline implementation design.
+- **Purpose:** Pre-aggregation validation staging table (`DDR-06`) holding malformed operational/historical demand rows for review rather than silently dropping records.
 
 ```sql
 CREATE TABLE demand_quarantine (
@@ -1134,6 +1165,7 @@ CREATE TABLE demand_quarantine (
     quarantine_status ENUM('pending_review', 'resolved', 'rejected') NOT NULL DEFAULT 'pending_review',
     resolution_notes VARCHAR(255) NULL,
     selected_workspace ENUM('store_manager', 'inventory_staff', 'purchase_manager', 'finance_staff') NULL,
+    action_source ENUM('UI', 'API', 'SYSTEM', 'ML_ENGINE') NOT NULL DEFAULT 'SYSTEM',
     operator_ref VARCHAR(64) NULL,
     quarantined_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
     resolved_at DATETIME(6) NULL,
@@ -1144,11 +1176,7 @@ CREATE TABLE demand_quarantine (
 ```
 
 #### `daily_demand_observations`
-- **Purpose:** Normalized historical & validated operational demand aggregation table (`DDR-06`, `M12`) storing base-UoM daily/weekly demand series generated strictly from validated confirmed B2B demand (`requested_delivery_date` or `DATE(created_at)`), net of `demand_adjustments`, separating recurring base demand (`recurring_base_uom_qty`) from isolated `one_time_bulk`/`contract`/`tender` volume (`non_recurring_bulk_qty`), marking lifespan zero-padding (`is_zero_padded`), and carrying **`is_censored_demand`** for periods affected by stockouts or allocation limits. Preserves exact downstream compatibility with the Phase 1 10-column feature contract (`StockCode`, `DayOfWeek`, `Month`, `DayOfMonth`, `Lag1`, `Lag7`, `Lag14`, `Lag28`, `RollingMean7`, `RollingMean28`) without altering approved ML features or algorithms.
-- **Primary Key:** `id` (`BIGINT UNSIGNED`).
-- **Foreign Keys:** `product_id` → `products(id)` (`ON DELETE RESTRICT`).
-- **Unique Constraints:** `uq_ddo_sku_date_gran_src` (`product_id`, `demand_date`, `granularity`, `source_origin`).
-- **Note on Censored Training Behaviour:** Exact training-time weighting/handling of rows flagged `is_censored_demand = TRUE` is left to the Phase 4 ML pipeline implementation stage; this table records the approved observation indicator cleanly.
+- **Purpose:** Validated base-UoM daily/weekly demand series (`DDR-06`, `M12`) built strictly from confirmed B2B demand (`requested_delivery_date` or `DATE(created_at)`, never invoice settlement dates), net of `demand_adjustments`, separating recurring base demand (`recurring_base_uom_qty`) from isolated non-recurring `one_time_bulk`/`contract`/`tender` demand (`non_recurring_bulk_qty`), marking lifespan zero-padding (`is_zero_padded`), and flagging **`is_censored_demand`** where stockouts or allocation constraints capped observed demand—preserving compatibility with the Phase 1 10-column feature contract without adding unapproved ML algorithms/features.
 
 ```sql
 CREATE TABLE daily_demand_observations (
@@ -1176,10 +1204,7 @@ CREATE TABLE daily_demand_observations (
 ```
 
 #### `model_runs`
-- **Purpose:** Tracks offline ML model training versions, horizons, evaluation manifests (`MAE`, `RMSE`, `WAPE`), artifact paths (`.joblib`), `feature_contract_version` (`'phase1_10col'`), and scheduled `DDR-06` drift monitoring results. Never created or updated inside real-time inference HTTP calls.
-- **Primary Key:** `id` (`BIGINT UNSIGNED`).
-- **Foreign Keys:** None.
-- **Check Constraints:** `horizon_days IN (7, 15, 30, 90)`, `training_end_date >= training_start_date`.
+- **Purpose:** Scheduled offline ML training manifest and `DDR-06` drift monitoring registry (`action_source = 'ML_ENGINE'` default; never mutated inside real-time inference HTTP calls).
 
 ```sql
 CREATE TABLE model_runs (
@@ -1195,6 +1220,7 @@ CREATE TABLE model_runs (
     drift_metrics JSON NULL,
     artifact_path VARCHAR(255) NULL,
     is_active BOOLEAN NOT NULL DEFAULT TRUE,
+    action_source ENUM('UI', 'API', 'SYSTEM', 'ML_ENGINE') NOT NULL DEFAULT 'ML_ENGINE',
     created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT chk_mr_horizon CHECK (horizon_days IN (7, 15, 30, 90)),
     CONSTRAINT chk_mr_dates CHECK (training_end_date >= training_start_date),
@@ -1203,10 +1229,7 @@ CREATE TABLE model_runs (
 ```
 
 #### `forecasts`
-- **Purpose:** Persisted SKU multi-horizon demand predictions (`M12`, `M14`) generated from `model_runs`, enforcing non-negativity ($\hat{y} = \max(0, \hat{y})$) and explicit `< 28`-lag (`insufficient_history`) / `unseen_sku_fallback` status flagging without fabricating predictions.
-- **Primary Key:** `id` (`BIGINT UNSIGNED`).
-- **Foreign Keys:** `product_id` → `products(id)`, `model_run_id` → `model_runs(id)` (`ON DELETE RESTRICT`).
-- **Check Constraints:** `horizon_days IN (7, 15, 30, 90)`, `predicted_quantity >= 0.00`.
+- **Purpose:** Persisted SKU forecasts (`M12`, `M14`) in `products.base_uom` (`DECIMAL(14, 4)` matching `inventory` & `daily_demand_observations`).
 
 ```sql
 CREATE TABLE forecasts (
@@ -1215,24 +1238,23 @@ CREATE TABLE forecasts (
     model_run_id BIGINT UNSIGNED NOT NULL,
     forecast_date DATE NOT NULL,
     horizon_days INT NOT NULL,
-    predicted_quantity DECIMAL(12, 2) NOT NULL,
+    predicted_quantity DECIMAL(14, 4) NOT NULL,
     status_flag ENUM('normal', 'insufficient_history', 'unseen_sku_fallback') NOT NULL DEFAULT 'normal',
     selected_workspace ENUM('store_manager', 'inventory_staff', 'purchase_manager', 'finance_staff') NULL,
+    action_source ENUM('UI', 'API', 'SYSTEM', 'ML_ENGINE') NOT NULL DEFAULT 'API',
+    operator_ref VARCHAR(64) NULL,
     created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT fk_fc_product FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE RESTRICT,
     CONSTRAINT fk_fc_model_run FOREIGN KEY (model_run_id) REFERENCES model_runs(id) ON DELETE RESTRICT,
     CONSTRAINT chk_fc_horizon CHECK (horizon_days IN (7, 15, 30, 90)),
-    CONSTRAINT chk_fc_pred_nonneg CHECK (predicted_quantity >= 0.00),
+    CONSTRAINT chk_fc_pred_nonneg CHECK (predicted_quantity >= 0.0000),
     INDEX idx_forecast_lookup (product_id, horizon_days, forecast_date),
     INDEX idx_forecast_run (model_run_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 ```
 
 #### `product_lifecycle_snapshots`
-- **Purpose:** Append-only longitudinal record of SKU lifecycle evaluations (`M08`, `DDR-08`) across all five approved stages (`Introduction`, `Growth`, `Maturity`, `Decline`, `Discontinued`). Consecutive-period hysteresis rules execute in application/scheduler logic over these snapshots cleanly without inventing unapproved schema state-counter columns, while threshold edits in `operational_settings` apply prospectively only and never rewrite historical snapshots.
-- **Primary Key:** `id` (`BIGINT UNSIGNED`).
-- **Foreign Keys:** `product_id` → `products(id)` (`ON DELETE RESTRICT`).
-- **Check Constraints:** `rolling_velocity >= 0.0000`, `order_frequency >= 0.0000`, `sku_age_days >= 0`, `days_since_last_sale IS NULL OR days_since_last_sale >= 0`.
+- **Purpose:** Append-only SKU lifecycle evaluation history (`M08`, `DDR-08`). Scheduled batch evaluations query prior `product_lifecycle_snapshots` ordered by `evaluated_at` to apply consecutive-period hysteresis rules in application logic without inventing unsupported hysteresis schema counters; when a transition occurs, the scheduler inserts a new immutable snapshot and updates `products.lifecycle_stage` atomically. Manual `'Discontinued'` changes write `trigger_type = 'manual_discontinued'` + Tier 1 `audit_logs`. Threshold updates apply forward-only and never alter existing rows.
 
 ```sql
 CREATE TABLE product_lifecycle_snapshots (
@@ -1240,7 +1262,7 @@ CREATE TABLE product_lifecycle_snapshots (
     product_id BIGINT UNSIGNED NOT NULL,
     lifecycle_stage ENUM('Introduction', 'Growth', 'Maturity', 'Decline', 'Discontinued') NOT NULL,
     previous_stage ENUM('Introduction', 'Growth', 'Maturity', 'Decline', 'Discontinued') NULL,
-    rolling_velocity DECIMAL(12, 4) NOT NULL,
+    rolling_velocity DECIMAL(14, 4) NOT NULL,
     order_frequency DECIMAL(10, 4) NOT NULL,
     sku_age_days INT NOT NULL,
     days_since_last_sale INT NULL,
@@ -1248,6 +1270,7 @@ CREATE TABLE product_lifecycle_snapshots (
     trigger_type ENUM('scheduled_evaluation', 'manual_discontinued') NOT NULL DEFAULT 'scheduled_evaluation',
     applied_settings_snapshot JSON NULL,
     selected_workspace ENUM('store_manager', 'inventory_staff', 'purchase_manager', 'finance_staff') NULL,
+    action_source ENUM('UI', 'API', 'SYSTEM', 'ML_ENGINE') NOT NULL DEFAULT 'SYSTEM',
     operator_ref VARCHAR(64) NULL,
     evaluated_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
     CONSTRAINT fk_pls_product FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE RESTRICT,
@@ -1261,9 +1284,7 @@ CREATE TABLE product_lifecycle_snapshots (
 ```
 
 #### `anomaly_events`
-- **Purpose:** Immutable empirical detection log produced by `M15` hybrid deterministic + statistical/ML scans (`DDR-08`) across demand spikes/drops (`DDR-06` tender/bulk and `is_censored_demand` context aware), inventory integrity/rapid depletion, return/cancellation surges, and procurement variance/PO splits (`DDR-09`). Strictly separated from user notification workflows (`alerts`) and never rewritten when `operational_settings` change later.
-- **Primary Key:** `id` (`BIGINT UNSIGNED`).
-- **Foreign Keys:** `product_id` → `products(id)` (nullable for supplier-level/store-wide events) (`ON DELETE RESTRICT`).
+- **Purpose:** Immutable hybrid detection log (`M15`, `DDR-08`, `DDR-09`) storing `observed_value` / `expected_baseline` (`DECIMAL(14, 4)`), `applied_thresholds_snapshot`, and `is_censored_context`. Separated strictly from `alerts`.
 
 ```sql
 CREATE TABLE anomaly_events (
@@ -1289,6 +1310,7 @@ CREATE TABLE anomaly_events (
     is_censored_context BOOLEAN NOT NULL DEFAULT FALSE,
     details JSON NOT NULL,
     applied_thresholds_snapshot JSON NULL,
+    action_source ENUM('UI', 'API', 'SYSTEM', 'ML_ENGINE') NOT NULL DEFAULT 'SYSTEM',
     detected_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
     CONSTRAINT fk_ae_product FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE RESTRICT,
     INDEX idx_ae_type_date (anomaly_type, detection_date),
@@ -1299,10 +1321,7 @@ CREATE TABLE anomaly_events (
 ```
 
 #### `alerts`
-- **Purpose:** Unified notification hub (`SYS-03`, replacing old `inventory_alerts`) aggregating actionable operator alerts across `inventory_control` (post-fulfillment `DDR-05` & low-stock alerts), `predictive_planner` (`DDR-01` `CRITICAL`/`ELEVATED` risks), `anomaly_detection` (`DDR-08`), `lifecycle_intelligence`, and `procurement` (`DDR-09` Tier 1 oversight digests, anti-split escalations, overdue PO reminders). Suppresses duplicate unresolved (`active` / `acknowledged`) alerts via stored generated column `active_dedup_key` while preserving resolved history (`EXCL-03`: alerts recommend action and never auto-dispatch POs).
-- **Primary Key:** `id` (`BIGINT UNSIGNED`).
-- **Foreign Keys:** `product_id` → `products(id)` (nullable), `anomaly_event_id` → `anomaly_events(id)` (nullable), `purchase_order_id` → `purchase_orders(id)` (nullable) — `ON DELETE RESTRICT`.
-- **Unique Constraints:** `uq_alerts_open_dedup` (`active_dedup_key`, suppressing duplicate unresolved alerts when `dedup_key IS NOT NULL`).
+- **Purpose:** Unified notification hub (`SYS-03`) aggregating recommend-only stock/planner/lifecycle/anomaly/PO notifications (`EXCL-03`). Stored generated column `active_dedup_key` suppresses duplicate unresolved (`active` / `acknowledged`) alerts while preserving resolved history (`DDR-08`).
 
 ```sql
 CREATE TABLE alerts (
@@ -1320,8 +1339,11 @@ CREATE TABLE alerts (
     active_dedup_key VARCHAR(160) GENERATED ALWAYS AS (
         IF(alert_status IN ('active', 'acknowledged'), dedup_key, NULL)
     ) STORED,
+    created_source ENUM('UI', 'API', 'SYSTEM', 'ML_ENGINE') NOT NULL DEFAULT 'SYSTEM',
     acknowledged_workspace ENUM('store_manager', 'inventory_staff', 'purchase_manager', 'finance_staff') NULL,
+    acknowledged_operator_ref VARCHAR(64) NULL,
     resolved_workspace ENUM('store_manager', 'inventory_staff', 'purchase_manager', 'finance_staff') NULL,
+    resolved_operator_ref VARCHAR(64) NULL,
     acknowledged_at DATETIME(6) NULL,
     resolved_at DATETIME(6) NULL,
     created_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
@@ -1340,11 +1362,7 @@ CREATE TABLE alerts (
 ### 3.9 Group 9 — Centralized History, Audit & Durable Outbox (`SYS-02`, `DDR-10`)
 
 #### `audit_logs`
-- **Purpose:** Append-only cross-module governance and error ledger (`SYS-02`, replacing old `activity_logs` and omitting all `users` FKs). Supports `DDR-10` **Tier 1 fail-closed atomicity** (mandatory `INSERT` inside the same InnoDB transaction as critical business mutations) and **Tier 2 async reconciliation** (idempotent writes drained from `audit_outbox`), capturing sanitized before/after JSON snapshots, `correlation_id`, `idempotency_key`, `selected_workspace`, `action_source`, and optional non-auth `operator_ref`.
-- **Primary Key:** `id` (`BIGINT UNSIGNED`).
-- **Foreign Keys:** **Intentionally none**—append-only audit history must never fail or lock due to parent deletion/mismatch, and records system/startup/validation errors (`entity_id` nullable).
-- **Unique Constraints:** `uq_audit_idempotency` (`idempotency_key` nullable unique token preventing duplicate retries across `audit_outbox`).
-- **Database Role Hardening (`DDR-10`):** Application DB roles **must hold strictly `SELECT` and `INSERT` privileges** on `audit_logs`; `UPDATE`, `DELETE`, `ALTER`, and `DROP` must **not** be granted.
+- **Purpose:** Append-only governance ledger (`SYS-02`, `DDR-10`) supporting Tier 1 fail-closed atomicity and Tier 2 idempotent outbox drainage. Zero `UPDATE`/`DELETE` SQL privileges may be granted to runtime app DB accounts.
 
 ```sql
 CREATE TABLE audit_logs (
@@ -1375,10 +1393,7 @@ CREATE TABLE audit_logs (
 ```
 
 #### `audit_outbox`
-- **Purpose:** Durable asynchronous reconciliation queue (`DDR-10`) buffering **Tier 2 non-critical events** (draft edits, notification acknowledgements, view/export telemetry) during transient audit write failures, supporting bounded background retries, `DEAD_LETTER` escalation after exhausted retries, and zero duplicate rows in `audit_logs` via shared `idempotency_key` + `correlation_id`.
-- **Primary Key:** `id` (`BIGINT UNSIGNED`).
-- **Foreign Keys:** None.
-- **Unique Constraints:** `uq_outbox_idempotency` (`idempotency_key`).
+- **Purpose:** Persistent MySQL retry and `dead_letter` queue for Tier 2 non-critical audit resilience (`DDR-10`) during transient `audit_logs` write failures. Because `audit_outbox` resides in the same MySQL instance, **full database outages cannot be persisted inside `audit_outbox` and require external operational telemetry** (Section 8).
 
 ```sql
 CREATE TABLE audit_outbox (
@@ -1404,129 +1419,121 @@ CREATE TABLE audit_outbox (
 
 ## 4. Primary & Foreign Key Relationships and Schema Transition Matrix
 
-### 4.1 Legacy (`v1.0`) to Revised (`v2.0` / Blueprint `v2.2`) Table Disposition
+### 4.1 Legacy (`v1.0`) to Current (`v2.1`) Table Disposition
+The 40-table count remains unchanged between `v2.0` and `v2.1` (targeting correctness and composite integrity cleanly without bloat):
 
-| Previous Draft Table (`v1.0` Baseline — Claimed `19`, Actually `22`) | Disposition | Target Table(s) in Revised Schema | Rationale |
+| Prior Draft (`v1.0` Baseline) | Disposition | Target Table(s) in `v2.1` | Key Changes (`v2.0` → `v2.1`) |
 | :--- | :---: | :--- | :--- |
-| `roles`, `permissions`, `role_permissions`, `users` | **Removed (`4`)** | Replaced by UI-only `selected_workspace`, `action_source`, optional `operator_ref` | NEXORA `v2.2` excludes login, passwords, JWTs, and RBAC (`SYS-01`). |
-| `activity_logs` | **Replaced / Refactored (`1`)** | `audit_logs`, `audit_outbox` | Removes `user_id` FK; implements `DDR-10` Tier 1/Tier 2 audit, before/after JSON snapshots, correlation/idempotency keys. |
-| `inventory_alerts` | **Replaced / Consolidated (`1`)** | `alerts` | Unified `SYS-03` alert queue covering stock, planner risk, `M15` anomalies, `M08` lifecycle, and `DDR-09` PO oversight/escalations. |
-| `products`, `transactions`, `transaction_items`, `inventory`, `inventory_movements`, `model_runs`, `forecasts`, `suppliers`, `purchase_orders`, `purchase_order_items`, `customers`, `invoices`, `invoice_items`, `credit_notes`, `shipments`, `packing_slips` | **Retained & Revised (`16`)** | Retained with revised columns, constraints & `ON DELETE RESTRICT` | Removed `users(id)` FKs; removed `suppliers.lead_time_days DEFAULT 7` (`DDR-01`); added `inventory.reserved_quantity` (`DDR-03`), `invoices.tax_rate`/`billing_snapshot`/`currency_code='INR'` (`DDR-04`), `1:N` split `shipments.order_id` (`DDR-05`), `purchase_orders` tiered approvals (`DDR-09`). |
-| *(New Blueprint `v2.2` / Task 4 Entities)* | **Added (`21`)** | `operational_settings`, `categories`, `uom_conversions`, `supplier_products`, `orders`, `order_items`, `order_fulfillments`, `order_fulfillment_items`, `purchase_order_approvals`, `purchase_order_receipts`, `purchase_order_receipt_items`, `returns`, `return_items`, `payments`, `shipment_items`, `shipment_events`, `demand_adjustments`, `demand_quarantine`, `daily_demand_observations`, `product_lifecycle_snapshots`, `anomaly_events` | Complete support for `DDR-01`–`DDR-10`: `16` new Blueprint Section 12.1 entities + `5` supplementary normalization/aggregation entities (`order_fulfillment_items`, `purchase_order_approvals`, `purchase_order_receipts`, `purchase_order_receipt_items`, `daily_demand_observations`) = `21` added (`+ 3` replaced `alerts`/`audit_logs`/`audit_outbox` `+ 16` retained/revised = `40` total). |
+| `roles`, `permissions`, `role_permissions`, `users` | **Removed (`4`)** | UI-only `selected_workspace`, `action_source`, optional `operator_ref` | Standardized provenance triad across all operational/governance tables. |
+| `activity_logs`, `inventory_alerts` | **Replaced (`2` → `3`)** | `audit_logs`, `audit_outbox`, `alerts` | Explicit outage limitations for `audit_outbox`; `alerts.created_source` added. |
+| `products`, `transactions`, `transaction_items`, `inventory`, `inventory_movements`, `model_runs`, `forecasts`, `suppliers`, `purchase_orders`, `purchase_order_items`, `customers`, `invoices`, `invoice_items`, `credit_notes`, `shipments`, `packing_slips` | **Retained & Revised (`16`)** | Retained with `v2.1` integrity updates | Converted stock & order/PO/invoice quantities to `DECIMAL(14, 4)`; added composite FKs on `transactions`, `transaction_items`, `purchase_order_items`, `invoices`, `invoice_items`, `shipments`; added `supplier_product_id` + snapshots on `purchase_order_items`. |
+| *(New Blueprint `v2.2` / Task 4 Entities)* | **Added (`21`)** | `operational_settings`, `categories`, `uom_conversions`, `supplier_products`, `orders`, `order_items`, `order_fulfillments`, `order_fulfillment_items`, `purchase_order_approvals`, `purchase_order_receipts`, `purchase_order_receipt_items`, `returns`, `return_items`, `payments`, `shipment_items`, `shipment_events`, `demand_adjustments`, `demand_quarantine`, `daily_demand_observations`, `product_lifecycle_snapshots`, `anomaly_events` | Unified `DECIMAL(14, 4)` quantities; native `JSON` in `operational_settings`; effective-dated `supplier_products` with generated single-active/preferred unique keys; dropped redundant `product_id` on `order_fulfillment_items`, `purchase_order_receipt_items`, and `shipment_items`; added composite parent FKs on multi-FK children and `idempotency_key` on `returns`/`purchase_order_approvals`. |
 
-*(Note: Every foreign key relationship forms a strict **Directed Acyclic Graph** without circular foreign keys. Returns reference `orders`/`transactions`/`invoices`; `credit_notes` reference `invoices` and `returns`; `invoices` never reference `returns`.)*
+### 4.2 Database-Enforced Constraints vs. Application-Enforced Invariants
+Because MySQL 8.x `CHECK` constraints cannot inspect other rows or tables, integrity across rows splits cleanly:
+
+| Integrity Rule | Database-Enforced (MySQL `InnoDB`) | Mandatory Application Transaction Check (`FOR UPDATE`) |
+| :--- | :--- | :--- |
+| **Order Fulfilment & Order-Line Same Order** | Composite FKs `(order_id, order_fulfillment_id)` & `(order_id, order_item_id)` + `order_items` `fulfilled_quantity <= quantity`. | Verify `orders.order_status IN ('confirmed', 'partially_fulfilled')`, increment `fulfilled_quantity` atomically, update `orders.order_status = 'fulfilled'` only at `100%` completion. |
+| **PO Receipt Limits & Same-PO Match (`4.1`)** | Composite FKs `(purchase_order_id, receipt_id)` & `(purchase_order_id, purchase_order_item_id)`, `uq_por_idempotency`, `CHECK (received_quantity <= ordered_quantity)`. | Lock `purchase_orders`, `purchase_order_items`, `inventory`; reject `order_status NOT IN ('approved', 'partially_received')` (`409`), verify delta `<= ordered - received` (`422`), write `inventory_movements` (`purchase_receipt`) + `purchase_order_receipts*` + `audit_logs` in same commit. |
+| **Shipment Allocation Limits (`4.2`)** | Composite FKs `(order_id, shipment_id)`, `(order_id, order_item_id)`, `(order_id, order_fulfillment_id, order_item_id, order_fulfillment_item_id)`. | Lock `orders`, `order_items`, and existing non-cancelled `shipments`/`shipment_items`; verify `SUM(non-cancelled shipment_items.quantity) + new_qty <= order_items.fulfilled_quantity` (and `<= quantity_fulfilled` when linked to a specific batch), plus `shipment.order_fulfillment_id` consistency. |
+| **Return & Refund Caps (`4.3`)** | Composite FKs `(return_id, order_id)` & `(order_id, order_item_id, product_id)`, `uq_returns_idempotency`, `quantity > 0`, `line_refund >= 0`, `credit_notes.amount > 0`. | Lock parent `order_items`/`transactions`/`invoices` and prior non-rejected `return_items`/`credit_notes`; enforce `SUM(returned) + new <= fulfilled_quantity` (`<= sold_quantity`), verify `SUM(credit_notes.amount) + new <= invoice.grand_total`, route `restock` vs `damaged` stock, and insert `demand_adjustments` solely for `excess_stock`. |
+| **Demand Adjustment Caps (`4.4`)** | Composite FKs `(order_id, order_item_id, product_id)` & `(return_id, order_id)`, `uq_da_key`, `uq_da_return_item`, `quantity_delta < 0`. | Lock `order_items` and existing `demand_adjustments`; enforce `ABS(SUM(base_uom_quantity_delta) + new_delta) <= order_items.base_uom_quantity`; reject adjustments against `defective`/`damaged` returns (`422`). |
+| **PO Approval Governance (`DDR-09`)** | Immutable `purchase_order_approvals`, snapshots (`applied_tier1_limit`, `po_total_cost`), `uq_poa_idempotency`, non-deletable FKs. | Validate selected workspace (`purchase_manager` routine `<= limit` without escalations vs `store_manager` above limit / split / anomaly / price spike / supplier override), lock PO & re-verify `submitted` status + total inside TX, auto-invalidate on pre-receipt supplier/qty/cost edits. |
+| **Supplier-Product Active & Preferred (`DDR-07`)** | Generated `UNIQUE (active_supplier_id, active_product_id)` & `UNIQUE (active_preferred_product_id)`; `uq_sp_id_sup_prod` checked by PO lines. | On terms change, atomically set old row `is_active=FALSE, is_preferred=FALSE, effective_to=NOW(6)` and insert new active version row. |
 
 ---
 
-## 5. Indexing & Constraint Architecture
+## 5. Indexing, Constraint & Replenishment Calculation Architecture
 
-1. **Precision Numerical Enforcement (`DDR-04`, `DDR-06`):**
-   - Monetary amounts exclusively use `DECIMAL(10, 2)` or `DECIMAL(12, 2)`; UoM and rate quantities use `DECIMAL(12, 6)` or `DECIMAL(14, 4)`.
-2. **Stock Integrity Guards (`DDR-03`):**
-   - `inventory` enforces `current_quantity >= 0`, `reserved_quantity >= 0`, `reserved_quantity <= current_quantity`, `minimum_stock >= 0`, and `safety_factor >= 1.00`.
-3. **Movement Sign & Balance Math (`M10`):**
-   - `inventory_movements` enforces `quantity_delta <> 0`, `resulting_quantity = previous_quantity + quantity_delta >= 0`, and sign rules per `movement_type`.
-4. **Supplier Lead-Time Non-Fabrication & Replenishment Math (`DDR-01`, `DDR-07`):**
-   - Hierarchy: (1) `supplier_products.lead_time_days` → (2) fallback `suppliers.lead_time_days` → (3) mark lead-time risk **`UNAVAILABLE`** if neither is valid. Both columns remain strictly **nullable** with `CHECK (lead_time_days IS NULL OR (lead_time_days BETWEEN 1 AND 365))`—never synthesized as default constants.
-   - Approved calculations using `forecasts.predicted_quantity`, `forecasts.horizon_days`, resolved lead time, and `inventory.safety_factor` (initial default `1.20`):
+1. **Fixed-Point Numerical Fidelity:** All currency amounts use `DECIMAL(10, 2)` / `DECIMAL(12, 2)`; all operational/base quantities use `DECIMAL(14, 4)`; conversion factors use `DECIMAL(12, 6)`. Zero `FLOAT`/`DOUBLE`.
+2. **Stock Invariants (`DDR-03`):** `inventory` enforces `0.0000 <= reserved_quantity <= current_quantity`, `minimum_stock >= 0.0000`, `safety_factor >= 1.00`.
+3. **Movement Invariants (`M10`):** `inventory_movements` enforces non-zero `quantity_delta`, `resulting_quantity = previous_quantity + quantity_delta >= 0.0000`, and directional sign per `movement_type`.
+4. **Supplier Lead-Time Hierarchy & Replenishment Math (`DDR-01`, `DDR-07`):**
+   - Hierarchy: (1) active `supplier_products.lead_time_days` → (2) fallback `suppliers.lead_time_days` → (3) mark supplier lead-time risk **`UNAVAILABLE`** (columns strictly nullable with `CHECK BETWEEN 1 AND 365`, never defaulted synthetically).
+   - Shared `M11`/`M14` formulas using `forecasts.predicted_quantity`, `forecasts.horizon_days`, resolved lead time, and `inventory.safety_factor` (initial default `1.20`):
      - `Lead-Time Demand = (Forecast Demand / Forecast Horizon Days) × Supplier Lead Time Days`
      - `Replenishment Risk Threshold = Lead-Time Demand × Safety Factor`
-5. **Key Lookup Indexes:**
-   - High-frequency query indexes cover `products(stock_code)`, `orders(order_status, order_demand_type, requested_delivery_date, created_at)`, `transactions(transaction_date, source_origin, transaction_type)`, `inventory_movements(product_id, created_at)`, `purchase_orders(order_status, supplier_id, order_date)` and `(supplier_id, created_at, order_status)`, `daily_demand_observations(product_id, granularity, source_origin, demand_date)`, `forecasts(product_id, horizon_days, forecast_date)`, `alerts(active_dedup_key)`, `audit_logs(timestamp / module / entity / workspace / correlation_id)`, and `audit_outbox(status, next_retry_at)`.
+5. **Composite & Query Indexes:** `orders`, `transactions`, `inventory_movements`, `purchase_orders` (status + split window), `supplier_products` (active + history), `daily_demand_observations`, `forecasts`, `alerts(active_dedup_key)`, `audit_logs`, and `audit_outbox`.
 
 ---
 
-## 6. Transaction Boundaries & Atomicity
+## 6. Transaction Boundaries & Concurrency Sequences
 
-All multi-table state changes must run inside single explicit ACID transactions (`with session.begin():`) using `SELECT ... FOR UPDATE` row locks on contended inventory, order, PO, and invoice rows:
+All multi-table mutations execute inside single ACID transactions (`with session.begin():`) acquiring pessimistic `SELECT ... FOR UPDATE` locks cleanly in consistent parent-before-child order (`orders` → `order_items` / `purchase_orders` → `purchase_order_items` → `inventory`) to eliminate deadlocks:
 
-| Operational Workflow | Locked Rows (`FOR UPDATE`) | Atomic Write Scope | Rollback & Error Behavior |
-| :--- | :--- | :--- | :--- |
-| **Product Onboarding (`Workflow A`)** | — | `products` + `inventory` (1:1) + optional `inventory_movements` + `audit_logs` | Duplicate `stock_code` or check violation (`409`/`422`) leaves zero orphan `products`/`inventory`. |
-| **Order Confirmation (`Workflow B`)** | `orders`, `order_items`, target `inventory` rows | Verify `Available Stock >= qty`; update `orders` (`confirmed`), increment `inventory.reserved_quantity`, insert Tier 1 `audit_logs` | Insufficient `Available Stock` rolls back completely (`409 Conflict`), reserving zero stock and creating no sale. |
-| **Order Fulfilment Batch (`Workflow B`)** | `orders`, `order_items`, `inventory` | Verify unique `order_fulfillments.idempotency_key`; decrement `current_quantity` & `reserved_quantity` for `batch_qty` only; insert `order_fulfillments`, `order_fulfillment_items`, `inventory_movements` (`sale_fulfillment`), `transactions`/`transaction_items`, optional `alerts` (`DDR-05`), Tier 1 `audit_logs` | Duplicate `idempotency_key`, shortage, over-fulfillment, or audit error rolls back atomically (`409` / `500` telemetry). |
-| **Manual Stock Adjustment (`Workflow E`)** | `inventory` | Update `inventory.current_quantity`, insert `inventory_movements`, optional `alerts`, Tier 1 `audit_logs` | Missing reason (`422`), `new_phys < reserved` (`409`), or audit failure rolls back completely. |
-| **PO Review / Invalidation (`Workflow C`)** | `purchase_orders`, `purchase_order_items` | Update `purchase_orders`, insert `purchase_order_approvals`, optional `alerts` (oversight digest / split escalation), Tier 1 `audit_logs` | Gate mismatch (`409`/`403`) or Tier 1 audit failure rolls back cleanly; zero vendor auto-dispatch (`EXCL-03`). |
-| **PO Stock Receipt (`Workflow C`)** | `purchase_orders`, `purchase_order_items`, `inventory` | Verify `idempotency_key`; update `received_quantity` & PO status, increment `inventory.current_quantity`, insert `purchase_order_receipts`, `purchase_order_receipt_items`, `inventory_movements` (`purchase_receipt`), Tier 1 `audit_logs` | Unapproved PO (`409`), over-receipt (`422`), duplicate key, or audit failure aborts cleanly. |
-| **Customer Return & Credit (`Workflow D`)** | Parent `orders`/`transactions`/`invoices`, `return_items`, `inventory` | Check remaining returnable qty; insert `returns`, `return_items`, conditional `inventory` + `return_restock`, conditional `demand_adjustments` (`excess_stock` only), optional `credit_notes`, update `invoices.payment_status`, Tier 1 `audit_logs` | Over-return, excess credit, or audit failure rolls back atomically (`409`/`422`). |
-| **Central Settings Edit (`DDR-04`/`08`/`09`)** | `operational_settings` | Validate `min_bound`/`max_bound`, update `setting_value`, insert Tier 1 `audit_logs` (`before_values`/`after_values`) | Out-of-bounds (`422`) or Tier 1 audit failure aborts config edit. |
+- **Order Confirmation (`M05`, `DDR-03`):** Lock `orders`, `order_items`, `inventory` → validate `Available Stock >= order_items.base_uom_quantity` (`409 Conflict` rollback if insufficient) → set `orders.order_status = 'confirmed'`, increment `inventory.reserved_quantity`, write Tier 1 `audit_logs`.
+- **Order Fulfilment (`M05`, `DDR-05`):** Verify unique `order_fulfillments.idempotency_key` → lock `orders`, `order_items`, `inventory` → verify `fulfilled_quantity + delta <= quantity` → deduct `current_quantity` & `reserved_quantity` in `base_uom` strictly for fulfilled batch → insert `order_fulfillments`, `order_fulfillment_items`, `inventory_movements` (`sale_fulfillment`), `transactions`/`transaction_items`, optional `alerts`, Tier 1 `audit_logs`.
+- **PO Approval / Invalidation (`M11`, `DDR-09`):** Lock `purchase_orders`, `purchase_order_items`, `operational_settings` → evaluate workspace workflow rules (`purchase_manager` Tier 1 vs `store_manager` escalation), rolling split flags, and `DDR-08` anomalies → update `purchase_orders` + insert `purchase_order_approvals` + optional `alerts` + Tier 1 `audit_logs`. Pre-receipt edits to supplier/qty/cost lock and emit `invalidated` + reset to `submitted`.
+- **PO Receipt (`M11`, `DDR-02`):** Verify unique `purchase_order_receipts.idempotency_key` → lock `purchase_orders`, `purchase_order_items`, `inventory` → verify `approved` or `partially_received` and `received_quantity + delta <= ordered_quantity` → update PO/items, increment `inventory.current_quantity`, insert `purchase_order_receipts`, `purchase_order_receipt_items`, `inventory_movements` (`+delta`, `purchase_receipt`), Tier 1 `audit_logs`.
+- **Customer Return & Credit (`M16`, `DDR-06`):** Verify `returns.idempotency_key` → lock parent `orders`/`order_items`/`transactions`/`invoices` + existing returns/credits + `inventory` → validate cumulative returnable qty and invoice credit cap → insert `returns`/`return_items`, conditional `inventory` + `return_restock` (`restock` only), conditional `demand_adjustments` (`excess_stock` only), optional `credit_notes`, update `invoices.payment_status`, Tier 1 `audit_logs`.
 
 ---
 
-## 7. Idempotency & Concurrency Control
+## 7. Idempotency & Deduplication Keys
 
-1. **Fulfilment Idempotency (`DDR-05`):** `order_fulfillments.idempotency_key` (`UNIQUE`) + row locking (`SELECT ... FOR UPDATE`) on `orders`, `order_items`, and `inventory` + `CHECK (fulfilled_quantity <= quantity)` prevents duplicate stock deduction across double-clicks and network retries.
-2. **PO Receipt Idempotency (`DDR-02`):** `purchase_order_receipts.idempotency_key` (`UNIQUE`) + `CHECK (received_quantity <= ordered_quantity)` prevents double-receiving deliveries.
-3. **Demand Adjustment Idempotency (`DDR-06`):** `demand_adjustments.adjustment_key` (`UNIQUE`) and `uq_da_return_item` prevent duplicate net-demand subtractions per `(return_id, order_item_id)` or cancelled order item.
-4. **Unresolved Alert Deduplication (`DDR-08`):** `alerts.active_dedup_key` generated `UNIQUE` index blocks duplicate unresolved (`active` / `acknowledged`) alerts for the same unresolved anomaly or stock issue while permitting new alerts if an issue recurs after resolution.
-5. **Audit & Outbox Retry Idempotency (`DDR-10`):** `audit_logs.idempotency_key` and `audit_outbox.idempotency_key` share identical token guarantees so outbox workers never create duplicate `audit_logs` entries during retries.
-
----
-
-## 8. Audit Failure Handling & DB Role Hardening (`DDR-10`)
-
-- **Tier 1 Critical Operations (Fail-Closed Atomicity):** Covers PO approvals/rejections/escalations/invalidations, manual inventory adjustments, returns and order/sale cancellations, order/sales fulfilment, centralized settings/threshold edits (`DDR-04`/`08`/`09`), and financial operations (`invoices`, `payments`, `credit_notes`). The business mutation and mandatory `audit_logs` `INSERT` share **one single InnoDB transaction**. If the `audit_logs` write fails, the entire transaction rolls back so zero unaudited Tier 1 changes commit, and independent non-DB critical failure telemetry fires immediately outside the rolled-back DB transaction.
-- **Tier 2 Non-Critical Events (Graceful Degradation via `audit_outbox`):** Covers `draft` saves/edits, `SYS-03` alert acknowledgements, and non-mutating UI views/exports. On transient `audit_logs` write error, the service persists the serialized audit event into `audit_outbox` (`pending` → `retrying` → `delivered`, or `dead_letter` after `max_retries` alongside independent failure telemetry) without crashing operator UX.
-- **MySQL Least-Privilege Security Grants (`DDR-10`):** Production/local database accounts used by FastAPI must separate schema-migration privileges (Alembic admin account) from runtime application grants:
-  ```sql
-  -- Runtime application account privilege pattern on audit_logs (conceptual enforcement)
-  GRANT SELECT, INSERT ON nexora_db.audit_logs TO 'nexora_app'@'%';
-  -- Strictly OMIT UPDATE, DELETE, ALTER, DROP on nexora_db.audit_logs
-  ```
-- **Redaction Rule:** Application serializers must redact credentials, secrets, `.env` values, and any card PANs/CVVs before writing JSON snapshots into `audit_logs` or `audit_outbox`.
+- `order_fulfillments.idempotency_key` (`UNIQUE`)
+- `purchase_order_approvals.idempotency_key` (`UNIQUE`)
+- `purchase_order_receipts.idempotency_key` (`UNIQUE`)
+- `returns.idempotency_key` (`UNIQUE`)
+- `demand_adjustments.adjustment_key` & `uq_da_return_item` (`UNIQUE`)
+- `alerts.active_dedup_key` generated `UNIQUE` (deduplicates active/acknowledged alerts only)
+- `audit_logs.idempotency_key` & `audit_outbox.idempotency_key` (`UNIQUE`)
 
 ---
 
-## 9. Historical Data Preservation, Snapshots & Deferred Implementation Notes
+## 8. Audit Failure Boundaries & DB Role Hardening (`DDR-10`)
 
-### 9.1 Immutable Snapshots vs. Current Master Data
-- **`orders` / `order_items`:** Freeze `requested_delivery_date`, `order_demand_type`, `uom_code`, `base_uom_conversion_factor`, and `unit_price`.
-- **`purchase_orders` / `purchase_order_items` / `purchase_order_approvals`:** Freeze `unit_cost`, `applied_tier1_limit`, `approval_tier`, and approval/rejection/invalidation events; editing `supplier_id`, quantities, `unit_cost`, or `total_cost` on an approved pre-receipt PO logs an invalidation record and resets status to `submitted` (`DDR-09`).
-- **`invoices` / `invoice_items` / `credit_notes`:** Freeze `billing_snapshot`, `currency_code` (`'INR'`), `tax_rate`, and `tax_amount` (`DDR-04`).
-- **`shipments`:** Freeze `shipping_address` at shipment creation.
-- **`product_lifecycle_snapshots` & `anomaly_events`:** Append-only immutable historical evaluation artifacts carrying `applied_settings_snapshot` / `applied_thresholds_snapshot`; future `operational_settings` edits apply forward-only (`DDR-08`).
+- **Tier 1 Fail-Closed:** PO reviews/invalidations, inventory adjustments, returns, cancellations, fulfilment, central settings updates (`DDR-04`/`08`/`09`), and financial entries execute `audit_logs` `INSERT` inside the exact business transaction; audit failure triggers full ACID rollback.
+- **Tier 2 Resilient Outbox:** Routine `draft` actions, alert acknowledgements, and exports write to `audit_outbox` (`pending` → `retrying` → `delivered` or `dead_letter`) on transient `audit_logs` write trouble.
+- **Explicit Outage & Telemetry Infrastructure Limitation (`4.6`):** Storing `audit_outbox` inside the same `nexora_db` MySQL instance **cannot record events if the MySQL server itself is completely unreachable or down** (and cannot survive inside a rolled-back DB transaction). Independent external failure telemetry (structured stderr/local log sink or external monitoring collector configured in Phase 2 infrastructure) is mandatory to capture complete DB unavailability and Tier 1 rollback events reliably.
+- **DB Role Privileges (`DDR-10`):** Runtime FastAPI DB accounts hold strictly `SELECT, INSERT` on `audit_logs`—omitting `UPDATE`, `DELETE`, `ALTER`, and `DROP`. Secrets, `.env` keys, and payment card PANs/CVVs are excluded/redacted before JSON serialization.
 
-### 9.2 Intentionally Deferred / Underspecified Schema Boundaries
-Per NEXORA specification discipline, business logic whose runtime mechanics belong to future Phase 4–5 implementation modules is not over-specified or invented in DDL columns:
-1. **`is_censored_demand` Training Treatment (`DDR-06`):** `orders.is_censored_demand` and `daily_demand_observations.is_censored_demand` flag stockout/allocation-constrained demand observations cleanly; how Phase 4 retraining weights or excludes those rows remains open to detailed ML design. Likewise, observation-level tracking when `/confirm` blocks an insufficient-stock request (`409`) occurs in aggregation/service logic without weakening `Available Stock >= qty`.
-2. **`demand_quarantine` Reprocessing Mechanics (`DDR-06`):** Captures malformed rows and review state (`pending_review`/`resolved`/`rejected`); detailed auto-remediation / patching forms await Phase 4 implementation.
-3. **Lifecycle Hysteresis Window Counters (`DDR-08`):** Consecutive-period transition evaluation runs cleanly inside service/scheduler logic over `product_lifecycle_snapshots` and `operational_settings` rather than inventing unsupported hysteresis counter tables.
-4. **Tax Multi-Slab Scope (`DDR-04`):** Uses a single centrally configured store tax setting per Blueprint `v2.2`; category/HSN multi-slab tax overrides are omitted (`EXCL-01`).
-5. **External Telemetry Sink (`DDR-10`):** Tier 1 rollback failure telemetry and dead-letter alerting outside MySQL operate via external log/telemetry handlers rather than database tables.
+---
+
+## 9. Historical Preservation, Snapshots & Deferred Decisions
+
+### 9.1 Frozen Historical Snapshots
+- `supplier_products` old closed versions (`is_active = FALSE`) & `purchase_order_items` (`supplier_product_id`, `unit_cost`, `lead_time_days_snapshot`, `moq_snapshot`)
+- `purchase_orders` (`applied_tier1_limit`, `approval_tier`) & `purchase_order_approvals`
+- `order_items` (`uom_code`, `base_uom_conversion_factor`, `base_uom_quantity`, `unit_price`)
+- `invoices` / `invoice_items` / `credit_notes` (`billing_snapshot`, `currency_code`, `tax_rate`, `tax_amount`)
+- `shipments` (`shipping_address`)
+- `product_lifecycle_snapshots` & `anomaly_events` (`applied_settings_snapshot` / `applied_thresholds_snapshot`, never rewritten when `operational_settings` change)
+
+### 9.2 Explicitly Deferred Application / Implementation Policies
+1. **Discrete vs. Fractional Unit Enforcement & Sub-`0.0001` Rounding Policy (`DDR-06`):** Schema stores all operational/stock quantities in `DECIMAL(14, 4)` (`conversion_to_base` in `DECIMAL(12, 6)`), while Blueprint `v2.2` does not fix per-SKU integer-only restrictions or UoM conversion rounding rules. Phase 2 implementation must define discrete-SKU guards and forbid silent rounding that alters stock balances.
+2. **`is_censored_demand` ML Retraining Weighting & Blocked-Confirmation Logging (`DDR-06`):** `orders.is_censored_demand` and `daily_demand_observations.is_censored_demand` preserve the stockout/allocation indicator; Phase 4 ML design determines training-time sample treatment and how `/confirm` `409` rejection telemetry populates period-level `is_censored_demand` without weakening `Available Stock >= qty`.
+3. **`demand_quarantine` Remediation UI & `DDR-08` Hysteresis Window Count:** Handled cleanly in Phase 4 services over `demand_quarantine`, `product_lifecycle_snapshots`, and `operational_settings`.
+4. **Centralized Store Tax Scope (`DDR-04`) & External Failure Telemetry (`DDR-10`):** Single centralized store tax key in `operational_settings` (`EXCL-01` excludes statutory tax slabs/e-way); external log/telemetry sink outside MySQL handles DB-outage alerts.
 
 ---
 
 ## 10. Data Retention & Deletion Policy
 
-1. **Soft-Deactivation Entities:** `categories`, `products`, `uom_conversions`, `suppliers`, `supplier_products` (mandatory historical retention per `DDR-07`), and `customers` use `is_active = FALSE` rather than `DELETE` once referenced.
-2. **State-Transition Cancellation Only:** `orders`, `purchase_orders`, and pre-dispatch `shipments` transition cleanly to `cancelled` (or `rejected` for POs) without deleting historical records.
-3. **Immutable Append-Only Ledgers (Zero Deletion / Update):** `transactions`, `transaction_items`, `inventory_movements`, `order_fulfillments`, `order_fulfillment_items`, `purchase_order_approvals`, `purchase_order_receipts`, `purchase_order_receipt_items`, `invoices`, `invoice_items`, `payments`, `returns`, `return_items`, `credit_notes`, `shipment_events`, `demand_adjustments`, `product_lifecycle_snapshots`, `anomaly_events`, and `audit_logs` are never deleted or retroactively overwritten.
+All referenced master entities (`categories`, `products`, `uom_conversions`, `suppliers`, `supplier_products`, `customers`) use soft-deactivation (`is_active = FALSE`). Open commitments close via `cancelled`/`rejected`. Commercial, ledger, receipt, fulfilment, financial, lifecycle, anomaly, and audit records enforce `ON DELETE RESTRICT` permanently.
 
 ---
 
 ## 11. Current Implementation vs. Planned Target Schema
 
-Per [FEATURES_STATUS.md](FEATURES_STATUS.md) (`Version 2.3`, tracking `277` total features: `22` Implemented, `8` Partially Implemented, `247` Planned):
-
-| Area | Repository Status on `main` | Verified Reality | Planned Scope in This Schema |
-| :--- | :---: | :--- | :--- |
-| **MySQL Engine & Migrations** | **`PLANNED`** | `sqlalchemy`, `pymysql`, `cryptography` in `backend/requirements.txt`; `DB_*` defaults in [config.py](../backend/app/core/config.py). **Zero** Alembic folder, **zero** ORM files in `backend/app/`, **zero** MySQL tables. | MySQL 8.x `InnoDB` engine, SQLAlchemy 2.x models, Alembic migrations, restricted `audit_logs` SQL roles (`DDR-10`). |
-| **Retail Ops, Inventory, POs, Billing, Shipping, Governance** | **`PLANNED`** | **Zero** operational MySQL tables (`M01`–`M11`, `M13`, `M15`–`M18`, `SYS-01`–`SYS-04` entities unimplemented). | All `40` target tables documented in Section 3. |
-| **Phase 1 ML Engine & Stateless Endpoints** | **`IMPLEMENTED` / `PARTIAL`** | Static UCI CSV (`online_retail_II.csv`), processed `daily_product_demand.csv`, serialized `.joblib` models + `models_metadata.json`, CSV feature lookup (`historical_data_service.py`), `/api/v1/forecast/*`, `/api/v1/experimental/*`, stateless `POST /api/v1/inventory/recommend` (`inventory_service.py`), and Phase 1 SPA (`frontend/src/App.tsx`). | Persist `model_runs`, `forecasts`, `uom_conversions`, `demand_adjustments`, `demand_quarantine`, `daily_demand_observations`; integrate MySQL 5-metric inventory & hierarchical lead times (`DDR-01`–`03`, `06`). |
+Per [FEATURES_STATUS.md](FEATURES_STATUS.md) (`Version 2.3`: `277` tracked features = `22` Implemented, `8` Partially Implemented, `247` Planned):
+- **Implemented Today on `main`:** Offline Phase 1 UCI CSV scripts, processed `daily_product_demand.csv`, committed `.joblib` models + `models_metadata.json`, CSV lag extraction (`historical_data_service.py`), `/api/v1/forecast/*`, `/api/v1/experimental/*`, stateless `POST /api/v1/inventory/recommend`, and Phase 1 SPA [App.tsx](../frontend/src/App.tsx).
+- **Planned in This Schema (`0` Live MySQL Tables):** `sqlalchemy`/`pymysql`/`cryptography` packages (`backend/requirements.txt`) and `DB_*` config fields ([config.py](../backend/app/core/config.py)) exist only as dependencies/defaults; zero ORM classes, zero Alembic migrations, and zero live MySQL tables exist on `main`.
 
 ---
 
 ## 12. Design Decision Alignment Matrix (`DDR-01`–`DDR-10`)
 
-| DDR | Decision Summary | Backing Tables | Enforcing Columns, Keys & Constraints |
+| DDR | Decision Summary | Backing Tables | Enforcing Keys, Constraints & Application Boundaries |
 | :---: | :--- | :--- | :--- |
-| **`DDR-01`** | Unified supplier lead-time hierarchy (`supplier_products` → `suppliers` → `UNAVAILABLE`, zero fabricated defaults) & identical `M11`/`M14` math (`(Forecast/H)×L×1.20`) | `suppliers`, `supplier_products`, `inventory`, `forecasts`, `model_runs` | `supplier_products.lead_time_days` NULLable + `suppliers.lead_time_days` NULLable (`CHECK BETWEEN 1 AND 365`, zero `DEFAULT 7`); `inventory.safety_factor DECIMAL(4,2) DEFAULT 1.20 CHECK >= 1.00`. |
-| **`DDR-02`** | Strictly `approved` & `partially_received` POs contribute outstanding units to `Incoming Stock`; `draft`/`submitted`/`rejected`/`received`/`cancelled` excluded (`0`) | `purchase_orders`, `purchase_order_items`, `purchase_order_receipts`, `purchase_order_receipt_items`, `inventory` | `purchase_orders.order_status` 7-state `ENUM`; `0 <= received_quantity <= ordered_quantity`; incoming units remain excluded from `inventory.current_quantity` until receipt. |
-| **`DDR-03`** | Separate 5 stock balances: `Physical`, `Reserved`, `Available = Physical - Reserved`, `Incoming`, `Projected Available = Available + Incoming` | `inventory`, `orders`, `order_items`, `purchase_orders`, `purchase_order_items` | `inventory.current_quantity`, `reserved_quantity` (`CHECK 0 <= reserved_quantity <= current_quantity`); derived `Available` & `Projected Available` kept strictly distinct. |
-| **`DDR-04`** | `INR` default operational currency, `DECIMAL` math everywhere, centralized Store Manager tax config applied forward-only, historical tax/currency preserved | `operational_settings`, `products`, `transactions`, `invoices`, `invoice_items`, `payments`, `credit_notes` | Zero `FLOAT`/`DOUBLE`; `DECIMAL(10,2)`/`DECIMAL(12,2)`; `invoices.currency_code DEFAULT 'INR'`, frozen `invoices.tax_rate`, `tax_amount`, `billing_snapshot`; `operational_settings.store_tax_rate`. |
-| **`DDR-05`** | Multiple partial/full fulfilment batches (`idempotency_key`), `1:N` split shipments with independent tracking, `fulfilled` at 100% completion only, threshold alerts recommend-only | `orders`, `order_items`, `order_fulfillments`, `order_fulfillment_items`, `shipments`, `shipment_items`, `packing_slips`, `shipment_events`, `inventory`, `inventory_movements`, `alerts` | `order_fulfillments.idempotency_key UNIQUE`; `0 <= fulfilled_quantity <= quantity`; `shipments.order_id` `1:N` + `shipment_items.order_item_id`; `alerts` linked safely (`EXCL-03`). |
-| **`DDR-06`** | Confirmed B2B orders establish demand timed by `requested_delivery_date`/creation date (never settlement date); separate fulfilled qty, `demand_adjustments` (`excess_stock` vs `defective`), `uom_conversions`, `demand_quarantine`, `is_censored_demand`, `daily_demand_observations`, `model_runs` drift | `orders`, `order_items`, `uom_conversions`, `return_items`, `demand_adjustments`, `demand_quarantine`, `daily_demand_observations`, `model_runs` | `orders.order_demand_type`, `requested_delivery_date`, `is_censored_demand`; `order_items.base_uom_conversion_factor`; `demand_adjustments` (`adjustment_key` & `uq_da_return_item` UNIQUE, `quantity_delta < 0`); `return_items.return_classification`; `demand_quarantine`; `daily_demand_observations`; `model_runs.drift_status`/`drift_metrics`. |
-| **`DDR-07`** | Explicit many-to-many supplier-product sourcing preserving inactive pairs for historical cost/PO traceability | `supplier_products`, `suppliers`, `products`, `purchase_orders` | `supplier_products` (`supplier_id`, `product_id` UNIQUE pair, `supplier_product_code`, `purchase_price`, `lead_time_days`, `minimum_order_quantity >= 1`, `is_preferred`, `is_active` retained permanently). |
-| **`DDR-08`** | 5-stage Lifecycle (`Introduction`..`Discontinued`, manual auth for `Discontinued`), hybrid anomaly detection, bounded central defaults + reset + forward-only eval + duplicate alert suppression | `products`, `product_lifecycle_snapshots`, `anomaly_events`, `alerts`, `operational_settings`, `audit_logs` | `lifecycle_stage` 5-stage `ENUM`; `product_lifecycle_snapshots` & `anomaly_events` immutable with `applied_*_snapshot`; `operational_settings` (`min_bound`, `max_bound`, `default_value`); `alerts.active_dedup_key` generated `UNIQUE` index. |
-| **`DDR-09`** | Dual-control tiered PO approval (`Purchase Manager <= limit`, non-escalated -> Tier 1 oversight digest; `> limit`/split flag/anomaly/price spike/vendor override -> `Store Manager`), post-approval edit invalidation, non-retroactive limit changes, zero auto-dispatch | `purchase_orders`, `purchase_order_items`, `purchase_order_approvals`, `operational_settings`, `alerts`, `anomaly_events`, `audit_logs` | `purchase_orders.approval_tier`, `applied_tier1_limit`, `escalation_required`, `split_review_flagged`, `review_notes`; `purchase_order_approvals` immutable event log; `operational_settings` (`po_tier1_approval_limit`, `po_split_window_days`). |
-| **`DDR-10`** | Tier 1 fail-closed atomicity + external telemetry vs. Tier 2 resilient `audit_outbox` retries/dead-letter, zero `UPDATE`/`DELETE` grants on `audit_logs`, `selected_workspace` attribution without auth RBAC | `audit_logs`, `audit_outbox`, plus workspace attribution across `M01`–`M18` tables | `audit_logs.audit_tier`, `outcome`, `selected_workspace`, `action_source`, `operator_ref`, `correlation_id`, `idempotency_key` (`UNIQUE`), `before_values`/`after_values`; `audit_outbox` retry/dead-letter state machine; MySQL role grants strictly `SELECT, INSERT`. |
+| **`DDR-01`** | Lead-time hierarchy (`supplier_products` → `suppliers` → `UNAVAILABLE`) & `(Forecast/H)×L×1.20` parity | `suppliers`, `supplier_products`, `inventory`, `forecasts`, `model_runs` | Strictly nullable `lead_time_days` (`CHECK 1..365`); `inventory.safety_factor DECIMAL(4,2) DEFAULT 1.20 CHECK >= 1.00`. |
+| **`DDR-02`** | Strictly `approved` & `partially_received` POs enter `Incoming Stock`; partial receipts move stock into `Physical Stock` | `purchase_orders`, `purchase_order_items`, `purchase_order_receipts`, `purchase_order_receipt_items`, `inventory`, `inventory_movements` | 7-state `ENUM`; `0 <= received_quantity <= ordered_quantity`; composite PO-receipt FKs; unique `idempotency_key`; atomic TX updates `inventory` + `inventory_movements`. |
+| **`DDR-03`** | Separate 5 stock balances in `products.base_uom` (`DECIMAL(14,4)`) | `inventory`, `orders`, `order_items`, `purchase_orders`, `purchase_order_items` | `CHECK (0.0000 <= reserved_quantity <= current_quantity)`; derived `Available` & `Projected Available` unstored. |
+| **`DDR-04`** | `INR` default currency, `DECIMAL` financial math, centralized Store Manager tax settings, frozen history | `operational_settings`, `products`, `transactions`, `invoices`, `invoice_items`, `payments`, `credit_notes` | Zero `FLOAT`/`DOUBLE`; native JSON `store_tax_rate` in `operational_settings`; frozen `invoices.currency_code`, `tax_rate`, `tax_amount`, `billing_snapshot`. |
+| **`DDR-05`** | Multi-batch partial fulfilment (`idempotency_key`), `1:N` split shipments, `fulfilled` at 100%, recommend alerts | `orders`, `order_items`, `order_fulfillments`, `order_fulfillment_items`, `shipments`, `shipment_items`, `packing_slips`, `shipment_events`, `inventory`, `inventory_movements`, `alerts` | Composite FKs tying batch/item/shipment to identical `order_id`; `uq_fulfillments_idempotency`; `0 <= fulfilled_quantity <= quantity`; locked app `SUM(shipped) <= fulfilled_quantity`. |
+| **`DDR-06`** | Confirmed B2B orders timed by `requested_delivery_date`/creation date; separate fulfilled qty, `demand_adjustments`, `uom_conversions`, `demand_quarantine`, `is_censored_demand`, `daily_demand_observations`, `model_runs` drift | `orders`, `order_items`, `uom_conversions`, `return_items`, `demand_adjustments`, `demand_quarantine`, `daily_demand_observations`, `model_runs` | `order_demand_type`, `requested_delivery_date`, `is_censored_demand`; `DECIMAL(14,4)`/`DECIMAL(12,6)` UoM traceability; `demand_adjustments` composite FKs + `uq_da_key`/`uq_da_return_item`; locked `SUM(adj) <= confirmed`. |
+| **`DDR-07`** | M2M `supplier_products` retaining historical sourcing terms & inactive records without overwrites | `supplier_products`, `suppliers`, `products`, `purchase_order_items` | Effective-dated rows + generated `uq_sp_one_active_pair` & `uq_sp_one_active_preferred` + `purchase_order_items.supplier_product_id` & term snapshots. |
+| **`DDR-08`** | 5 lifecycle stages (manual `Discontinued`), hybrid anomaly detection, bounded settings, duplicate alert suppression | `products`, `product_lifecycle_snapshots`, `anomaly_events`, `alerts`, `operational_settings`, `audit_logs` | `products.lifecycle_stage` synchronized alongside immutable `product_lifecycle_snapshots`; bounded JSON `operational_settings`; `alerts.active_dedup_key` generated `UNIQUE`. |
+| **`DDR-09`** | Dual-control PO approval, split/anomaly escalation, post-approval invalidation, non-retroactive limits, zero auto-dispatch | `purchase_orders`, `purchase_order_items`, `purchase_order_approvals`, `operational_settings`, `alerts`, `anomaly_events`, `audit_logs` | Snapshot `applied_tier1_limit`; immutable `purchase_order_approvals` + `idempotency_key`; app workspace & locked TX workflow validation explicitly separated from DB constraints (`EXCL-03`). |
+| **`DDR-10`** | Tier 1 fail-closed atomicity vs Tier 2 `audit_outbox`, zero `UPDATE`/`DELETE` SQL grants, non-auth workspace provenance & external outage telemetry | `audit_logs`, `audit_outbox`, plus standardized `selected_workspace`/`action_source`/`operator_ref` | Unified provenance triad; `audit_logs` `SELECT, INSERT` grant pattern; explicit `audit_outbox` single-DB outage boundary documented in Section 8. |
