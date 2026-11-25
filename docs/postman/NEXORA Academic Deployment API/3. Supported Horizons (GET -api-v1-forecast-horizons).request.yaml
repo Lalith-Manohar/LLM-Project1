@@ -1,0 +1,11 @@
+$kind: http-request
+name: 3. Supported Horizons (GET /api/v1/forecast/horizons)
+description: Retrieves the operational planning horizon windows (7, 15, 30, and 90 days) supported by NEXORA.
+url: "{{baseUrl}}/api/v1/forecast/horizons"
+method: GET
+headers:
+  - key: ngrok-skip-browser-warning
+    value: "69420"
+    description: Bypasses the ngrok free-tier browser warning interstitial page.
+examples: ./.resources/3. Supported Horizons (GET -api-v1-forecast-horizons).resources/examples
+order: 3000

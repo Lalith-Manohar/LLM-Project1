@@ -1,0 +1,5 @@
+$kind: http-request
+description: shows Available forecast horizons
+url: "{{baseUrl}}/api/v1/forecast/horizons"
+method: GET
+order: 8000

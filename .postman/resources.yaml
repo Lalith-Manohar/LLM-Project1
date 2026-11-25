@@ -1,0 +1,7 @@
+# Use this workspace to collaborate
+workspace:
+  id: 0d7cd9b0-ab2c-4cb5-8dd1-2b5085ba1720
+
+localResources:
+  collections:
+    - ../docs/postman/NEXORA Academic Deployment API

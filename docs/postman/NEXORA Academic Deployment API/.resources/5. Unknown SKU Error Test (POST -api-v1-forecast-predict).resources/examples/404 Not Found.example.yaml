@@ -1,0 +1,14 @@
+$kind: http-example
+request:
+  url: ""
+  method: GET
+response:
+  statusCode: 404
+  statusText: Not Found
+  body:
+    type: json
+    content: |-
+      {
+        "detail": "Product SKU 'NON_EXISTENT_SKU_99999' was not found in historical sales records. Ensure the SKU exists in the UCI Online Retail II catalog."
+      }
+order: 1000

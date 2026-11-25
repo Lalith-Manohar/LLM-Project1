@@ -1,0 +1,12 @@
+$kind: http-request
+description: ""
+url: "{{baseUrl}}/api/v1/forecast"
+method: POST
+body:
+  type: json
+  content: "{\r
+
+    \  \"stock_code\": \"NON_EXISTENT_SKU_99999\"\r
+
+    }"
+order: 11000

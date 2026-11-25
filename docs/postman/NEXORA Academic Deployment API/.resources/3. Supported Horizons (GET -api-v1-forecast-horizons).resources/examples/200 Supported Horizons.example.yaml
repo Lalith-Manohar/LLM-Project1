@@ -1,0 +1,21 @@
+$kind: http-example
+request:
+  url: ""
+  method: GET
+response:
+  statusCode: 200
+  statusText: OK
+  body:
+    type: json
+    content: |-
+      {
+        "supported_horizons_days": [7, 15, 30, 90],
+        "description": "Multi-horizon retail demand planning windows (7 to 90 days).",
+        "horizon_definitions": {
+          "7": "Weekly fast-moving replenishment & shelf restock",
+          "15": "Bi-weekly supplier batch ordering",
+          "30": "Monthly inventory planning & space allocation",
+          "90": "Quarterly supplier volume quotas & supply chain planning"
+        }
+      }
+order: 1000

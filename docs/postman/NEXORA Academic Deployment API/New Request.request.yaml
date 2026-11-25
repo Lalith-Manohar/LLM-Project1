@@ -1,0 +1,19 @@
+$kind: http-request
+url: "{{baseUrl}}/api/v1/inventory/recommend"
+method: POST
+body:
+  type: json
+  content: "{\r
+
+    \  \"stock_code\": \"85123A\",\r
+
+    \  \"current_stock\": -50,\r
+
+    \  \"lead_time_days\": 7,\r
+
+    \  \"review_period_days\": 7,\r
+
+    \  \"safety_stock_days\": 3\r
+
+    }"
+order: 7000

@@ -66,11 +66,11 @@ def load_clean_sales(file_path: Optional[str] = None) -> pd.DataFrame:
         low_memory=False
     )
     
-    # Parse InvoiceDate with explicit format '%d-%m-%y %H:%M'
-    df["date"] = pd.to_datetime(df["InvoiceDate"], format="%d-%m-%y %H:%M", errors="coerce").dt.date
-    if df["date"].isnull().any():
-        fallback_mask = df["date"].isnull()
-        df.loc[fallback_mask, "date"] = pd.to_datetime(df.loc[fallback_mask, "InvoiceDate"], errors="coerce").dt.date
+    # Clean StockCode identifiers
+    df["StockCode"] = df["StockCode"].fillna("").astype(str).str.strip()
+
+    # Parse InvoiceDate cleanly
+    df["date"] = pd.to_datetime(df["InvoiceDate"], errors="coerce").dt.date
 
     # Calculate line-level revenue for supplementary aggregation
     df["line_revenue"] = df["Quantity"].astype(float) * df["Price"].astype(float)
@@ -94,7 +94,9 @@ def aggregate_daily_demand(df: pd.DataFrame) -> pd.DataFrame:
         pd.DataFrame: Product-day aggregated DataFrame sorted by (StockCode, date).
     """
     print("[NEXORA Feature Engineering] Aggregating transactions by StockCode and calendar date...")
-    daily_df = df.groupby(["StockCode", "date"], as_index=False).agg(
+    df_clean = df.copy()
+    df_clean["StockCode"] = df_clean["StockCode"].fillna("").astype(str).str.strip()
+    daily_df = df_clean.groupby(["StockCode", "date"], as_index=False).agg(
         daily_demand=("Quantity", "sum"),
         transaction_count=("Quantity", "count"),
         revenue=("line_revenue", "sum")
@@ -134,7 +136,13 @@ def create_continuous_date_series(daily_df: pd.DataFrame) -> Tuple[pd.DataFrame,
     reindexed_groups = []
     total_observed_rows = len(daily_df)
     
-    for sku, group in daily_df.groupby("StockCode", as_index=False):
+    for sku, group in daily_df.groupby("StockCode"):
+        if group["date"].duplicated().any():
+            group = group.groupby("date", as_index=False).agg(
+                daily_demand=("daily_demand", "sum"),
+                transaction_count=("transaction_count", "sum"),
+                revenue=("revenue", "sum")
+            )
         min_date = group["date"].min()
         max_date = group["date"].max()
         
@@ -275,6 +283,23 @@ def save_daily_demand_data(
     df.to_csv(output_path, index=False)
     print(f"[NEXORA Feature Engineering] File saved ({output_path.stat().st_size:,} bytes).")
     return output_path
+
+
+def run_daily_aggregation_pipeline(
+    sales_csv_path: Optional[str] = None,
+    output_dir: Optional[Path] = None
+) -> Tuple[pd.DataFrame, Dict[str, Any]]:
+    """Runs the full daily aggregation, continuous date imputation, and validation pipeline."""
+    print("=== NEXORA Phase 1 Task 3: Daily SKU Demand Aggregation Pipeline ===")
+    clean_df = load_clean_sales(sales_csv_path)
+    daily_agg = aggregate_daily_demand(clean_df)
+    continuous_df, imputation_stats = create_continuous_date_series(daily_agg)
+    val = validate_daily_demand_data(clean_df, daily_agg, continuous_df)
+    if not val["is_valid"]:
+        raise ValueError("Daily demand aggregation validation failed!")
+    save_daily_demand_data(continuous_df, output_dir)
+    print("=== NEXORA Phase 1 Task 3 Completed Successfully ===")
+    return continuous_df, val
 
 
 # ==============================================================================

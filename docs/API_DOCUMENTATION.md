@@ -10,11 +10,14 @@ NEXORA utilizes **FastAPI** for its asynchronous REST application programming in
 
 ## 2. Implemented Endpoints
 
-### 2.1 General / Health Endpoints
+### 2.1 General & Health / Readiness Endpoints
 | Method | Endpoint | Status | Description |
 | :--- | :--- | :--- | :--- |
 | `GET` | `/` | **Implemented** | Root health and service metadata. |
-| `GET` | `/health` | **Implemented** | Service status and version probe. |
+| `GET` | `/health` | **Implemented** | Service liveness probe (`200 OK`). |
+| `GET` | `/ready` | **Implemented** | Subsystem readiness probe (`200 OK` or `503 Unavailable`). |
+| `GET` | `/api/v1/health` | **Implemented** | Route alias for `/health`. |
+| `GET` | `/api/v1/ready` | **Implemented** | Route alias for `/ready`. |
 
 #### Root Response Example (`200 OK`)
 ```json
@@ -25,6 +28,44 @@ NEXORA utilizes **FastAPI** for its asynchronous REST application programming in
   "documentation": "/docs"
 }
 ```
+
+#### Liveness Probe Example (`GET /health` -> `200 OK`)
+```json
+{
+  "status": "healthy",
+  "service": "backend",
+  "version": "0.1.0"
+}
+```
+
+#### Readiness Probe Example (`GET /ready` -> `200 OK`)
+```json
+{
+  "status": "ready",
+  "service": "backend",
+  "version": "0.1.0",
+  "models": {
+    "ready": true,
+    "models_count": 4,
+    "loaded_horizons": [7, 15, 30, 90],
+    "total_skus": null,
+    "total_records": null,
+    "dataset_file": null,
+    "error": null
+  },
+  "historical_data": {
+    "ready": true,
+    "models_count": null,
+    "loaded_horizons": null,
+    "total_skus": 3922,
+    "total_records": 1074653,
+    "dataset_file": "daily_product_demand.csv",
+    "error": null
+  }
+}
+```
+
+*(If any subsystem fails to load or is uninitialized, `/ready` returns `HTTP 503 Service Unavailable` with error diagnostics in the `error` field).*
 
 ---
 
@@ -116,11 +157,19 @@ NEXORA utilizes **FastAPI** for its asynchronous REST application programming in
 
 #### 4. Multi-Horizon Demand Prediction
 - **Endpoints:**
-  - `POST /api/v1/forecast/`
-  - `POST /api/v1/forecast/predict` *(Blueprint alias)*
+  - `POST /api/v1/forecast/predict` *(Primary Blueprint Endpoint)*
+  - `POST /api/v1/forecast/` *(Route Prefix Alias)*
 - **Status:** **Implemented & Verified**
-- **Description:** Generates multi-horizon or single-horizon demand forecasts using in-memory pre-trained `.joblib` estimators. Guaranteed non-negative and finite predictions.
-- **Request Body (Nested Features Example):**
+- **Description:** Generates multi-horizon demand forecasts using in-memory pre-trained `.joblib` estimators. Automatically extracts historical lag and rolling features from indexed retail records when features are omitted.
+- **Primary Request Body (Automated CSV Feature Extraction - Postman Default):**
+```json
+{
+  "stock_code": "85123A"
+}
+```
+*Optionally specify horizons: `{"stock_code": "85123A", "horizons": [7, 15, 30, 90]}`.*
+
+- **Alternative Request Body (Manual Nested Features for Testing):**
 ```json
 {
   "stock_code": "85123A",
@@ -151,35 +200,41 @@ NEXORA utilizes **FastAPI** for its asynchronous REST application programming in
   "rolling_mean_28": 12.8
 }
 ```
-- **Response `200 OK`:**
+- **Response `200 OK` (Automated Features Example):**
 ```json
 {
   "stock_code": "85123A",
   "horizons": [7, 15, 30, 90],
   "predictions": {
-    "7": 83.4307,
-    "15": 184.358,
-    "30": 576.6974,
-    "90": 1588.9073
+    "7": 771.5717,
+    "15": 3009.3201,
+    "30": 3062.395,
+    "90": 9427.142
   },
   "horizon_details": [
-    { "horizon_days": 7, "predicted_demand": 83.4307, "model_name": "Linear Regression", "wape": 55.65 },
-    { "horizon_days": 15, "predicted_demand": 184.358, "model_name": "Random Forest", "wape": 50.00 },
-    { "horizon_days": 30, "predicted_demand": 576.6974, "model_name": "Random Forest", "wape": 48.73 },
-    { "horizon_days": 90, "predicted_demand": 1588.9073, "model_name": "Random Forest", "wape": 53.22 }
+    { "horizon_days": 7, "predicted_demand": 771.5717, "model_name": "Linear Regression", "wape": 55.65 },
+    { "horizon_days": 15, "predicted_demand": 3009.3201, "model_name": "Random Forest", "wape": 50.00 },
+    { "horizon_days": 30, "predicted_demand": 3062.395, "model_name": "Random Forest", "wape": 48.73 },
+    { "horizon_days": 90, "predicted_demand": 9427.142, "model_name": "Random Forest", "wape": 53.22 }
   ],
   "units": "units",
   "model_version": "Phase 1 (Task 5 Model Training & Serialization)",
-  "timestamp": "2026-11-17T01:19:15.123456+00:00",
-  "warnings": [],
+  "timestamp": "2026-11-19T17:49:00.188438+00:00",
+  "warnings": [
+    "Historical demand features automatically generated from 374 daily records up to observation date 2011-12-09 (UCI Online Retail II dataset)."
+  ],
+  "observation_date": "2011-12-09",
+  "history_days": 374,
+  "is_auto_generated": true,
   "status": "success",
-  "total_predicted_demand": 83.4307,
+  "total_predicted_demand": 771.5717,
   "horizon_days": null
 }
 ```
 - **Error Responses:**
-  - `422 Unprocessable Entity`: Validation failure (unsupported horizon like 999, negative demand, missing required lags, non-finite values, or blank StockCode).
-  - `503 Service Unavailable`: Models not ready or missing artifacts.
+  - `404 Not Found`: Unknown SKU not in historical catalog.
+  - `422 Unprocessable Content`: Insufficient historical records (< 29 days) or schema validation failure.
+  - `503 Service Unavailable`: Models or historical dataset unready / uninitialized.
 
 ---
 

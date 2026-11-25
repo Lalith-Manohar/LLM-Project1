@@ -1,0 +1,21 @@
+$kind: http-request
+name: 6. Insufficient History Error Test (POST /api/v1/forecast/predict)
+description: |-
+  Submits SKU '21777' which has only 6 calendar days of records (minimum 29 required).
+  Expected: HTTP 422 Unprocessable Content.
+url: "{{baseUrl}}/api/v1/forecast/predict"
+method: POST
+headers:
+  - key: Content-Type
+    value: application/json
+  - key: ngrok-skip-browser-warning
+    value: "69420"
+    description: Bypasses the ngrok free-tier browser warning interstitial page.
+body:
+  type: json
+  content: |-
+    {
+      "stock_code": "21777"
+    }
+examples: ./.resources/6. Insufficient History Error Test (POST -api-v1-forecast-predic.resources/examples
+order: 6000

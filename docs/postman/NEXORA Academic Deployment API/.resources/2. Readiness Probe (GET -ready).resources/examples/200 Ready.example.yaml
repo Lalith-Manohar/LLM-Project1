@@ -1,0 +1,34 @@
+$kind: http-example
+request:
+  url: ""
+  method: GET
+response:
+  statusCode: 200
+  statusText: OK
+  body:
+    type: json
+    content: |-
+      {
+        "status": "ready",
+        "service": "backend",
+        "version": "0.1.0",
+        "models": {
+          "ready": true,
+          "models_count": 4,
+          "loaded_horizons": [7, 15, 30, 90],
+          "total_skus": null,
+          "total_records": null,
+          "dataset_file": null,
+          "error": null
+        },
+        "historical_data": {
+          "ready": true,
+          "models_count": null,
+          "loaded_horizons": null,
+          "total_skus": 3922,
+          "total_records": 1074653,
+          "dataset_file": "daily_product_demand.csv",
+          "error": null
+        }
+      }
+order: 1000
