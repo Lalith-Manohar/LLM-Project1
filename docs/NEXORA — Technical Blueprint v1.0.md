@@ -2,19 +2,20 @@
 ## Technical Project Blueprint & Master Architecture Specification
 
 - **Project:** NEXORA – AI-Powered Retail Management & Intelligence System
-- **Document Version:** 2.1 (Detailed Technical Specification)
+- **Document Version:** 2.2 (Design Decision Resolution)
 - **Original Baseline (v1.0):** 15 November 2026
 - **Scope Revision (v2.0):** 25 November 2026
 - **Detailed Specification (v2.1):** 25 November 2026
+- **Design Decision Resolution (v2.2):** 25 November 2026
 - **Target File:** `docs/NEXORA — Technical Blueprint v1.0.md`
-- **Active Repository Baseline:** Branch `main` (`f0e56ba`), Phase 1 ML Engine & Forecast API Completed
+- **Active Repository Baseline:** Branch `main` (`3d8a937`), Phase 1 ML Engine & Forecast API Completed
 
 ---
 
 # 1. Scope Revision & Implementation Reality
 
-## 1.1 Continuity from v1.0 and v2.0 to v2.1
-This document refines and completes Technical Blueprint v2.0 into an implementation-ready technical specification (`v2.1`). All core architectural decisions established in v2.0 remain intact:
+## 1.1 Continuity from v1.0, v2.0, and v2.1 to v2.2
+This document consolidates Technical Blueprint v2.1 into **Technical Blueprint v2.2 (Design Decision Resolution)** by formally incorporating all ten finalized Design Decisions (**`DDR-01` through `DDR-10`**). All core architectural decisions established in v2.0 and v2.1 remain intact:
 
 - **Maximum Two Primary Webpages:** Page 1 (**Stakeholder Workspace Selection**) and Page 2 (**Unified Retail Management Dashboard**).
 - **Four Stakeholder Workspaces (UI Context, Not Authentication):** **Store Manager (Admin)**, **Inventory Staff**, **Purchase Manager**, and **Finance Staff**. Zero login screens, passwords, registration flows, or JWT tokens exist in the target design.
@@ -22,11 +23,12 @@ This document refines and completes Technical Blueprint v2.0 into an implementat
 - **Centralized History & Audit Database:** Persistent, append-only history tracking across modules, workspaces, API errors, and restarts.
 - **Preserved Phase 1 ML Engine:** Complete retention of the UCI Online Retail II preprocessing, leakage-free feature engineering, multi-horizon (7, 15, 30, 90-day) training/evaluation pipelines, and FastAPI inference endpoints.
 - **Integrated Modular Monolith:** Single FastAPI backend, MySQL 8.x (InnoDB) relational database, serialized scikit-learn `.joblib` estimators, and React + TypeScript frontend.
+- **Finalized Design Decisions (`DDR-01`–`DDR-10`):** Unified supplier lead-time risk calculation, incoming PO rules, stock reservation & availability breakdown, `INR` default currency and central tax config, partial fulfillment & split shipments, B2B demand/quarantine/UoM ML integration, `supplier_products` mapping, lifecycle & hybrid anomaly governance, tiered dual-control PO approval, and tiered fail-closed/outbox audit handling.
 
 ## 1.2 Verified Repository Implementation Reality (`main`)
 Direct inspection of the repository on branch `main` establishes the exact boundary between implemented components and planned work. No component is claimed implemented merely because it appears in prior draft documents.
 
-| Architectural Area | Status on `main` | Verified Repository Evidence | Target State in Blueprint v2.1 |
+| Architectural Area | Status on `main` | Verified Repository Evidence | Target State in Blueprint v2.2 |
 | :--- | :---: | :--- | :--- |
 | **ML Data Ingestion & Profiling** | **Implemented** | `backend/ml/src/data_loader.py` reads `backend/ml/data/raw/online_retail_II.csv` (`latin1`, 541,910 rows) and generates `eda_report.md`. | Preserved untouched; used as empirical baseline. |
 | **Transaction Stream Separation** | **Implemented** | `backend/ml/src/preprocessing.py` performs 4-way MECE classification (`gross_sales`, `cancellation`, `return_credit`, `exceptional`) verified by `test_preprocessing.py` (5 tests). | Preserved; supports future Return & Anomaly analytics. |
@@ -105,7 +107,7 @@ NEXORA adheres to a single, streamlined stack across frontend, backend, data, ML
 | **Automated Testing** | Pytest (`>=8.0.0`) + `pytest-timeout` + HTTPX | **Implemented** (60 tests) | Unit, API, ML leakage, and integration verification (`pytest.ini` 30s timeout guard) |
 | **API Exploration** | Swagger UI (`/docs`) + Postman | **Implemented** | Interactive endpoint inspection and reproducible API verification |
 
-*Note on Authentication Removal:* JWT libraries and `Passlib` password hashing from Blueprint v1.0 are **not** part of the approved v2.1 stack because workspace selection replaces user login.
+*Note on Authentication Removal:* JWT libraries and `Passlib` password hashing from Blueprint v1.0 are **not** part of the approved v2.2 stack because workspace selection replaces user login.
 
 ## 3.2 Modular Monolithic System Architecture
 
@@ -139,12 +141,12 @@ NEXORA adheres to a single, streamlined stack across frontend, backend, data, ML
                    v                                             v
 +--------------------------------------+      +-------------------------------------+
 |        MYSQL 8.x DATABASE            |      |     TRAINED ML ENGINE (Disk)        |
-| - Foundation (Catalog, Cust, Supp)   |      | - backend/ml/models/*.joblib        |
-| - Transactions, Orders & Returns     |      | - models_metadata.json              |
-| - Inventory, Movements & POs         |      | - UCI Historical Demand Baseline    |
-| - Invoices, Payments & Credit Notes  |      |   (online_retail_II.csv)            |
-| - Shipments, Forecasts, Alerts       |      +-------------------------------------+
-| - Centralized History & Audit Logs   |
+| - Foundation & supplier_products   |      | - backend/ml/models/*.joblib        |
+| - Orders, Fulfillments, Sales, Ret.  |      | - models_metadata.json              |
+| - Inventory, Reserved, Moves & POs   |      | - Demand Adjustments & Quarantine   |
+| - Invoices, Payments & Credit Notes  |      | - UCI Historical Demand + Validated |
+| - Shipments, Forecasts, Alerts       |      |   B2B Demand Aggregates             |
+| - Audit Logs, Outbox & Settings      |      +-------------------------------------+
 +--------------------------------------+
 ```
 
@@ -160,7 +162,7 @@ NEXORA enforces a strict **two-page web architecture**. Modules must never be fr
 - **Card Grid (Exactly Four Workspaces):**
   1. **Store Manager (Admin)** — Full operational, analytical, configuration, and audit oversight across all 18 core modules and 4 supporting capabilities.
   2. **Inventory Staff** — Focused view for physical stock control, stock adjustments, movement history, forecast consumption, replenishment alerts, and inventory reports.
-  3. **Purchase Manager** — Focused view for supplier directories, lead-time purchase simulation, purchase order drafting/management, procurement workflows, forecasts, and procurement reports.
+  3. **Purchase Manager** — Focused view for supplier directories, supplier-product mappings, lead-time purchase simulation, PO drafting/submission, Tier 1 routine PO approval (`<= Tier 1 Spending Limit`, when not escalated), procurement workflows, forecasts, and procurement reports.
   4. **Finance Staff** — Focused view for customer billing details, invoice generation, payment tracking, return/credit note adjustments, revenue reconciliation, and financial reports.
 - **Behaviour:** Clicking a workspace card stores the active workspace selection in client state (e.g., `sessionStorage` / context provider), appends workspace metadata (such as `X-NEXORA-Workspace`) to outgoing API calls for audit attribution, and routes immediately to **Page 2**.
 - **Explicit Authentication Exclusion:** Page 1 must contain **no** username input, password field, registration form, forgot-password flow, or JWT login call. **This is a workspace selector, NOT an authentication system.**
@@ -169,7 +171,7 @@ NEXORA enforces a strict **two-page web architecture**. Modules must never be fr
 - **Route:** `/dashboard`
 - **Single-Shell Workspace Navigation:** All accessible modules render inside Page 2's main workspace container via structured navigation sections, horizontal sub-tabs, expandable drawers, sortable tables, interactive forms, and modal confirmation dialogs.
 - **Live In-Dashboard Switching:** A prominent workspace switcher dropdown/selector in the Page 2 top header lets operators transition seamlessly between **Store Manager (Admin)**, **Inventory Staff**, **Purchase Manager**, and **Finance Staff** without navigating back to Page 1 or loading separate applications.
-- **UI Scoping vs. Security Clarification:** Workspace visibility filters Page 2 navigation items and action panels for usability and role focus. It must **never** be presented or relied upon as cryptographically verified identity or server-enforced authorization.
+- **UI Scoping vs. Security Clarification:** Workspace visibility filters Page 2 navigation items and action panels for usability and workflow governance (such as `DDR-09` Tier 1 vs. Store Manager PO approval stages or `DDR-04`/`DDR-08` configuration panels). It must **never** be presented or relied upon as cryptographically verified identity, authentication, or server-enforced security RBAC.
 
 ---
 
@@ -190,7 +192,9 @@ Maintains the master SKU catalog for NEXORA, providing structured product defini
 - Register new retail products with unique SKU identifiers (`stock_code`), categories, descriptions, and unit prices.
 - Search, filter (by category, active status, keyword), sort, and paginate the product master catalog.
 - Edit product descriptions, category assignments, and baseline unit prices.
-- Soft-deactivate or reactivate products rather than destroying catalog rows referenced by historical sales or invoices.
+- Soft-deactivate or reactivate products rather than destroying catalog rows referenced by historical sales or invoices (`Discontinued` lifecycle status in Module 8 requires an explicit authorized manual change per `DDR-08`).
+- Store product-specific base Units of Measure (`base_uom`) and support historically traceable UoM conversion factors (`uom_conversions`) used by B2B orders and ML demand aggregation (`DDR-06`).
+- Link eligible suppliers, supplier part codes, purchase prices, MOQs, and product-specific lead times via `supplier_products` (`DDR-07`).
 - Initialize corresponding warehouse inventory records automatically upon new product creation (or link via onboarding workflow).
 - Display whether a SKU carries historical UCI transaction baseline data or was newly added operationally.
 
@@ -207,7 +211,7 @@ Maintains the master SKU catalog for NEXORA, providing structured product defini
 
 #### E. Database Requirements
 - **Entities:** `products`, `categories`.
-- **Important Fields (`products`):** `id` (PK), `stock_code` (VARCHAR, UNIQUE, indexed), `description` (VARCHAR, NOT NULL), `category_id` (FK → `categories.id`), `current_unit_price` (`DECIMAL(10, 2)`), `is_uci_baseline` (BOOLEAN), `is_active` (BOOLEAN DEFAULT TRUE), `created_at`, `updated_at`.
+- **Important Fields (`products`):** `id` (PK), `stock_code` (VARCHAR, UNIQUE, indexed), `description` (VARCHAR, NOT NULL), `category_id` (FK → `categories.id`), `base_uom` (VARCHAR DEFAULT `'unit'`), `current_unit_price` (`DECIMAL(10, 2)` — operational default currency `INR` per `DDR-04`), `lifecycle_stage` (`ENUM('Introduction','Growth','Maturity','Decline','Discontinued')` per `DDR-08`), `is_uci_baseline` (BOOLEAN), `is_active` (BOOLEAN DEFAULT TRUE), `created_at`, `updated_at` (plus related `uom_conversions` and `supplier_products`).
 - **Important Fields (`categories`):** `id` (PK), `name` (UNIQUE), `description`, `is_active`, `created_at`.
 - **Constraints:** `stock_code` must be unique (case-trimmed/normalized); `current_unit_price > 0` (or `>= 0` only if non-commercial flags apply—recommended `>= 0.01` for active sellable SKUs).
 
@@ -233,7 +237,7 @@ Maintains the master SKU catalog for NEXORA, providing structured product defini
 
 #### I. Module Dependencies
 - **Upstream:** None (root catalog foundation).
-- **Downstream:** `Inventory Control` (1:1 stock tracking), `Order Management` & `Sales Management`, `Purchase Planning Simulator` / Purchase Orders, `Demand Forecasting`, `Billing & Finance`, `Business Intelligence`, `Price & Revenue Intelligence`, `Return Intelligence`.
+- **Downstream:** `Inventory Control` (1:1 stock tracking), `Supplier Management` (`supplier_products` many-to-many mapping per `DDR-07`), `Order Management` & `Sales Management`, `Purchase Planning Simulator` / Purchase Orders, `Demand Forecasting` (`uom_conversions` per `DDR-06`), `Billing & Finance`, `Business Intelligence`, `Price & Revenue Intelligence`, `Return Intelligence`.
 
 #### J. History & Audit Events
 - `PRODUCT_CREATED`, `PRODUCT_UPDATED` (capturing before/after price/description snapshots), `PRODUCT_DEACTIVATED`, `PRODUCT_REACTIVATED`, `PRODUCT_CATEGORY_CREATED/UPDATED`, and failed duplicate-SKU attempts.
@@ -260,8 +264,9 @@ Maintains the vendor directory and supplier lead-time data required for procurem
 
 #### B. Functional Requirements
 - Create, search, filter, view, update, and soft-deactivate suppliers.
-- Store contact details (`contact_person`, `email`, `phone`, `address`) and operational `lead_time_days`.
-- Associate supplier terms with draft/submitted Purchase Orders and expose lead times to Purchase Planning Simulator and Predictive Planner.
+- Store contact details (`contact_person`, `email`, `phone`, `address`) and optional supplier-level fallback `lead_time_days`.
+- Maintain explicit many-to-many **Supplier-Product Mappings (`supplier_products`, `DDR-07`)** storing `supplier_product_code`, supplier-specific `purchase_price`, product-specific `lead_time_days`, `minimum_order_quantity`, `is_preferred` indicator, and `is_active` status while retaining inactive relationships for historical traceability.
+- Provide deterministic lead-time resolution (`DDR-01`): product-specific `supplier_products.lead_time_days` is primary; supplier-level `suppliers.lead_time_days` acts as fallback; if neither exists, mark supplier lead-time risk unavailable rather than inventing a lead time.
 
 #### C. Workspace Responsibilities
 - **Store Manager (Admin):** Full supplier CRUD and activation management.
@@ -270,13 +275,14 @@ Maintains the vendor directory and supplier lead-time data required for procurem
 - **Finance Staff:** Not required for core billing (optional read-only context for vendor reference if needed).
 
 #### D. Inputs and Outputs
-- **Inputs:** `supplier_name`, `contact_person`, `email`, `phone`, `address`, `lead_time_days`, `is_active`.
-- **Outputs:** Supplier profile record, lead-time parameter (`lead_time_days`) consumed by procurement simulation and PO expected delivery dates.
+- **Inputs:** `supplier_name`, `contact_person`, `email`, `phone`, `address`, optional default `lead_time_days`, `is_active`; plus per-SKU `supplier_products` mapping inputs (`product_id`, `supplier_product_code`, `purchase_price`, product-specific `lead_time_days`, `minimum_order_quantity`, `is_preferred`, `is_active`).
+- **Outputs:** Supplier profile record, many-to-many `supplier_products` mappings, and resolved lead-time parameter (`supplier_products.lead_time_days` → fallback `suppliers.lead_time_days` → `NULL`/unavailable) consumed by Module 11, Module 14, and PO expected delivery dates.
 
 #### E. Database Requirements
-- **Entities:** `suppliers` (plus optional `supplier_products` mapping if multiple suppliers supply an item—see `[DESIGN DECISION REQUIRED]` below).
-- **Important Fields (`suppliers`):** `id` (PK), `supplier_name` (VARCHAR, NOT NULL, indexed), `contact_person`, `email`, `phone`, `address` (TEXT), `lead_time_days` (INT NOT NULL DEFAULT 7), `is_active` (BOOLEAN DEFAULT TRUE), `created_at`, `updated_at`.
-- **Constraints:** `lead_time_days >= 1` (must be positive integer days); `[DESIGN DECISION REQUIRED]` whether a `supplier_products` many-to-many SKU-to-preferred-supplier link table is needed in Phase 2/5 or if Purchase Orders select any active supplier dynamically.
+- **Entities:** `suppliers`, `supplier_products` *(Resolved per `DDR-07`)*.
+- **Important Fields (`suppliers`):** `id` (PK), `supplier_name` (VARCHAR, NOT NULL, indexed), `contact_person`, `email`, `phone`, `address` (TEXT), `lead_time_days` (INT NULLABLE — fallback default lead time when product-specific lead time is unset; never auto-fabricated if null), `is_active` (BOOLEAN DEFAULT TRUE), `created_at`, `updated_at`.
+- **Important Fields (`supplier_products`, many-to-many per `DDR-07`):** `id` (PK), `supplier_id` (FK → `suppliers.id`), `product_id` (FK → `products.id`), `supplier_product_code` (VARCHAR), `purchase_price` (`DECIMAL(10, 2) >= 0`), `lead_time_days` (INT NULLABLE `>= 1`), `minimum_order_quantity` (INT NOT NULL DEFAULT `1`, `>= 1`), `is_preferred` (BOOLEAN NOT NULL DEFAULT FALSE), `is_active` (BOOLEAN NOT NULL DEFAULT TRUE), `created_at`, `updated_at`.
+- **Constraints:** Any populated `lead_time_days` (`suppliers` or `supplier_products`) must be `>= 1` and bounded (`<= 365`). If neither table supplies a valid lead time, `lead_time_days` remains unset (`NULL`) and `DDR-01` marks lead-time-based stockout risk unavailable. Deactivated `supplier_products` mappings (`is_active = False`) are permanently retained for historical PO/cost traceability.
 
 #### F. API Requirements *(Planned)*
 - `GET /api/v1/suppliers` — Paginated supplier list (`search`, `is_active`).
@@ -284,21 +290,23 @@ Maintains the vendor directory and supplier lead-time data required for procurem
 - `POST /api/v1/suppliers` — Create supplier (`201 Created`).
 - `PUT /api/v1/suppliers/{supplier_id}` — Update contact details or `lead_time_days`.
 - `PATCH /api/v1/suppliers/{supplier_id}/status` (or soft `DELETE`) — Deactivate vendor (`is_active = False`).
+- `GET / POST / PUT / PATCH /api/v1/suppliers/{supplier_id}/products` *(and `/api/v1/products/{product_id}/suppliers`)* — Manage `supplier_products` mappings, preferred supplier indicators, MOQs, purchase prices, and soft-deactivation (`is_active = False`).
 
 #### G. CRUD and Business Operations
 - Full Create, Read, Update, and Soft-Deactivate operations. Suppliers referenced by historical `purchase_orders` cannot be hard-deleted.
 
 #### H. Business Rules and Validation
-- `lead_time_days` must be a valid integer (`>= 1` and bounded reasonably, e.g., `<= 365`). Missing or `<= 0` lead times must fail validation (`422`).
-- Deactivated suppliers cannot be assigned to new Purchase Orders, though existing in-flight or historical POs remain intact.
-- Changing `lead_time_days` updates future simulations and new PO `expected_delivery_date` calculations without altering historical closed PO dates.
+- Any supplied `lead_time_days` (`suppliers` or `supplier_products`) must be a valid integer (`1 <= lead_time_days <= 365`); `<= 0` fails validation (`422`). Omitting lead time keeps it `NULL` rather than fabricating a synthetic lead time (`DDR-01`).
+- **Lead-Time Fallback Rule (`DDR-01` & `DDR-07`):** Product-specific `supplier_products.lead_time_days` supersedes `suppliers.lead_time_days`; supplier-level lead time serves as fallback when product-specific lead time is unavailable.
+- Deactivated suppliers or deactivated `supplier_products` mappings cannot be used on new Purchase Orders, while existing in-flight and historical POs retain full FK/cost traceability.
+- Changing `purchase_price` or `lead_time_days` updates future simulations and new PO calculations without altering historical closed PO records.
 
 #### I. Module Dependencies
 - **Upstream:** None.
 - **Downstream:** `Purchase Planning Simulator` (leads & PO creation), `Predictive Planner` (if lead-time scaling configured), `Business Intelligence` / procurement reports.
 
 #### J. History & Audit Events
-- `SUPPLIER_CREATED`, `SUPPLIER_UPDATED` (especially changes to `lead_time_days`), `SUPPLIER_DEACTIVATED`, `SUPPLIER_REACTIVATED`.
+- `SUPPLIER_CREATED`, `SUPPLIER_UPDATED` (especially changes to `lead_time_days`), `SUPPLIER_DEACTIVATED`, `SUPPLIER_REACTIVATED`, `SUPPLIER_PRODUCT_MAPPED`, `SUPPLIER_PRODUCT_UPDATED`, `SUPPLIER_PRODUCT_DEACTIVATED`.
 
 #### K. Error and Edge-Case Handling
 - Invalid email syntax or non-positive `lead_time_days` → HTTP `422`.
@@ -380,10 +388,11 @@ Manages retail customer records, contact information, and billing/shipping addre
 Tracks completed commercial sales records and unifies historical UCI transaction streams with ongoing operational store sales. Strictly preserves accounting separation between gross positive demand, cancellations, returns, and exceptional adjustments.
 
 #### B. Functional Requirements
-- Record completed operational sales (normally generated upon Order fulfillment or direct point-of-sale completion).
-- Search, filter, and inspect sales records separated by `transaction_stream` (`gross_sale`, `cancellation`, `return`, `exceptional`) and `data_source` (`historical_uci` vs. `operational_mysql`).
+- Record completed commercial sales / fulfillments generated cleanly from operational orders (or verified direct entries) using central `INR` default currency and `DECIMAL` precision (`DDR-04`).
+- Search, filter, and inspect sales records separated by `transaction_stream` (`gross_sale`, `cancellation`, `return`, `exceptional`), B2B `order_demand_type` (`recurring_replenishment`, `one_time_bulk`, `contract`, `tender`), and `source_origin` (`uci_historical` vs. `operational`).
+- **B2B Demand & Adjustment Separation (`DDR-06`):** Separate **confirmed B2B sales demand** (from confirmed orders timed by `requested_delivery_date`, or creation date for immediate fulfillment—never invoice settlement date) from **realized/fulfilled quantities**, and maintain a separate `demand_adjustments` ledger linking excess-stock returns and full cancellations directly to original `(order_id, order_item_id)` rows while ensuring defective/damaged returns do **not** reduce original demand.
 - Calculate gross sales quantity, cancellation quantity, return deductions, and net revenue/quantity.
-- Support traceable **sale cancellation / reversal** creating compensating status updates and reversing entries rather than deleting historical records.
+- Support traceable **sale cancellation / reversal** creating compensating status updates and reversing entries (`DDR-10` Tier 1 fail-closed audit) rather than deleting historical records.
 
 #### C. Workspace Responsibilities
 - **Store Manager (Admin):** Full viewing, sales creation/completion oversight, and traceable cancellation/reversal operations.
@@ -395,7 +404,7 @@ Tracks completed commercial sales records and unifies historical UCI transaction
 - **Outputs:** Persistent `sales`/`transactions` & line-item records (`transaction_items`), net vs. gross demand feeds for Business Intelligence, and invoice linkage for Billing & Finance.
 
 #### E. Database Requirements
-- **Entities:** `transactions` (unified or paired operational `sales` + `sale_items` / `transaction_items`—see Section 12 logical schema).
+- **Entities:** `transactions`, `transaction_items`, `demand_adjustments` (B2B demand reversal ledger per `DDR-06`), `demand_quarantine` (malformed demand validation staging), `uom_conversions` (historically traceable product UoM factors) — see Section 12 logical schema.
 - **Important Fields:** `id` (PK), `invoice_number` / `sale_reference` (VARCHAR, indexed), `order_id` (FK → `orders.id`, nullable for direct historical UCI imports), `customer_id` (FK → `customers.id`, nullable for historical imports), `transaction_date`, `country`, `transaction_type` (`standard`, `cancellation`, `return`, `exceptional`), `source_origin` (`uci_historical`, `operational`), `total_amount` (`DECIMAL(12, 2)`), `status` (`completed`, `cancelled`, `reversed`), `created_at`.
 - **Line Items:** `product_id` (FK), `quantity` (INT), `unit_price` (`DECIMAL(10, 2)`), `line_total` (`DECIMAL(12, 2)`).
 
@@ -411,9 +420,10 @@ Tracks completed commercial sales records and unifies historical UCI transaction
 - **Cancel / Reverse:** Marks transaction state and generates traceable compensating audit/financial/stock entries.
 
 #### H. Business Rules and Validation
-- **Order vs. Sale Distinction:** An **Order** represents customer purchase intent and lifecycle progression; a **Sale** represents a confirmed/realized commercial revenue event.
-- **Zero Double-Deduction Guard:** If a sale originates from an order (`order_id`), inventory deduction occurs **once** at fulfillment (`Order Management` + `Inventory Control`); creating a linked sale record must not deduct inventory a second time.
-- **Historical vs. Operational Boundary:** Historical UCI transactions (`source_origin = 'uci_historical'`) are read-only reference data and cannot be modified via operational sales forms.
+- **Order vs. Sale vs. Confirmed Demand Distinction (`DDR-06`):** An **Order** tracks fulfillment lifecycle progression; a **Sale** tracks commercial revenue realization; **Confirmed Demand** comes from confirmed B2B sales orders timed by `requested_delivery_date` (or order creation date for immediate fulfillment). **Confirmed demand and fulfilled quantities are separate concepts**, and **invoice settlement dates must never determine demand timing**.
+- **Demand Adjustment Ledger Invariant (`DDR-06`):** Excess-stock returns and full cancellations emit entries in `demand_adjustments` tied to original `(order_id, order_item_id)` to prevent duplicate deductions, whereas defective/damaged returns do **not** reduce original demand.
+- **Zero Double-Deduction Guard:** Inventory deduction occurs **once per actually fulfilled quantity** at fulfillment (`Order Management` + `Inventory Control`); creating a linked sale record must never deduct inventory a second time (`DDR-05`).
+- **Historical vs. Operational Boundary:** Historical UCI transactions (`source_origin = 'uci_historical'`) are read-only reference data and cannot be modified via operational sales forms. Historical transactions preserve originally applied currency (`INR` operational default per `DDR-04`), tax rate, and tax amounts regardless of subsequent tax changes.
 - All monetary totals use strict `DECIMAL` arithmetic (`line_total = quantity × unit_price`).
 
 #### I. Module Dependencies
@@ -444,10 +454,10 @@ Tracks completed commercial sales records and unifies historical UCI transaction
 Manages the end-to-end customer order lifecycle from initial order intake through item availability checks, processing, fulfillment completion, and cancellation before dispatch. Separates mutable order preparation from finalized accounting sales and invoice records.
 
 #### B. Functional Requirements
-- Create multi-item customer orders specifying `customer_id`, order date, shipping preferences, and product line items (`product_id`, `quantity`, `unit_price` defaulting from catalog or explicit override where permitted).
-- Validate SKU existence, active catalog status (`is_active == True`), positive integer quantities, and live inventory availability.
-- Support explicit order status transitions: `draft` / `pending` → `confirmed` → `fulfilled` (or `cancelled`).
-- Execute atomic **Fulfillment**: convert an order to fulfilled state, verify single-execution guard, deduct inventory **once**, write `sale_fulfillment` movement records, generate/link the **Sales Management** record, and enable **Billing & Finance** & **Shipping & Delivery**.
+- Create multi-item B2B/retail customer orders specifying `customer_id`, `requested_delivery_date` (or immediate fulfillment flag), `order_demand_type` (`recurring_replenishment`, `one_time_bulk`, `contract`, `tender` per `DDR-06`), shipping preferences, and product line items (`product_id`, `quantity`, `uom_code`, `unit_price` defaulting from catalog or explicit override where permitted).
+- Validate SKU existence, active catalog status (`is_active == True`), positive integer quantities, UoM conversion validity, and **Available Stock** (`Physical Stock - Reserved Stock`, `DDR-03`).
+- Support explicit order status transitions: `draft` / `pending` → `confirmed` (reserving `reserved_quantity` per `DDR-03` and establishing confirmed B2B demand per `DDR-06`) → `partially_fulfilled` (when some quantities are fulfilled and remaining quantities stay pending per `DDR-05`) → `fulfilled` (only when **all** line-item quantities are fulfilled), or `cancelled`.
+- Execute atomic **Partial or Full Fulfillment (`DDR-05`)**: accept a per-line fulfillment batch with an `idempotency_key`, deduct `Physical Stock` (`inventory.current_quantity`) and release `Reserved Stock` (`inventory.reserved_quantity`) **only for the quantities actually fulfilled**, write `sale_fulfillment` movement records, create linked **Sales Management** / **Billing** & independent split **`Shipping & Delivery`** shipment records (`1:N`), and trigger **Smart Alerts** (`SYS-03`) if **Available Stock** reaches or falls below the reorder threshold.
 
 #### C. Workspace Responsibilities
 - **Store Manager (Admin):** Full order creation, editing (while `draft`/`pending`), confirmation, fulfillment execution, and cancellation.
@@ -459,9 +469,9 @@ Manages the end-to-end customer order lifecycle from initial order intake throug
 - **Outputs:** Persistent `orders` & `order_items` records, fulfillment triggers to `Inventory Control`, `Stock Movement Tracking`, `Sales Management`, `Billing & Finance`, and `Shipping & Delivery`.
 
 #### E. Database Requirements
-- **Entities:** `orders`, `order_items`.
-- **Important Fields (`orders`):** `id` (PK), `order_number` (UNIQUE), `customer_id` (FK → `customers.id`), `order_status` (`ENUM('draft', 'pending', 'confirmed', 'fulfilled', 'cancelled')`), `inventory_deducted` (BOOLEAN NOT NULL DEFAULT FALSE — idempotency guard), `subtotal` (`DECIMAL(12, 2)`), `notes`, `created_at`, `updated_at`.
-- **Important Fields (`order_items`):** `id` (PK), `order_id` (FK → `orders.id`), `product_id` (FK → `products.id`), `quantity` (INT > 0), `unit_price` (`DECIMAL(10, 2)`), `line_total` (`DECIMAL(12, 2)`).
+- **Entities:** `orders`, `order_items`, `order_fulfillments` *(plus `order_fulfillment_items` supporting idempotent multi-batch partial fulfillment per `DDR-05`)*.
+- **Important Fields (`orders`):** `id` (PK), `order_number` (UNIQUE), `customer_id` (FK → `customers.id`), `order_status` (`ENUM('draft', 'pending', 'confirmed', 'partially_fulfilled', 'fulfilled', 'cancelled')`), `order_demand_type` (`ENUM('recurring_replenishment', 'one_time_bulk', 'contract', 'tender')` DEFAULT `'recurring_replenishment'` per `DDR-06`), `requested_delivery_date` (DATE NULLABLE — determines demand timing when set; `created_at` date when immediate per `DDR-06`), `is_censored_demand` (BOOLEAN NOT NULL DEFAULT FALSE — stockout/allocation-constraint flag per `DDR-06`), `inventory_deducted` (BOOLEAN NOT NULL DEFAULT FALSE — legacy/full-completion indicator paired with cumulative `fulfilled_quantity` and `order_fulfillments.idempotency_key`), `subtotal` (`DECIMAL(12, 2)`), `notes`, `created_at`, `updated_at`.
+- **Important Fields (`order_items`):** `id` (PK), `order_id` (FK → `orders.id`), `product_id` (FK → `products.id`), `quantity` (INT > 0), `fulfilled_quantity` (INT NOT NULL DEFAULT `0`, `0 <= fulfilled_quantity <= quantity`), `uom_code` (VARCHAR), `base_uom_conversion_factor` (`DECIMAL(12, 6)` snapshot per `DDR-06`), `unit_price` (`DECIMAL(10, 2)`), `line_total` (`DECIMAL(12, 2)`).
 
 #### F. API Requirements *(Planned)*
 - `GET /api/v1/orders` — List/filter orders by status, customer, date range.
@@ -469,7 +479,7 @@ Manages the end-to-end customer order lifecycle from initial order intake throug
 - `POST /api/v1/orders` — Create draft or pending order (`201 Created`).
 - `PUT /api/v1/orders/{order_id}` — Update items/quantities (only allowed in `draft` or `pending` state prior to fulfillment).
 - `POST /api/v1/orders/{order_id}/confirm` — Validate stock and confirm order.
-- `POST /api/v1/orders/{order_id}/fulfill` — Execute atomic fulfillment (deducts inventory once, creates `sale_fulfillment` movements, generates linked sale/invoice readiness).
+- `POST /api/v1/orders/{order_id}/fulfill` — Execute idempotent atomic full or **partial** fulfillment (accepting optional line-level `fulfill_items` and `Idempotency-Key`; deducts inventory strictly for units actually fulfilled, updates `fulfilled_quantity`, records `sale_fulfillment` movements, triggers `Smart Alerts` on threshold breach, and creates linked sale/shipment readiness).
 - `POST /api/v1/orders/{order_id}/cancel` — Cancel unfulfilled order (or trigger reversal workflow if already fulfilled).
 
 #### G. CRUD and Business Operations
@@ -479,9 +489,13 @@ Manages the end-to-end customer order lifecycle from initial order intake throug
 - **State Transition Operations:** `confirm`, `fulfill`, `cancel` (replaces destructive delete).
 
 #### H. Business Rules and Validation
-- **Inventory Deduction Rule (Critical Consistency Guarantee):** Physical inventory (`inventory.current_quantity`) is **deducted at Order Fulfillment**, NOT at initial order creation, to prevent unconfirmed drafts or cancelled quotes from draining stock balances.
-- **Single-Deduction Idempotency Guard:** Every order tracks `inventory_deducted = True` inside the same database transaction that transitions `order_status → 'fulfilled'` and inserts `inventory_movements`. Any duplicate fulfillment call must check `inventory_deducted == True` (with row-level `SELECT ... FOR UPDATE` locking) and reject with `409 Conflict`, guaranteeing the same order **can never deduct inventory more than once**.
-- `[DESIGN DECISION REQUIRED]` **Optional Soft Stock Reservation at Confirmation:** Decide whether transitioning `order_status` from `draft` → `confirmed` should reserve stock via an explicit `inventory.reserved_quantity` column prior to physical deduction at `fulfilled`, or rely strictly on fulfillment-time availability checking.
+- **Reserved vs. Physical Deduction Rule (`DDR-03` & `DDR-05`):**
+  - `draft` / `pending` orders allocate **zero** stock (`Physical` and `Reserved` remain unchanged).
+  - Transitioning to `confirmed` validates `Available Stock >= quantity` and atomically increments `inventory.reserved_quantity` (`Reserved Stock`) without reducing `Physical Stock`, establishing the confirmed B2B demand baseline (`DDR-06`). If insufficient `Available Stock` blocks or constrains confirmation/allocation, flag `is_censored_demand = True` so ML does not treat allocation shortages as zero customer demand.
+  - Physical inventory (`inventory.current_quantity`) is deducted **only at Order Fulfillment**, and **only for the exact quantities actually fulfilled** in that batch (simultaneously decrementing `inventory.reserved_quantity` for those fulfilled units). Unfulfilled remaining quantities stay pending in `partially_fulfilled` state (remaining reserved until fulfilled or cancelled). An order transitions to `fulfilled` **only when all its quantities are fulfilled**.
+- **Duplicate-Deduction Idempotency Guard (`DDR-05`):** Fulfillment endpoints acquire `SELECT ... FOR UPDATE` row locks on `orders`, `order_items`, and `inventory`, enforce unique fulfillment `idempotency_key` checks inside `order_fulfillments`, verify `order_item.fulfilled_quantity + delta <= order_item.quantity`, and reject duplicate/over-fulfillment attempts (`409 Conflict`) so no batch or order ever deducts inventory twice.
+- **Threshold Alert Hook (`DDR-05` & `EXCL-03`):** When fulfillment decreases `Available Stock` to or below the reorder threshold (or `minimum_stock`), dispatch a replenishment alert to `SYS-03 Smart Alerts`; alerts recommend human review and **never** automatically create or submit Purchase Orders.
+- **Tier 1 Fail-Closed Audit (`DDR-10`):** Confirmation, fulfillment, and cancellation commit their mandatory `audit_logs` records in the same atomic transaction (rolling back on audit insert failure).
 - Orders cannot include inactive SKUs (`products.is_active == False`) or quantities `<= 0`.
 - Orders in `fulfilled` or `cancelled` status are immutable for line-item edits.
 
@@ -490,18 +504,18 @@ Manages the end-to-end customer order lifecycle from initial order intake throug
 - **Downstream:** `Sales Management`, `Inventory Control`, `Stock Movement Tracking`, `Billing & Finance`, `Shipping & Delivery`, `Return Intelligence`.
 
 #### J. History & Audit Events
-- `ORDER_CREATED`, `ORDER_UPDATED`, `ORDER_CONFIRMED`, `ORDER_FULFILLED` (recording `inventory_deducted=True` and linked sale ID), `ORDER_CANCELLED`, and `ORDER_FULFILLMENT_FAILED` (e.g., insufficient stock rollback).
+- **Tier 1 Fail-Closed:** `ORDER_CONFIRMED`, `ORDER_PARTIALLY_FULFILLED`, `ORDER_FULFILLED` (recording fulfilled batch qty, `idempotency_key`, remaining open qty, and linked sale/shipment IDs), `ORDER_CANCELLED` (releasing remaining `reserved_quantity` + recording demand reversal), and `ORDER_FULFILLMENT_FAILED` (rolling back cleanly; telemetry emitted). **Tier 2:** `ORDER_CREATED` (`draft` intake), `ORDER_UPDATED` (pre-confirmation draft edit).
 
 #### K. Error and Edge-Case Handling
 - Insufficient stock at fulfillment time → rollback entire transaction (no partial stock deduction, no sale created), return HTTP `409 Conflict` with specific SKU shortfall details, and log failure outcome.
-- Double-click / concurrent duplicate `/fulfill` request → second request blocked via row lock + `inventory_deducted` check (`409 Conflict`).
+- Double-click / concurrent duplicate `/fulfill` request → blocked safely via row locks (`FOR UPDATE`), unique `order_fulfillments.idempotency_key`, and cumulative `fulfilled_quantity` bounds (`409 Conflict` / idempotent response, `DDR-05`).
 - Inactive customer or deactivated SKU submitted on new order → HTTP `422` / `400`.
 - Attempt to edit line items after fulfillment → HTTP `409 Conflict`.
 
 #### L. Acceptance Criteria
-- Order creation validates SKUs and customer without prematurely deducting `current_quantity`.
-- Fulfilling an order atomically reduces inventory once, creates `sale_fulfillment` movements, creates a linked sale, and blocks subsequent duplicate fulfillment calls with `409`.
-- Cancelled pre-fulfillment orders never alter inventory balances.
+- Draft/pending order creation leaves `Physical` and `Reserved` stock unchanged; confirming increments `Reserved Stock` (`Available = Physical - Reserved`) cleanly.
+- Partial fulfillment deducts `Physical` and `Reserved` stock solely for actually fulfilled units, keeps remaining units `partially_fulfilled`, transitions to `fulfilled` only when 100% of units are fulfilled, supports independent split shipments (`M18`), and prevents duplicate deductions via `idempotency_key` + row locks (`409`).
+- Cancelling a `confirmed`/`partially_fulfilled` order releases remaining `Reserved Stock` and writes `demand_adjustments` without mutating already-fulfilled physical deductions.
 
 #### M. Implementation Status
 - **Planned** *(No `orders` tables, schemas, or API routes exist on `main`).*
@@ -547,7 +561,7 @@ Transforms raw historical (UCI) and live operational (MySQL) retail, inventory, 
 #### H. Business Rules and Validation
 - **Demand Stream Consistency:** Gross revenue/units derive solely from positive valid sales streams (`Quantity > 0`, `Price > 0`, non-`'C'`); net figures subtract traceable cancellations and returns explicitly.
 - Invalid date bounds (`start_date > end_date`) must return HTTP `422`.
-- Historical UCI data boundaries (2010–2011) must be explicitly surfaced in response metadata (`data_span` / `source_origin`) so BI charts never misrepresent historical UK e-commerce records as live current-year revenue.
+- Historical UCI data boundaries (2010–2011, natively `GBP`) must be explicitly surfaced in response metadata (`data_span`, `currency`, and `source_origin`) distinct from operational NEXORA transactions (**`INR` default operational currency per `DDR-04`**) so charts never blend currencies or misrepresent UCI history as live revenue.
 
 #### I. Module Dependencies
 - **Upstream:** `Sales Management`, `Order Management`, `Product Management`, `Inventory Control`, `Purchase Planning Simulator` (PO spend), `Billing & Finance`, `Return Intelligence`.
@@ -626,13 +640,15 @@ Uncovers calendar seasonality across months and days of the week using historica
 ### Module 8: Product Lifecycle Intelligence
 
 #### A. Module Purpose
-Classifies every catalog SKU into clear commercial lifecycle stages (**Emerging**, **Growing**, **Stable**, **Declining**, and **Inactive / Potentially Dead Stock**) using sales velocity and recency rules so managers can spot expanding winners and stagnant inventory capital.
+Classifies every catalog SKU into five standardized commercial lifecycle stages (**`Introduction`**, **`Growth`**, **`Maturity`**, **`Decline`**, and **`Discontinued`**) (`DDR-08`) using rolling sales velocity, order frequency, and SKU age with anti-flicker hysteresis so managers can spot expanding winners and stagnant inventory capital cleanly. *(Note: Earlier Blueprint `v2.1` draft terms map cleanly to `DDR-08`: `Emerging → Introduction`, `Growing → Growth`, `Stable → Maturity`, `Declining → Decline`, while dormant zero-sale inventory is flagged inside `Decline` / dead-stock views until explicitly `Discontinued`.)*
 
 #### B. Functional Requirements
-- Evaluate SKU sales trajectories across configurable observation windows (recent period vs. prior baseline period).
-- Assign each active product to one of five lifecycle stages: `Emerging`, `Growing`, `Stable`, `Declining`, or `Inactive / Potentially Dead Stock`.
-- Identify potentially dead stock tying up live warehouse inventory (`current_quantity > 0` with prolonged zero sales).
-- Track lifecycle transitions and surface notable degradations to `Smart Alerts` (for Store Manager/Inventory review).
+- Evaluate SKU demand trajectories using **rolling sales velocity**, **order frequency**, and **SKU age** against centrally configured thresholds (`operational_settings` with system defaults and enforced min/max bounds per `DDR-08`).
+- Assign each SKU to one of five canonical lifecycle stages (`DDR-08`): **`Introduction`**, **`Growth`**, **`Maturity`**, **`Decline`**, or **`Discontinued`**.
+- Apply **hysteresis / consecutive evaluation periods** before committing automated transitions across `Introduction`–`Decline` to prevent stage flickering near threshold boundaries.
+- Identify dormant/stagnant active stock tying up warehouse capital (`current_quantity > 0` with prolonged zero sales) for dead-stock review without auto-discontinuing SKUs.
+- Require an **explicit authorized manual status change** (by **Store Manager (Admin)**) to transition any SKU into **`Discontinued`**.
+- Persist historical lifecycle snapshots (`product_lifecycle_snapshots`), support **reset-to-default** configuration, apply config changes strictly to future evaluations, and surface significant transitions to `Smart Alerts` (suppressing duplicate unresolved notifications).
 
 #### C. Workspace Responsibilities
 - **Store Manager (Admin):** Full lifecycle distribution dashboard, dead-stock review, and classification rule configuration.
@@ -640,11 +656,11 @@ Classifies every catalog SKU into clear commercial lifecycle stages (**Emerging*
 - **Purchase Manager:** Consult SKU lifecycle stage before approving large long-horizon replenishment quantities.
 
 #### D. Inputs and Outputs
-- **Inputs:** Product lifespan (`first_sale_date`, `last_sale_date`), historical/operational transaction volumes across recent vs. prior windows, current inventory quantity, configurable threshold settings.
-- **Outputs:** Per-SKU lifecycle classification, velocity trend delta (`% change`), days since last sale, dead-stock inventory value estimate (`current_quantity × current_unit_price`).
+- **Inputs:** SKU age (onboarding / `first_sale_date`), rolling sales velocity, order frequency, `DDR-06` demand classifications, current inventory quantity, and centrally bounded threshold settings (`DDR-08`).
+- **Outputs:** Per-SKU lifecycle stage (`Introduction`..`Discontinued`), longitudinal `product_lifecycle_snapshots`, velocity trend delta (`% change`), order frequency, days since last sale, and dormant/dead-stock valuation (`current_quantity × current_unit_price` in `INR` default currency).
 
 #### E. Database Requirements
-- **Primary Read Sources:** `products`, `transactions`, `transaction_items`, `inventory`, plus `operational_settings` for lifecycle threshold configuration.
+- **Entities & Read Sources:** `product_lifecycle_snapshots` (historical snapshot retention), `products`, `orders`, `transactions`, `transaction_items`, `inventory`, and `operational_settings` (central threshold config with system defaults and min/max bounds).
 
 #### F. API Requirements *(Planned)*
 - `GET /api/v1/intelligence/lifecycle` — Filterable SKU table grouped by lifecycle stage with distribution counts.
@@ -652,23 +668,25 @@ Classifies every catalog SKU into clear commercial lifecycle stages (**Emerging*
 - `GET /api/v1/intelligence/dead-stock` — Active inventory with zero recent sales exceeding inactivity window.
 
 #### G. CRUD and Business Operations
-- **Read-Only Analytical Classification + Configurable Parameters:** Thresholds configurable by Store Manager; does **not** automatically deactivate SKUs or enforce markdowns (`EXCL-04`).
+- **Analytical Classification + Bounded Configuration + Manual Discontinuation:** Automated evaluation updates historical `product_lifecycle_snapshots`; threshold parameters are adjustable within system min/max bounds (with **reset-to-default**) in the **Store Manager (Admin)** workspace *(architecture note: reflects Operations Lead configuration privilege within NEXORA's 4-workspace, no-auth UI without introducing a 5th workspace or security RBAC)*; marking a SKU `Discontinued` requires explicit manual approval and does **not** trigger automated price markdowns (`EXCL-04`).
 
-#### H. Business Rules and Validation
-- **Non-Discontinuation Safeguard:** A product with zero recent sales (`Inactive / Potentially Dead Stock`) must **never** be automatically assumed permanently discontinued—intermittent demand or seasonal dormancy may explain inactivity.
-- **UCI Anchor Warning:** When run solely on 2010–2011 historical data, recency ("days since last sale") must be measured relative to the dataset reference cutoff date (`2011-12-09`) rather than today's wall-clock date, preventing every UCI product from appearing falsely dead!
-- `[DESIGN DECISION REQUIRED]` **Exact Lifecycle Threshold Parameters:** Confirm default day windows and percentage growth/decline thresholds distinguishing `Emerging`, `Growing`, `Stable`, `Declining`, and `Inactive` (e.g., `+20%` growth threshold, `60/90` days inactivity threshold).
+#### H. Business Rules and Validation (`DDR-08`)
+- **Non-Auto-Discontinuation Safeguard:** Zero recent sales alone (dormant / potentially dead stock) must **never** automatically set a product's lifecycle stage to **`Discontinued`**—transitioning to `Discontinued` requires an **explicit authorized status change**.
+- **Anti-Flicker Hysteresis:** Stage transitions across `Introduction`, `Growth`, `Maturity`, and `Decline` require consecutive evaluation periods (hysteresis) inside configured bands to prevent oscillating labels.
+- **Forward-Only Threshold Governance:** Centrally configured defaults apply within enforced minimum/maximum bounds (`422` if out-of-bounds). Editing thresholds affects **future** evaluations only and never mutates preserved historical `product_lifecycle_snapshots`.
+- **UCI Anchor Warning:** When evaluated strictly on 2010–2011 historical UCI records, SKU age and recency anchor cleanly to dataset cutoff (`2011-12-09`) rather than wall-clock date.
 
 #### I. Module Dependencies
 - **Upstream:** `Product Management`, `Sales Management`, `Inventory Control`.
 - **Downstream:** `Smart Alerts`, `Purchase Planning Simulator`, `Reports & Export`.
 
-#### J. History & Audit Events
-- `LIFECYCLE_CONFIG_UPDATED` when classification thresholds change; lifecycle report exports logged in `Centralized History & Audit`.
+#### J. History & Audit Events (`DDR-08` & `DDR-10` Tier 1)
+- `LIFECYCLE_CONFIG_UPDATED` and `LIFECYCLE_CONFIG_RESET` (atomic Tier 1 fail-closed audit logging timestamp, `selected_workspace`, optional non-auth `operator_ref`/`user_id` attribution slot when supplied, plus previous and new threshold values), `PRODUCT_DISCONTINUED` (manual authorized stage change), plus lifecycle snapshot/export events.
 
 #### K. Error and Edge-Case Handling
-- Brand-new product created today with zero sales history → classify cleanly as `Emerging (No Sales Yet)` rather than `Inactive / Dead Stock`.
-- Division by zero when prior baseline period demand equals `0` → handle explicitly as `Emerging` / `New Activity` rather than `NaN` or infinity percentage.
+- Brand-new product created today with zero sales history → classify cleanly as `Introduction` (initial stage) rather than `Decline` or `Discontinued`.
+- Division by zero when prior baseline period demand equals `0` → handle explicitly within `Introduction` / `Growth` rule checks rather than `NaN` or infinity percentage.
+- Threshold update outside system min/max bounds → rejected with `422 Unprocessable Entity` before committing.
 
 #### L. Acceptance Criteria
 - Every SKU in catalog maps deterministically to one valid lifecycle label using configured thresholds and reference date anchor.
@@ -687,10 +705,10 @@ Classifies every catalog SKU into clear commercial lifecycle stages (**Emerging*
 Acts as the authoritative live inventory ledger in MySQL. Tracks exact on-hand physical stock (`current_quantity`), safety margins (`minimum_stock`, `safety_factor`), low-stock thresholds, and manual adjustments—bridging historical UCI transactions (which lack stock levels) with operational retail reality.
 
 #### B. Functional Requirements
-- Display master warehouse stock table across all products with search, filtering (low stock, zero stock, category, active/inactive), and sorting.
-- Store configurable per-SKU `minimum_stock` and `safety_factor` (default `1.20`).
-- Perform manual physical stock adjustments (cycle counts, opening stock onboarding, write-offs/damage, corrections) with mandatory justification reason codes.
-- Surface real-time stock availability checks to Order Management and low-stock flags to Predictive Planner & Smart Alerts.
+- Display master warehouse stock table clearly separating **five distinct stock values (`DDR-03` & `DDR-02`)**: `Physical Stock` (`current_quantity`), `Reserved Stock` (`reserved_quantity`), `Available Stock` (`Physical Stock - Reserved Stock`), `Incoming Stock` (outstanding `approved` / `partially_received` PO qty), and `Projected Available Stock` (`Available Stock + Incoming Stock`), with search, filtering, and allowlisted sorting.
+- Store configurable per-SKU `minimum_stock` and `safety_factor` (initial default `1.20` per `DDR-01`).
+- Perform manual physical stock adjustments (cycle counts, opening stock onboarding, write-offs/damage, corrections) with mandatory justification reason codes under **DDR-10 Tier 1 fail-closed** audit atomicity.
+- Surface real-time `Available Stock` checks to Order Management and emit threshold warnings into `Smart Alerts` whenever fulfillment or manual decreases push `Available Stock` to or below the reorder threshold / `minimum_stock` (`DDR-05`, recommend-only without auto-PO).
 
 #### C. Workspace Responsibilities
 - **Store Manager (Admin):** Full inventory viewing, safety parameter configuration, manual stock adjustments, and dead-stock oversight.
@@ -699,12 +717,12 @@ Acts as the authoritative live inventory ledger in MySQL. Tracks exact on-hand p
 
 #### D. Inputs and Outputs
 - **Inputs:** Adjustment requests (`product_id`, `quantity_delta` or target count, `movement_type`, `reason`), safety parameter updates (`minimum_stock`, `safety_factor`), automated deltas from `Order Management` fulfillment, `Purchase Order` receipt, and `Return Intelligence`.
-- **Outputs:** Live `current_quantity`, `available_quantity`, threshold violation indicators, and atomic transactional calls to `Stock Movement Tracking`.
+- **Outputs:** Separately displayed `physical_stock` (`current_quantity`), `reserved_stock` (`reserved_quantity`), `available_stock` (`physical - reserved`), `incoming_stock` (from M11 approved open POs), `projected_available_stock` (`available + incoming`), threshold alerts, and atomic transactional calls to `Stock Movement Tracking`.
 
 #### E. Database Requirements
 - **Entities:** `inventory` (1:1 with `products`).
-- **Important Fields (`inventory`):** `id` (PK), `product_id` (FK → `products.id`, UNIQUE, NOT NULL), `current_quantity` (INT NOT NULL DEFAULT 0), `minimum_stock` (INT NOT NULL DEFAULT 10), `safety_factor` (`DECIMAL(4, 2)` NOT NULL DEFAULT `1.20`), `updated_at` (TIMESTAMP). *(Plus optional `reserved_quantity` pending `[DESIGN DECISION REQUIRED]` in Module 5).*
-- **Constraints:** `current_quantity >= 0` enforced at both application validation and MySQL `CHECK` constraint; `safety_factor >= 1.00`; `minimum_stock >= 0`.
+- **Important Fields (`inventory`):** `id` (PK), `product_id` (FK → `products.id`, UNIQUE, NOT NULL), `current_quantity` (`Physical Stock`, INT NOT NULL DEFAULT 0), `reserved_quantity` (`Reserved Stock` allocated to confirmed unfulfilled order quantities per `DDR-03`, INT NOT NULL DEFAULT 0), `minimum_stock` (INT NOT NULL DEFAULT 10), `safety_factor` (`DECIMAL(4, 2)` NOT NULL DEFAULT `1.20`), `updated_at` (TIMESTAMP). *(Derived non-persisted or view metrics: `available_stock = current_quantity - reserved_quantity`; `incoming_stock` from `DDR-02`; `projected_available_stock = available_stock + incoming_stock`.)*
+- **Constraints:** `current_quantity >= 0`, `reserved_quantity >= 0`, and `reserved_quantity <= current_quantity` (`available_stock >= 0`) enforced via application logic + MySQL `CHECK` constraints; `safety_factor >= 1.00`; `minimum_stock >= 0`. Incoming PO stock must **never** be added into `current_quantity` or `available_stock` before physical receipt.
 
 #### F. API Requirements *(Planned)*
 - `GET /api/v1/inventory` — Master stock list joined with `products` (`search`, `low_stock_only`, `zero_stock_only`).
@@ -810,14 +828,15 @@ Provides an immutable, chronological ledger of every physical inventory quantity
 Bridges predictive ML demand forecasts with operational procurement execution. Provides an interactive "what-if" replenishment simulator alongside human-reviewed Purchase Order (PO) lifecycle management—from PO drafting through mandatory human approval/rejection and stock receipt.
 
 #### B. Functional Requirements
-- **Interactive Simulation Scratchpad:** Load a SKU's live available stock, open incoming stock, ML forecast demand, and preferred/selected supplier `lead_time_days`; allow temporary overrides of expected demand, lead time, and `safety_factor` to inspect simulated stock positions and suggested purchase quantities without mutating live DB data.
-- **Draft PO Generation:** Convert simulated recommendations into persistent Purchase Order drafts linked to a selected active supplier.
-- **Purchase Order Lifecycle:** Create, edit (while `draft`), submit for approval (`submitted`), execute mandatory human **Approval** or **Rejection** (`approved` / `rejected`), and process **Partial or Full Stock Receipt** (`partially_received` / `received`).
-- **Receipt Integration:** Receiving PO quantities atomically updates `inventory.current_quantity`, logs `purchase_receipt` entries in `Stock Movement Tracking`, and updates PO received quantities.
+- **Interactive Simulation Scratchpad:** Load a SKU's separately displayed `Physical Stock`, `Reserved Stock`, `Available Stock`, `Incoming Stock` (only outstanding `approved` / `partially_received` PO quantities per `DDR-02`), `Projected Available Stock`, ML forecast demand, and hierarchical supplier `lead_time_days` (`supplier_products` → fallback `suppliers` → `UNAVAILABLE` per `DDR-01` & `DDR-07`); allow temporary overrides of expected demand, lead time, and `safety_factor` (initial `1.20`) without mutating live DB data. If supplier lead time is unavailable, mark lead-time risk unavailable while optionally displaying a clearly distinguished horizon-based view (`DDR-01`).
+- **Draft PO Generation:** Convert simulated recommendations into persistent Purchase Order drafts linked to a selected active supplier (`EXCL-03` compliant: never auto-created or auto-dispatched).
+- **Tiered Dual-Control Purchase Order Lifecycle (`DDR-09`):** Create, edit (while `draft`), submit (`submitted`), enforce **Tier 1 / Tier 2 Escalated Human Approval** (`approved` or `rejected` with preserved reason), invalidate prior approval automatically if supplier/quantity/unit_price/total changes post-approval, flag suspicious same-supplier PO splitting within a configurable rolling window (and escalate DDR-08 anomalies / price spikes / unapproved supplier switches to Store Manager), and process **Partial or Full Stock Receipt** (`partially_received` / `received`).
+- **Store Manager Governance Config (`DDR-09`):** Dedicated Store Manager dashboard controls for Tier 1 spending limit, anti-split rolling window/thresholds, and escalation rules (with validation + Tier 1 audit; never retroactively invalidating existing approved POs).
+- **Receipt Integration:** Receiving PO quantities atomically updates `inventory.current_quantity`, reduces outstanding `Incoming Stock`, logs `purchase_receipt` entries in `Stock Movement Tracking`, and updates PO status cleanly under `DDR-10` Tier 1 audit control.
 
-#### C. Workspace Responsibilities
-- **Store Manager (Admin):** Full access to simulation, PO drafting, PO approval/rejection, and receipt confirmation.
-- **Purchase Manager:** Primary workspace for running replenishment simulations, managing supplier selections, drafting POs, submitting/managing PO workflows, and receiving deliveries. *(See `[DESIGN DECISION REQUIRED]` below regarding approval separation between Purchase Manager and Store Manager).*
+#### C. Workspace Responsibilities *(UI Context / Workflow Governance — Not Security RBAC)*
+- **Store Manager (Admin):** Full simulation, PO drafting, exclusive approval authority for **POs exceeding `Tier 1 Spending Limit` or flagged for escalation** (`DDR-09`: split-PO flags, DDR-08 procurement anomaly, price spikes, unapproved supplier change), non-blocking **Oversight Notification / Digest** on Purchase Manager Tier 1 approvals, PO rejection/cancellation oversight, and centralized procurement threshold configuration.
+- **Purchase Manager:** Primary workspace for running replenishment simulations, supplier-product selection, drafting & submitting POs, executing **Tier 1 routine PO approvals (`<= Tier 1 Spending Limit`, when zero escalation triggers apply)** (`DDR-09`), and recording deliveries.
 - **Inventory Staff:** Read visibility into approved/expected incoming purchase orders and optional participation in physical receipt verification.
 
 #### D. Inputs and Outputs
@@ -827,8 +846,8 @@ Bridges predictive ML demand forecasts with operational procurement execution. P
 - **Outputs:** Transient simulation projection (no DB side effects), persistent `purchase_orders` & `purchase_order_items` records, and atomic inventory receipt deltas.
 
 #### E. Database Requirements
-- **Entities:** `purchase_orders`, `purchase_order_items`.
-- **Important Fields (`purchase_orders`):** `id` (PK), `po_number` (UNIQUE), `supplier_id` (FK → `suppliers.id`), `order_status` (`ENUM('draft', 'submitted', 'approved', 'rejected', 'partially_received', 'received', 'cancelled')`), `order_date`, `expected_delivery_date`, `total_cost` (`DECIMAL(12, 2)`), `created_workspace`, `reviewed_workspace` (nullable), `review_notes`, `reviewed_at`, `created_at`, `updated_at`.
+- **Entities:** `purchase_orders`, `purchase_order_items`, `supplier_products` (M02), `operational_settings` (`po_tier1_approval_limit`, `po_split_window_days`, escalation thresholds per `DDR-09`).
+- **Important Fields (`purchase_orders`):** `id` (PK), `po_number` (UNIQUE), `supplier_id` (FK → `suppliers.id`), `order_status` (`ENUM('draft', 'submitted', 'approved', 'rejected', 'partially_received', 'received', 'cancelled')`), `order_date`, `expected_delivery_date`, `total_cost` (`DECIMAL(12, 2)`), `approval_tier` (`ENUM('tier1_routine', 'tier2_store_manager')` nullable), `escalation_required` (BOOLEAN NOT NULL DEFAULT FALSE), `escalation_reason` (VARCHAR(255) nullable), `split_review_flagged` (BOOLEAN NOT NULL DEFAULT FALSE), `created_workspace`, `reviewed_workspace` (nullable), `review_notes`, `reviewed_at`, `created_at`, `updated_at`.
 - **Important Fields (`purchase_order_items`):** `id` (PK), `purchase_order_id` (FK → `purchase_orders.id`), `product_id` (FK → `products.id`), `ordered_quantity` (INT > 0), `received_quantity` (INT NOT NULL DEFAULT 0), `unit_cost` (`DECIMAL(10, 2)` >= 0), `line_total` (`DECIMAL(12, 2)`).
 
 #### F. API Requirements *(Planned)*
@@ -836,7 +855,7 @@ Bridges predictive ML demand forecasts with operational procurement execution. P
 - `GET /api/v1/purchase-orders` — Paginated PO list filterable by `order_status`, `supplier_id`, date range.
 - `GET /api/v1/purchase-orders/{po_id}` — Detailed PO with line items and cumulative received counts.
 - `POST /api/v1/purchase-orders` — Create `draft` PO (`201 Created`).
-- `PUT /api/v1/purchase-orders/{po_id}` — Edit line items/supplier (strictly while status is `draft`).
+- `PUT /api/v1/purchase-orders/{po_id}` — Edit line items/supplier (full draft editing; editing `supplier_id`, quantities, `unit_cost`, or `total_cost` on a pre-receipt `approved` PO automatically invalidates prior approval and restarts `submitted` review per `DDR-09`; locked once receipt begins).
 - `POST /api/v1/purchase-orders/{po_id}/submit` — Transition `draft` → `submitted`.
 - `POST /api/v1/purchase-orders/{po_id}/approve` — Human approval (`submitted` → `approved`).
 - `POST /api/v1/purchase-orders/{po_id}/reject` — Human rejection (`submitted` → `rejected` with required reason).
@@ -844,25 +863,32 @@ Bridges predictive ML demand forecasts with operational procurement execution. P
 
 #### G. CRUD and Business Operations
 - **Simulation:** Non-persistent calculation (`POST /calculate`).
-- **PO Lifecycle:** Full CRUD in `draft` state; governed state machine transitions (`submit`, `approve`, `reject`, `receive`, `cancel`) thereafter. Approved/received POs cannot be edited or deleted.
+- **PO Lifecycle:** Full CRUD in `draft` state; governed state machine transitions (`submit`, `approve`, `reject`, `receive`, `cancel`) thereafter. Pre-receipt changes to `supplier_id`, quantity, `unit_cost`, or `total_cost` on an `approved` PO invalidate approval and restart review (`DDR-09`); partially/fully received POs cannot be edited or deleted.
 
 #### H. Business Rules and Validation
 - **Simulation vs. Purchase Order Distinction:** Running the Purchase Planning Simulator creates **zero** binding procurement commitments and sends nothing externally; only explicit PO creation and human approval authorize incoming stock orders.
-- **No Auto-Dispatch (`EXCL-03`):** Approving a PO transitions status cleanly inside MySQL; NEXORA never automatically emails vendors or calls supplier EDI APIs.
-- **Partial & Full Receipt Guard:** Total `received_quantity` per item cannot exceed `ordered_quantity` unless an explicit over-delivery tolerance policy is adopted (`received_quantity <= ordered_quantity` enforced by default). Receiving transitions PO automatically to `partially_received` when some lines/units remain open, or `received` when all lines reach `received_quantity == ordered_quantity`.
-- **Formula Parity Rule:** Simulation calculations MUST use the exact same replenishment equation defined in Section 11 (`Predictive Planner`).
-- `[DESIGN DECISION REQUIRED]` **PO Approval Workspace Boundary:** Determine whether **Purchase Manager** may approve `submitted` POs directly within their workspace or whether two-person/managerial separation requires **Store Manager (Admin)** workspace context for `/approve` and `/reject`.
+- **No Auto-Dispatch (`EXCL-03`):** Approval modifies internal MySQL state only; NEXORA never automatically emails vendors, places electronic orders, or calls supplier EDI APIs.
+- **Incoming PO Stock Inclusion Rule (`DDR-02` & `DDR-09`):** Only **`approved`** and **`partially_received`** POs contribute their outstanding (`ordered_quantity - received_quantity`) units to `Incoming Stock`. `draft`, `submitted`, `rejected`, fully `received`, and `cancelled` remaining units are strictly excluded (`0`). `Incoming Stock` remains distinct from `Physical` and `Available` stock until physical receipt.
+- **Tiered Dual-Control & Escalation Rules (`DDR-09`):**
+  1. `Purchase Manager` may approve submitted POs with `total_cost <= po_tier1_approval_limit` **only when zero escalation rules trigger**; upon Tier 1 approval, emit a non-blocking `SYS-03` oversight notification/digest to `Store Manager (Admin)`.
+  2. POs above `po_tier1_approval_limit` **must** route to `Store Manager (Admin)` approval.
+  3. **Suspicious PO Splitting Check:** Detect multiple drafts/submissions/approvals to the **same `supplier_id`** inside the configurable rolling window (`po_split_window_days`) whose combined spend or frequency exceeds threshold; **flag cleanly for Store Manager review without automatically assuming malicious intent** and escalate approval to `Store Manager (Admin)`.
+  4. **Mandatory Anomaly Escalation:** Any PO exhibiting a **`DDR-08` procurement anomaly**, unusual unit-price spike relative to `supplier_products.purchase_price` / recent baseline, or change to an unapproved/non-preferred supplier escalates to `Store Manager (Admin)` regardless of amount.
+  5. **Post-Approval Invalidation:** Modifying `supplier_id`, line `ordered_quantity`, `unit_cost`, or `total_cost` on an already-approved pre-receipt PO automatically **invalidates prior approval**, reverts status for fresh review (`submitted`), excludes its quantities from `Incoming Stock` until re-approved, and writes an invalidation audit event.
+  6. **Rejection Preservation & Limit Non-Retroactivity:** Rejected POs permanently preserve status and mandatory `review_notes`. Changing `po_tier1_approval_limit` later never retroactively invalidates previously approved POs.
+- **Partial & Full Receipt Guard:** Total `received_quantity` per item cannot exceed `ordered_quantity` (`received_quantity <= ordered_quantity`). Receiving increments `Physical Stock`, decrements outstanding `Incoming Stock`, appends `purchase_receipt` movement logs (`M10`), and transitions to `partially_received` or `received`.
+- **Formula Parity Rule (`DDR-01`):** Simulation calculations MUST invoke the exact same Section 11 replenishment & lead-time equations used by `Predictive Planner` (marking lead-time risk unavailable rather than inventing a lead time when neither mapping nor supplier fallback exists).
 
 #### I. Module Dependencies
 - **Upstream:** `Supplier Management`, `Demand Forecasting`, `Predictive Planner`, `Inventory Control`, `Product Management`.
 - **Downstream:** `Inventory Control`, `Stock Movement Tracking`, `Business Intelligence`, `Centralized History & Audit`, `Reports & Export`.
 
 #### J. History & Audit Events
-- `PO_SIMULATION_SAVED_AS_DRAFT`, `PO_CREATED`, `PO_UPDATED`, `PO_SUBMITTED`, `PO_APPROVED`, `PO_REJECTED` (with reason), `PO_PARTIAL_RECEIVED`, `PO_FULLY_RECEIVED`, `PO_CANCELLED`.
+- **Tier 1 Fail-Closed (`DDR-10` & `DDR-09`):** `PO_APPROVED` (capturing `approval_tier`), `PO_REJECTED` (with reason), `PO_ESCALATED` (split/anomaly/price-spike/supplier-change trigger), `PO_APPROVAL_INVALIDATED` (post-approval edit), `PO_PARTIAL_RECEIVED`, `PO_FULLY_RECEIVED`, `PO_CANCELLED`, `PO_GOVERNANCE_CONFIG_UPDATED` (Tier 1 limit / split-window before/after). **Also audited:** `PO_SIMULATION_SAVED_AS_DRAFT`, `PO_CREATED`, `PO_UPDATED`, `PO_SUBMITTED`, `PO_TIER1_OVERSIGHT_DIGEST_EMITTED`.
 
 #### K. Error and Edge-Case Handling
 - Attempt to receive stock on a `draft`, `submitted`, or `rejected` PO → blocked with HTTP `409 Conflict` (must be `approved` first).
-- Attempt to edit line items after PO approval → HTTP `409 Conflict`.
+- Editing `supplier_id`, line quantities, `unit_cost`, or `total_cost` on an `approved` PO before physical receipt → automatically invalidates prior approval, removes pending `Incoming Stock`, and resets approval workflow (`DDR-09`); attempting edits after partial/full receipt (`partially_received`/`received`) → HTTP `409 Conflict`.
 - Negative unit cost or zero ordered quantity → HTTP `422`.
 - Receipt exceeding ordered quantity → HTTP `422` validation failure preventing accidental double-receiving.
 
@@ -885,7 +911,7 @@ Generates empirical, multi-horizon SKU demand projections (**7, 15, 30, and 90 d
 #### B. Functional Requirements
 - **Implemented Backend ML Pipeline:** Load UCI Online Retail II raw transactions (`latin1`), isolate gross positive customer sales, aggregate daily demand per SKU with continuous lifespan zero-padding, construct 10 leakage-free features (`StockCode`, `DayOfWeek`, `Month`, `DayOfMonth`, `Lag1`, `Lag7`, `Lag14`, `Lag28`, `RollingMean7`, `RollingMean28`), train and evaluate models across 7/15/30/90d horizons (`WeeklyAverageDemandRateBaseline`, `Ridge`, `RandomForestRegressor`), persist `.joblib` estimators and `models_metadata.json`, and serve FastAPI predictions.
 - **Implemented API Operations:** Return supported horizons, backtest evaluation metrics (`MAE`, `RMSE`, `WAPE`), active model architecture info, and single/multi-horizon non-negative predictions.
-- **Planned Integrations:** Persist generated forecasts and training runs in MySQL (`model_runs`, `forecasts`), automatically look up SKU lag/rolling history from MySQL + UCI baseline without manual client feature entry, enforce explicit `< 28 days` insufficient-history flags when automating feature lookup, and render Page 2 interactive forecast graphs.
+- **Planned B2B & Operational Integrations (`DDR-06`):** Persist `model_runs` and `forecasts` in MySQL; construct validated daily/weekly base-UoM demand aggregates from **confirmed B2B sales orders** (`orders` timed by `requested_delivery_date`, or `created_at` for immediate fulfillment—never invoice settlement dates); isolate one-time bulk/tender spikes from recurring baseline predictions; adjust net demand via a separate `demand_adjustments` ledger; flag allocation/stockout-constrained periods (`censored_demand`); enforce schema/identifier/UoM/anomaly checks quarantining malformed inputs into `demand_quarantine`; support scheduled batch retraining & WAPE/feature drift monitoring while preserving 100% compatibility with the Phase 1 10-column `.joblib` contract; enforce `< 28 days` `insufficient_history` flags; and render Page 2 interactive forecast graphs.
 
 #### C. Workspace Responsibilities
 - **Store Manager (Admin):** Full forecast generation, horizon comparisons, model performance/metrics inspection, and forecast history viewing.
@@ -899,7 +925,7 @@ Generates empirical, multi-horizon SKU demand projections (**7, 15, 30, and 90 d
 - **Outputs:** Non-negative cumulative unit predictions keyed by horizon (`"7"`, `"15"`, `"30"`, `"90"`), per-horizon `model_name` & validation `wape`, `model_version`, UTC ISO-8601 `timestamp`, informational `warnings` (e.g., infrequent/unseen SKU mapping).
 
 #### E. Database Requirements *(Planned MySQL Persistence)*
-- **Entities:** `model_runs`, `forecasts`.
+- **Entities:** `model_runs`, `forecasts` (plus upstream validated reads from B2B confirmed `orders`/`order_items`, `demand_adjustments`, `uom_conversions`, and `demand_quarantine` per `DDR-06`).
 - **Important Fields (`model_runs`):** `id` (PK), `model_name`, `model_version`, `horizon_days`, `training_start_date`, `training_end_date`, `evaluation_metrics` (JSON storing `mae`, `rmse`, `wape`), `artifact_path`, `created_at`.
 - **Important Fields (`forecasts`):** `id` (PK), `product_id` (FK → `products.id`), `model_run_id` (FK → `model_runs.id`), `forecast_date`, `horizon_days`, `predicted_quantity` (`DECIMAL(10, 2)`), `status_flag` (`normal`, `insufficient_history`, `unseen_sku_fallback`), `selected_workspace`, `created_at`.
 
@@ -920,8 +946,13 @@ Generates empirical, multi-horizon SKU demand projections (**7, 15, 30, and 90 d
 - **Non-Negativity:** All predictions strictly clamped via $\hat{y} = \max(0.0, \hat{y})$ with `NaN`/`Inf` rejection.
 - **Unseen SKU Handling:** Native `OneHotEncoder(max_categories=50, handle_unknown="infrequent_if_exist")` encodes unseen/long-tail SKUs safely and emits an informational `warnings` string rather than crashing.
 - **Insufficient History Handling:** When automated history lookup is integrated, SKUs with `< 28` consecutive lifespan days of daily demand history return an explicit insufficient-history status/warning rather than fabricated lag numbers.
-- **Zero Retraining in API:** Models are loaded once during FastAPI `lifespan` startup as read-only pipelines.
-- `[DESIGN DECISION REQUIRED]` **Live Operational Sales Integration with Historical Baseline:** Define how ongoing sales recorded in MySQL (`source_origin='operational'`) append to or replace the UCI historical series when computing inference lags (`Lag1`..`RollingMean28`) at future dates without silently invalidating or altering the verified Phase 1 `.joblib` model contracts.
+- **Zero Retraining in API & Scheduled MLOps (`DDR-06`):** Read-only `.joblib` models load at FastAPI `lifespan` startup. Batch retraining runs strictly on an **offline schedule** (never inside HTTP requests), paired with **drift monitoring** (tracking out-of-time validation `WAPE`/feature shifts) and mandatory human review of downstream replenishment actions (`EXCL-03`).
+- **Operational B2B Demand Integration (`DDR-06` Resolved):**
+  1. **Confirmed B2B Source & Timing:** Confirmed sales orders supply operational actual demand timed by `requested_delivery_date` (or `created_at` for immediate fulfillment). **Confirmed demand and fulfilled quantities are separate concepts**, and **invoice settlement dates never affect demand timing**.
+  2. **Demand Adjustment Ledger:** Excess-stock returns and full cancellations record entries in `demand_adjustments` tied to original `(order_id, order_item_id)` to reduce net demand without double deduction; defective/damaged returns do **not** reduce original demand.
+  3. **B2B Order Classification & Spike Isolation:** Orders carry explicit `order_demand_type` (`recurring_replenishment`, `one_time_bulk`, `contract`, `tender`). All valid records remain preserved in history, while exceptional one-time/tender spikes are isolated so they do not distort recurring baseline forecasts.
+  4. **Censored Demand Flagging:** Stockout or allocation-constrained periods carry explicit `is_censored_demand` indicators so observed under-fulfillment is never mistaken for true low demand.
+  5. **Validation, Quarantine & Historical UoM Traceability:** Pre-aggregation pipelines validate schema, IDs, UoM codes, and extreme anomalous values—routing malformed records to `demand_quarantine` instead of silently dropping/ignoring them—and convert quantities using **product-specific, historically traceable `uom_conversions`**. Validated base-unit daily/weekly aggregates populate the exact 10-column feature contract compatible with Phase 1 `.joblib` estimators.
 
 #### I. Module Dependencies
 - **Upstream:** Offline UCI dataset (`ml/data/`) and (planned) `Sales Management` + `Product Management`.
@@ -1008,9 +1039,9 @@ Combines multi-horizon ML demand predictions (**Module 12**) with live warehouse
 
 #### B. Functional Requirements
 - Select planning horizon (`7`, `15`, `30`, or `90` days) across single SKUs or bulk warehouse catalog scans.
-- Pull `forecast_demand`, `current_quantity`, `safety_factor`, supplier `lead_time_days`, and incoming open PO quantities.
-- Compute deterministic `reorder_threshold`, `suggested_purchase_quantity`, and `risk_level` (`CRITICAL`, `ELEVATED`, `SAFE`).
-- Display side-by-side comparison charts (Current Stock vs. Forecast Demand vs. Reorder Threshold) and direct `"Send to Purchase Simulator"` workflow triggers.
+- Pull `forecast_demand`, separately tracked stock balances (`Physical Stock`, `Reserved Stock`, `Available Stock`, approved-only `Incoming Stock` per `DDR-02`, and `Projected Available Stock` per `DDR-03`), `safety_factor` (initial `1.20`), and hierarchical supplier `lead_time_days` (`supplier_products` → fallback `suppliers` per `DDR-01`/`DDR-07`).
+- Compute deterministic `Lead-Time Demand`, `Replenishment Risk Threshold`, `suggested_purchase_quantity`, and supplier lead-time `risk_level` (`CRITICAL`, `ELEVATED`, `SAFE`), or mark supplier lead-time risk **`UNAVAILABLE`** (showing a separately badged horizon-based view without ever inventing a synthetic lead time per `DDR-01`).
+- Display side-by-side comparison charts (Available / Projected Available Stock vs. Lead-Time / Forecast Demand vs. Replenishment Risk Threshold) and direct `"Send to Purchase Simulator"` handoffs (requiring human review; zero auto-PO creation per `EXCL-03`).
 
 #### C. Workspace Responsibilities
 - **Store Manager (Admin):** Full portfolio predictive planning, risk sorting, bulk alert generation, and simulator handoff.
@@ -1019,10 +1050,10 @@ Combines multi-horizon ML demand predictions (**Module 12**) with live warehouse
 
 #### D. Inputs and Outputs
 - **Inputs:** `product_id` / `stock_code`, selected `horizon_days`, optional override `safety_factor` / `supplier_id`, live `inventory` balance, live forecast output from `PredictionService`.
-- **Outputs:** `predicted_demand`, `reorder_threshold`, `current_stock`, `incoming_stock`, `risk_level` (`CRITICAL`/`ELEVATED`/`SAFE`), `suggested_purchase_quantity`, human-readable explanation breakdown, and optional persisted alert records.
+- **Outputs:** `predicted_demand`, `lead_time_days` (with `lead_time_source`: `supplier_product` | `supplier_default` | `unavailable`), `lead_time_demand`, `reorder_threshold`, separately itemized `physical_stock`, `reserved_stock`, `available_stock`, `incoming_stock`, `projected_available_stock`, `risk_basis` (`lead_time_based` | `horizon_fallback_no_lead_time`), `risk_level` (`CRITICAL`/`ELEVATED`/`SAFE`/`UNAVAILABLE`), `suggested_purchase_quantity`, transparent formula explanation, and alert triggers.
 
 #### E. Database Requirements
-- **Primary Read Sources:** `inventory`, `products`, `suppliers`, `purchase_orders`/`purchase_order_items` (incoming open stock), `forecasts`.
+- **Primary Read Sources:** `inventory`, `products`, `suppliers`, `supplier_products` (`DDR-07`), `purchase_orders`/`purchase_order_items` (`approved` and `partially_received` incoming stock only per `DDR-02`), `forecasts`.
 - **Outputs Written (Planned):** `inventory_alerts` / `alerts` table records when thresholds trigger alerts.
 
 #### F. API Requirements *(Planned)*
@@ -1034,9 +1065,9 @@ Combines multi-horizon ML demand predictions (**Module 12**) with live warehouse
 - Generates deterministic calculations on demand, persists risk alerts (`alerts`), and initiates draft workflows into **Purchase Planning Simulator**.
 
 #### H. Business Rules and Validation
-- **Formula Parity with Module 11:** Predictive Planner and Purchase Planning Simulator **must use identical mathematical equations** for reorder thresholds, risk levels, and suggested purchase quantities (defined in Section 11).
-- **Non-Guarantee Disclaimer:** Stockout risk flags are empirical decision-support warnings, not physical guarantees that a stockout will occur.
-- `[DESIGN DECISION REQUIRED]` **Unified Lead-Time Scaling & Incoming PO Rules:** Confirm (1) whether `Forecast Demand` over supplier `lead_time_days` scales the nearest ML horizon prediction vs. uses direct selected horizon prediction, and (2) whether incoming `approved` PO units offset `suggested_purchase_quantity`. (Baseline fallback formula preserved in Section 11 until confirmed.)
+- **Formula Parity with Module 11 (`DDR-01`, `DDR-02`, `DDR-03`):** Both `M14` and `M11` call the shared Section 11 risk engine computing `Lead-Time Demand = (Forecast Demand / Horizon Days) × Supplier Lead Time Days`, `Replenishment Risk Threshold = Lead-Time Demand × Safety Factor` (default `1.20`), using `supplier_products` lead time first and `suppliers.lead_time_days` fallback second, and strictly subtracting `Projected Available Stock = Available Stock + Incoming Stock` (where `Incoming Stock` counts only outstanding `approved` / `partially_received` PO quantities).
+- **Unavailable Lead-Time Rule (`DDR-01`):** If neither product mapping nor supplier default provides a valid lead time, **never invent one**—mark supplier lead-time risk **`UNAVAILABLE`**. A clearly badged horizon-based stock check ($\hat{y}_H$ vs. stock) may still be displayed separately without conflating it with lead-time risk.
+- **Non-Guarantee & Human Review Disclaimer (`EXCL-03`):** Stockout risk flags recommend human procurement review and never auto-create or auto-submit Purchase Orders.
 
 #### I. Module Dependencies
 - **Upstream:** `Demand Forecasting` (ML engine), `Inventory Control`, `Supplier Management`, `Purchase Planning Simulator` (incoming POs).
@@ -1048,6 +1079,7 @@ Combines multi-horizon ML demand predictions (**Module 12**) with live warehouse
 #### K. Error and Edge-Case Handling
 - SKU missing from inventory table → return clear `404` / onboarding prompt rather than assuming `current_stock = 0` silently.
 - SKU lacking sufficient historical demand → return explicit `insufficient_history` indicator instead of generating misleading `SAFE` status.
+- SKU lacking both `supplier_products.lead_time_days` and `suppliers.lead_time_days` → mark supplier lead-time risk explicitly **`UNAVAILABLE`** (never invent lead time; optionally render clearly badged horizon-based risk check per `DDR-01`).
 - Inactive product (`is_active == False`) → excluded from routine replenishment buy suggestions unless explicitly queried.
 
 #### L. Acceptance Criteria
@@ -1062,17 +1094,16 @@ Combines multi-horizon ML demand predictions (**Module 12**) with live warehouse
 ### Module 15: Anomaly Detection
 
 #### A. Module Purpose
-Monitors retail sales streams, cancellation rates, return surges, and stock depletion velocities using transparent statistical deviation techniques so operators detect operational disruptions, errors, or sudden market shifts early.
+Implements NEXORA's **hybrid deterministic-rule and statistical/ML anomaly detection engine (`DDR-08`)** monitoring retail/B2B demand streams, inventory integrity, return surges, and procurement variances so operators detect operational disruptions, errors, or risk spikes early.
 
-#### B. Functional Requirements
-- Detect five core anomaly classes:
-  1. **Demand Spikes:** Daily/weekly SKU demand significantly above historical rolling mean (`z-score > upper_threshold`).
-  2. **Demand Drops:** Sudden collapse in sales velocity for previously active SKUs.
-  3. **Unusual Return Activity:** Return rate or returned units spiking above SKU historical baseline.
-  4. **Cancellation Surges:** Abrupt rise in cancelled orders/invoices within an evaluation window.
-  5. **Rapid Inventory Depletion:** Physical stock dropping far faster than typical daily consumption velocity.
-- Support configurable rolling lookback window sizes and sigma/percentage thresholds.
-- Persist structured `anomaly_events` records separate from user-facing `Smart Alerts` notifications.
+#### B. Functional Requirements (`DDR-08`)
+- Execute hybrid detection across **four operational anomaly domains**:
+  1. **Demand Anomalies:** Spikes and abrupt drops across daily/weekly SKU demand, explicitly integrating `DDR-06` order classifications (`recurring_replenishment`, `one_time_bulk`, `contract`, `tender`) and `censored_demand` flags so expected tagged tenders/bulk purchases are distinguished cleanly from anomalous unexplained spikes.
+  2. **Inventory-Integrity Anomalies:** Rapid stock depletion velocities, physical/reserved divergence checks, and blocked negative-stock / quarantine triggers.
+  3. **Return Anomalies:** Unusual return spikes integrating `DDR-06` return types (`excess_stock` vs. `defective`/`damaged` return surges separately from `'C'` cancellations).
+  4. **Procurement Variance & Split Signals (`DDR-08` & `DDR-09`):** Unusual PO purchase-price spikes vs. `supplier_products.purchase_price`, lead-time slippage variances, unapproved supplier substitutions, and suspicious same-supplier PO splitting within configurable rolling windows (surfacing review flags cleanly for Store Manager PO escalation without presuming malicious intent).
+- Support centrally configured thresholds with **system defaults**, **system-enforced min/max bounds**, **reset-to-default** capability, and future-only application (`operational_settings`).
+- Persist immutable `anomaly_events` separately from `SYS-03` notification states and **suppress duplicate notifications** for already-unresolved events.
 
 #### C. Workspace Responsibilities
 - **Store Manager (Admin):** Full anomaly dashboard, threshold configuration, and event investigation.
@@ -1085,7 +1116,7 @@ Monitors retail sales streams, cancellation rates, return surges, and stock depl
 
 #### E. Database Requirements
 - **Entities:** `anomaly_events`, plus `operational_settings` (threshold configs).
-- **Important Fields (`anomaly_events`):** `id` (PK), `product_id` (FK, nullable for store-wide anomalies), `anomaly_type` (`ENUM('demand_spike', 'demand_drop', 'return_surge', 'cancellation_surge', 'rapid_depletion')`), `severity` (`ENUM('LOW', 'MEDIUM', 'HIGH', 'CRITICAL')`), `detection_date`, `observed_value` (`DECIMAL(12, 2)`), `expected_baseline` (`DECIMAL(12, 2)`), `deviation_score` (`DECIMAL(8, 4)`), `details` (JSON), `detected_at`.
+- **Important Fields (`anomaly_events`):** `id` (PK), `product_id` (FK, nullable for store-wide anomalies), `anomaly_type` (`ENUM('demand_spike', 'demand_drop', 'return_surge', 'cancellation_surge', 'rapid_depletion', 'inventory_integrity', 'procurement_variance')`), `detection_method` (`ENUM('deterministic_rule', 'statistical_zscore', 'hybrid')`), `severity` (`ENUM('LOW', 'MEDIUM', 'HIGH', 'CRITICAL')`), `detection_date`, `observed_value` (`DECIMAL(12, 2)`), `expected_baseline` (`DECIMAL(12, 2)`), `deviation_score` (`DECIMAL(8, 4)`), `details` (JSON), `detected_at`.
 
 #### F. API Requirements *(Planned)*
 - `GET /api/v1/intelligence/anomalies` — Paginated/filterable detected anomaly events (`anomaly_type`, `severity`, `product_id`, `date_range`).
@@ -1096,17 +1127,16 @@ Monitors retail sales streams, cancellation rates, return surges, and stock depl
 - Automated or on-demand **Detection Scans** generate immutable `anomaly_events` (deduplicated per entity/date/type). Status lifecycle (`unread`/`acknowledged`/`resolved`) is managed on the associated notification inside **Smart Alerts**.
 
 #### H. Business Rules and Validation
-- **Event vs. Notification Separation Rule:** An `anomaly_event` is an objective statistical measurement record (historical analytical evidence), whereas a **Smart Alert** is the actionable operator notification presenting that anomaly (or stock risk) for acknowledgement and resolution.
-- **Zero-Variance Guard:** When historical rolling standard deviation $\sigma = 0$ (e.g., constant zero or flat demand), z-score division must be guarded explicitly via minimum baseline floor or fallback ratio rule rather than throwing `ZeroDivisionError` / `Inf`.
-- **Minimum Baseline Rule:** Avoid flagging newly created SKUs with only 1–2 observations as statistical "demand drops".
-- `[DESIGN DECISION REQUIRED]` **Default Statistical Windows & Sigma Cutoffs:** Finalize exact rolling window lengths (e.g., 14 vs. 28 days) and default $z$-score thresholds (e.g., $|z| \ge 2.5$ warning, $|z| \ge 3.0$ critical) plus batch execution trigger (scheduled/on-demand vs. inline after sales/returns).
+- **Event vs. Notification Separation & Duplicate Suppression (`DDR-08`):** `anomaly_events` stores immutable empirical detection evidence, whereas `SYS-03 alerts` manages operator acknowledgement/resolution lifecycles. Consecutive scans MUST **suppress duplicate active/unacknowledged alerts** for unresolved events on the same entity/anomaly class.
+- **Bounded Configuration & Forward-Only Rule (`DDR-08`):** Default rolling windows (e.g., `14`/`28` days), z-score cutoffs (`|z| >= 2.5`/`3.0`), and procurement variance percentages ship with system defaults and enforced min/max bounds adjustable within **Store Manager (Admin)** *(or equivalent Operations Lead admin panel in future RBAC deployments)* with **reset-to-default** support. Edits apply strictly to future evaluations and never alter historical `anomaly_events`.
+- **Zero-Variance & Cold-Start Guards:** Guard $\sigma = 0$ via fallback delta/ratio rules; exempt brand-new SKUs (`Introduction` stage / insufficient baseline window) from false "demand drop" alerts.
 
 #### I. Module Dependencies
 - **Upstream:** `Sales Management`, `Return Intelligence`, `Stock Movement Tracking`, `Inventory Control`.
 - **Downstream:** `Smart Alerts`, `Business Intelligence`, `Centralized History & Audit`.
 
 #### J. History & Audit Events
-- `ANOMALY_SCAN_EXECUTED` (summary counts), `ANOMALY_CONFIG_UPDATED` (before/after thresholds), `CRITICAL_ANOMALY_DETECTED`.
+- **Tier 1 Fail-Closed (`DDR-08` & `DDR-10`):** `ANOMALY_CONFIG_UPDATED` and `ANOMALY_CONFIG_RESET` (capturing `timestamp`, `selected_workspace`, optional non-auth `operator_ref`/`user_id` attribution slot when supplied, plus previous and new threshold values). **Also audited:** `ANOMALY_SCAN_EXECUTED` and `CRITICAL_ANOMALY_DETECTED`.
 
 #### K. Error and Edge-Case Handling
 - Re-running scan for the same date window → deduplication check ensures identical `(product_id, anomaly_type, detection_date)` is not alerted redundantly.
@@ -1129,9 +1159,9 @@ Monitors retail sales streams, cancellation rates, return surges, and stock depl
 Combines operational return processing with analytical return/cancellation health metrics. Ensures operational returns connect back to original orders/sales/invoices, enforce strict returned-quantity caps, drive warehouse stock disposition (`restock` vs. `damaged`), initiate financial credit notes/refunds, and analyze historical UCI cancellation/return friction separately from gross sales.
 
 #### B. Functional Requirements
-- **Operational Return Intake:** Search original order/sale/invoice, select specific sold items, specify returned quantity (`<= remaining returnable quantity`), record mandatory structured `return_reason`, and choose physical disposition (`restock` vs. `damaged`).
-- **Automated Downstream Linkage:** Atomically update inventory/movements (`return_restock` or `damaged`) and trigger draft/issued credit note adjustment in **Billing & Finance**.
-- **Analytical Return Health:** Track gross sales, `'C'`-prefix cancellations, negative-quantity returns, net sales (`Net = Gross - Returns - Cancellations`), SKU return rates (`returned_units / gross_units`), and top-returned items across both UCI history and live operations.
+- **Operational Return Intake:** Search original fulfilled order/fulfillment batch/sale/invoice (`DDR-05`), select specific delivered/sold line items, specify returned quantity (`<= remaining returnable quantity`), capture structured `return_reason` + B2B demand return classification (**`excess_stock`** vs. **`defective_or_damaged`**, per `DDR-06`), and choose physical disposition (`restock` vs. `damaged`).
+- **Automated Downstream Linkage:** Atomically update inventory/movements (`return_restock` or `damaged`), record net-demand subtraction in **`demand_adjustments` strictly for `excess_stock` returns** (`DDR-06` — `defective_or_damaged` returns NEVER reduce original confirmed customer demand!), and trigger Credit Note adjustment in **Billing & Finance** under **`DDR-10` Tier 1 fail-closed audit**.
+- **Analytical Return Health:** Track gross sales, `'C'`-prefix cancellations, negative-quantity returns, net sales, SKU return rates, and excess-stock vs. defective return splits feeding `M15` (`DDR-08`) without conflating UCI `'C'` cancellations with non-`'C'` returns.
 
 #### C. Workspace Responsibilities
 - **Store Manager (Admin):** Full return processing, disposition approval, return analytics, and credit linkage oversight.
@@ -1145,7 +1175,7 @@ Combines operational return processing with analytical return/cancellation healt
 #### E. Database Requirements
 - **Entities:** `returns`, `return_items` (plus read access to `transactions`, `invoices`, `credit_notes`).
 - **Important Fields (`returns`):** `id` (PK), `return_number` (UNIQUE), `order_id` (FK, nullable), `sale_id` (FK, nullable), `invoice_id` (FK, nullable), `return_status` (`ENUM('requested', 'approved', 'completed', 'rejected')`), `total_refund_amount` (`DECIMAL(12, 2)`), `selected_workspace`, `created_at`.
-- **Important Fields (`return_items`):** `id` (PK), `return_id` (FK → `returns.id`), `product_id` (FK → `products.id`), `quantity` (INT > 0), `unit_price` (`DECIMAL(10, 2)`), `line_refund` (`DECIMAL(12, 2)`), `disposition` (`ENUM('restock', 'damaged')`), `reason` (VARCHAR(255)).
+- **Important Fields (`return_items`):** `id` (PK), `return_id` (FK → `returns.id`), `order_item_id` (FK nullable → `order_items.id` per `DDR-06`), `product_id` (FK → `products.id`), `quantity` (INT > 0), `unit_price` (`DECIMAL(10, 2)`), `line_refund` (`DECIMAL(12, 2)`), `return_classification` (`ENUM('excess_stock', 'defective', 'damaged', 'other')` per `DDR-06`), `disposition` (`ENUM('restock', 'damaged')`), `reason` (VARCHAR(255)).
 
 #### F. API Requirements *(Planned)*
 - `GET /api/v1/returns` — List operational returns filterable by SKU, status, date, order/invoice.
@@ -1160,6 +1190,8 @@ Combines operational return processing with analytical return/cancellation healt
 - **Disposition Movement Mapping:**
   - `disposition = 'restock'`: Atomically increments `inventory.current_quantity` by `+return_quantity` and logs `movement_type = 'return_restock'`.
   - `disposition = 'damaged'`: Does **not** add unsellable customer-returned goods back into sellable `inventory.current_quantity`; instead, the damaged disposition, quantity, and justification are recorded traceably in `return_items` and `Centralized History & Audit` (whereas write-offs of existing warehouse shelf stock execute directly via `Stock Movement Tracking` with `movement_type = 'damaged'` and negative `quantity_delta`).
+- **Demand Adjustment Separation (`DDR-06`):** `excess_stock` returns generate net-demand reduction entries in `demand_adjustments` referencing `(order_id, order_item_id)` to prevent duplicate subtractions; `defective` / `damaged` returns trigger physical handling and financial credits **without** deducting original demand (`demand_adjustments` not reduced).
+- **Tier 1 Fail-Closed Audit (`DDR-10`):** Return approvals/completions and cancellations execute within a single atomic transaction paired with `audit_logs`.
 - **UCI Separation Preservation:** Historical UCI records strictly maintain separate streams (`'C'` cancellations vs. negative non-`'C'` returns). Neither historical returns nor cancellations alone may be used to assert product manufacturing defects.
 
 #### I. Module Dependencies
@@ -1197,7 +1229,7 @@ Handles customer invoicing, tax and grand-total calculations, payment recording,
 - Provide financial revenue reconciliation views comparing invoiced gross revenue, received payments, issued credit notes, and net realized revenue.
 
 #### C. Workspace Responsibilities
-- **Store Manager (Admin):** Full financial oversight, invoice viewing, credit note oversight, and reconciliation reports.
+- **Store Manager (Admin):** Full financial oversight, invoice viewing, credit note oversight, reconciliation reports, and centralized `INR`/tax rate configuration (`DDR-04`).
 - **Finance Staff:** Primary operational workspace for customer billing entry, invoice generation, payment tracking, credit note issuance, refund adjustments, and financial reports.
 
 #### D. Inputs and Outputs
@@ -1206,7 +1238,7 @@ Handles customer invoicing, tax and grand-total calculations, payment recording,
 
 #### E. Database Requirements
 - **Entities:** `invoices`, `invoice_items`, `payments`, `credit_notes`.
-- **Important Fields (`invoices`):** `id` (PK), `invoice_number` (VARCHAR(64), UNIQUE, indexed), `order_id` (FK, nullable), `customer_id` (FK → `customers.id`), `billing_snapshot` (JSON/TEXT freezing customer billing details at invoice time), `invoice_date`, `subtotal` (`DECIMAL(12, 2)`), `tax_rate` (`DECIMAL(5, 2)`), `tax_amount` (`DECIMAL(12, 2)`), `grand_total` (`DECIMAL(12, 2)`), `amount_paid` (`DECIMAL(12, 2)` DEFAULT `0.00`), `payment_status` (`ENUM('unpaid', 'partially_paid', 'paid', 'partially_credited', 'refunded')`), `selected_workspace`, `created_at`.
+- **Important Fields (`invoices`):** `id` (PK), `invoice_number` (VARCHAR(64), UNIQUE, indexed), `order_id` (FK, nullable), `customer_id` (FK → `customers.id`), `billing_snapshot` (JSON/TEXT freezing customer billing details at invoice time), `currency_code` (`CHAR(3)` DEFAULT `'INR'` per `DDR-04`), `invoice_date`, `subtotal` (`DECIMAL(12, 2)`), `tax_rate` (`DECIMAL(5, 2)` — historical applied rate preserved permanently per `DDR-04`), `tax_amount` (`DECIMAL(12, 2)`), `grand_total` (`DECIMAL(12, 2)`), `amount_paid` (`DECIMAL(12, 2)` DEFAULT `0.00`), `payment_status` (`ENUM('unpaid', 'partially_paid', 'paid', 'partially_credited', 'refunded')`), `selected_workspace`, `created_at`.
 - **Important Fields (`invoice_items`):** `id` (PK), `invoice_id` (FK), `product_id` (FK), `description`, `quantity`, `unit_price` (`DECIMAL(10, 2)`), `line_total` (`DECIMAL(12, 2)`).
 - **Important Fields (`payments`):** `id` (PK), `invoice_id` (FK), `payment_reference`, `amount` (`DECIMAL(12, 2)`), `payment_method` (`ENUM('cash', 'card_manual', 'bank_transfer', 'cheque', 'other')`), `payment_date`, `notes`, `selected_workspace`, `created_at`.
 - **Important Fields (`credit_notes`):** `id` (PK), `credit_note_number` (UNIQUE), `invoice_id` (FK), `return_id` (FK, nullable), `amount` (`DECIMAL(12, 2)`), `reason` (TEXT), `selected_workspace`, `created_at`.
@@ -1225,11 +1257,13 @@ Handles customer invoicing, tax and grand-total calculations, payment recording,
 - Supports Create, Read, Print/Export, Payment Recording, and Credit Note Issuance.
 
 #### H. Business Rules and Validation
-- **Strict DECIMAL Precision:** Every monetary calculation uses Python `decimal.Decimal` (`ROUND_HALF_UP`) and MySQL `DECIMAL(10, 2)` / `DECIMAL(12, 2)`. IEEE floating-point (`FLOAT`/`DOUBLE`) is prohibited.
-- **Credit Cap Rule:** Sum of credit notes issued against an invoice **cannot exceed** `invoice.grand_total` (`already_credited + new_credit <= grand_total`).
-- **Overpayment Validation:** Payment amounts must be `> 0` and `amount_paid + new_payment <= grand_total - already_credited` (or cleanly warn/block overpayment).
-- **Boundary Rules:** Does **not** integrate external credit-card gateways (Stripe/Razorpay) or statutory tax filing portals (`EXCL-01`); payment recording tracks manual settlement bookkeeping only.
-- `[DESIGN DECISION REQUIRED]` **Tax Configuration Granularity & Currency:** Define whether tax applies as a single configurable store-wide percentage setting vs. per-invoice manual rate override vs. per-SKU tax category, and confirm single display currency symbol (e.g., `£` matching UCI vs. configurable store currency).
+- **Default Currency & Central Tax Configuration (`DDR-04`):**
+  1. **`INR` (`₹`)** is NEXORA's default operational currency (`currency_code = 'INR'`), stored consistently alongside `DECIMAL` monetary columns (while `uci_historical` analytical baselines retain their GBP provenance label).
+  2. Tax rates are **centrally configurable by `Store Manager (Admin)`** inside centralized settings (`operational_settings`); **hardcoded tax percentages across backend modules or frontend views are strictly prohibited**.
+  3. **Historical Immutability & Forward-Only Changes:** Completed `invoices` preserve the exact `currency_code`, `tax_rate`, and `tax_amount` originally applied at creation. Updating central tax settings affects **future** invoices/transactions only and never retroactively alters existing records.
+- **Strict DECIMAL & Demand Timing Boundaries (`DDR-04`, `DDR-06`):** Every monetary calculation uses Python `decimal.Decimal` (`ROUND_HALF_UP`) and MySQL `DECIMAL(10, 2)` / `DECIMAL(12, 2)` (never `FLOAT`/`DOUBLE`). Per `DDR-06`, invoice issuance and payment settlement dates **never** determine ML demand timing (which tracks order `requested_delivery_date` / order date).
+- **Credit Cap, Overpayment & Tier 1 Audit (`DDR-10`):** Sum of credit notes cannot exceed `grand_total`; payments cannot exceed remaining collectible balance; every financial write (`invoice`, `payment`, `credit_note`) executes as a **DDR-10 Tier 1 fail-closed atomic transaction**.
+- **Boundary Rules (`EXCL-01`):** Does **not** integrate external payment gateways or government statutory e-way/GST portal APIs.
 
 #### I. Module Dependencies
 - **Upstream:** `Customer Management`, `Order Management`, `Sales Management`, `Product Management`, `Return Intelligence`.
@@ -1259,9 +1293,9 @@ Handles customer invoicing, tax and grand-total calculations, payment recording,
 Manages internal warehouse fulfillment preparation and dispatch tracking for confirmed/invoiced orders: generating pick lists, digital packing slips, internal routing labels, and delivery status updates—while honoring the exclusion of external carrier API integrations (`EXCL-02`).
 
 #### B. Functional Requirements
-- View queue of fulfilled/invoiced orders awaiting packing and dispatch.
+- View queue of `partially_fulfilled`, `fulfilled`, and invoiced orders awaiting packing and dispatch (`1:N` split-shipment queue per `DDR-05`).
 - Generate internal **Warehouse Pick Lists** aggregating SKU descriptions and quantities to pull from shelves.
-- Generate **Digital Packing Slips** linking shipment ID, order/invoice ID, destination address, and packed line items.
+- Generate **Digital Packing Slips** linking shipment ID, order/fulfillment/invoice IDs, destination address, and independent split-parcel line items.
 - Generate **Internal Dispatch / Routing Labels** (order number, customer destination address, delivery method, internal `tracking_reference`).
 - Track internal shipment status progression (`pending` → `packed` → `dispatched` → `delivered` or `cancelled`) and maintain delivery status event history.
 
@@ -1276,8 +1310,8 @@ Manages internal warehouse fulfillment preparation and dispatch tracking for con
 
 #### E. Database Requirements
 - **Entities:** `shipments`, `shipment_items`, `packing_slips`, `shipment_events`.
-- **Important Fields (`shipments`):** `id` (PK), `shipment_number` (UNIQUE), `order_id` (FK, indexed), `invoice_id` (FK, nullable), `shipping_address` (TEXT NOT NULL), `delivery_method` (VARCHAR(50)), `shipping_status` (`ENUM('pending', 'packed', 'dispatched', 'delivered', 'cancelled')`), `internal_tracking_ref` (VARCHAR(100)), `created_at`, `updated_at`.
-- **Important Fields (`shipment_items`):** `id` (PK), `shipment_id` (FK), `product_id` (FK), `quantity` (INT > 0).
+- **Important Fields (`shipments`):** `id` (PK), `shipment_number` (UNIQUE), `order_id` (FK, indexed — `1:N` supporting multiple split shipments per order under `DDR-05`), `order_fulfillment_id` (FK nullable → `order_fulfillments.id`), `invoice_id` (FK, nullable), `shipping_address` (TEXT NOT NULL), `delivery_method` (VARCHAR(50)), `shipping_status` (`ENUM('pending', 'packed', 'dispatched', 'delivered', 'cancelled')`), `internal_tracking_ref` (VARCHAR(100)), `created_at`, `updated_at`.
+- **Important Fields (`shipment_items`):** `id` (PK), `shipment_id` (FK), `order_item_id` (FK → `order_items.id`), `product_id` (FK), `quantity` (INT > 0 — independent shipped quantity per split parcel under `DDR-05`).
 - **Important Fields (`packing_slips`):** `id` (PK), `shipment_id` (FK), `slip_number` (UNIQUE), `selected_workspace`, `generated_at`.
 - **Important Fields (`shipment_events`):** `id` (PK), `shipment_id` (FK), `status`, `notes`, `selected_workspace`, `event_at`.
 
@@ -1295,8 +1329,8 @@ Manages internal warehouse fulfillment preparation and dispatch tracking for con
 #### H. Business Rules and Validation
 - **Internal Fulfillment Boundary (`EXCL-02`):** Tracking references and labels are **internal warehouse references only**, never live carrier API labels (FedEx/UPS/DHL).
 - **Status Progression Validation:** Invalid jumps (e.g., `delivered` back to `pending`, or shipping without destination address) must be rejected with HTTP `409`/`422`.
-- **Order Consistency:** Total quantity packed across shipment(s) for an order must never exceed `order_items.quantity`.
-- `[DESIGN DECISION REQUIRED]` **Partial Shipment Support:** Determine whether one order strictly produces one shipment (`1:1`) or supports split/partial multi-parcel shipments (`1:N` using `shipment_items` balance validation).
+- **Partial Fulfillment & Split-Shipment Model (`DDR-05` Resolved):** A single customer order (`orders`) supports **multiple fulfillments and multiple split shipments (`1:N`)**. Each `shipments` row tracks its own independent `shipment_items` quantities and independent delivery status (`pending` → `packed` → `dispatched` → `delivered`, or pre-dispatch `cancelled`).
+- **Cumulative Quantity Consistency:** Cumulative non-cancelled `shipment_items.quantity` for any `order_item_id` must never exceed `order_item.fulfilled_quantity` (nor `order_items.quantity`). Remaining unfulfilled order quantities stay pending in `M05` without blocking dispatch of already-fulfilled split shipments.
 
 #### I. Module Dependencies
 - **Upstream:** `Order Management`, `Billing & Finance` (invoice link), `Customer Management` (shipping address).
@@ -1334,8 +1368,11 @@ Supporting System Capabilities provide cross-cutting navigation, governance, ale
 
 ## 6.3 Capability 3 — Smart Alerts *(Planned)*
 - **Purpose:** Presents a unified operator notification center aggregating critical stockout risks from **Predictive Planner**, statistical deviations from **Anomaly Detection**, low-stock triggers from **Inventory Control**, and pending/overdue workflow reminders (such as POs awaiting approval).
-- **Functional Lifecycle:** Each notification tracks `alert_id`, `source_module` (`predictive_planner`, `anomaly_detection`, `inventory_control`, `procurement`), `severity` (`INFO`, `WARNING`, `ELEVATED`, `CRITICAL`), linked `entity_type`/`entity_id`, `message`, and lifecycle status (`active` → `acknowledged` → `resolved`).
-- **Distinction:** Smart Alerts present actionable operator notifications with acknowledgement/resolution tracking; underlying objective events (like `anomaly_events` or `inventory` balances) remain preserved independently.
+- **Functional Lifecycle:** Each notification tracks `alert_id`, `source_module` (`predictive_planner`, `anomaly_detection`, `inventory_control`, `procurement`), `severity` (`INFO`, `WARNING`, `ELEVATED`, `CRITICAL`), linked `entity_type`/`entity_id`, `message`, and lifecycle status (`active` → `acknowledged` → `resolved`, where acknowledgements follow `DDR-10` Tier 2 audit resilience).
+- **Consolidated Trigger & Suppression Rules (`DDR-05`, `DDR-08`, `DDR-09`, `EXCL-03`):**
+  - *Fulfillment Stock Threshold (`DDR-05`):* Order fulfillment inventory decreases pushing `Available Stock <= Reorder Threshold` (or `minimum_stock`) trigger replenishment recommendation alerts cleanly—never auto-creating or submitting POs.
+  - *Duplicate Suppression (`DDR-08`):* Suppress duplicate active/unacknowledged alerts for unresolved `anomaly_events` or active threshold breaches on the same entity; preserve underlying `anomaly_events` even after an alert resolves.
+  - *Procurement Oversight & Escalations (`DDR-09`):* Emit non-blocking Store Manager notification/digest alerts on Purchase Manager Tier 1 PO approvals, plus escalation notices for anti-split flags, DDR-08 price variances, and unapproved supplier overrides.
 - **Planned Endpoints:** `GET /api/v1/alerts`, `PATCH /api/v1/alerts/{id}/acknowledge`, `PATCH /api/v1/alerts/{id}/resolve`.
 
 ## 6.4 Capability 4 — Reports & Export *(Planned)*
@@ -1386,25 +1423,24 @@ flowchart LR
 7. **Failure & Rollback:** Duplicate `stock_code` or validation error rolls back all inserts—no orphan `inventory` or `product` row persists.
 8. **Expected Final State:** Product is active in catalog, live stock record exists, audit history recorded.
 
-## Workflow B — Customer Order to Delivery
-1. **Trigger:** Store Manager creates and fulfills a customer order (with Finance/Inventory visibility downstream).
-2. **Preconditions:** Active `customer_id`, active `products`, sufficient physical stock at fulfillment time.
+## Workflow B — Customer Order to Delivery *(Updated for `DDR-03`, `DDR-04`, `DDR-05`, `DDR-06`, `DDR-10`)*
+1. **Trigger:** Store Manager creates, confirms, and executes full or partial fulfillment on a customer order (with Finance/Inventory visibility downstream).
+2. **Preconditions:** Active `customer_id`, active `products`, valid `Available Stock` (`Physical Stock - Reserved Stock`) for confirmed/fulfilled quantities.
 3. **Ordered Processing Steps:**
-   1. Create `orders` (`status='draft'`/`'pending'`, `inventory_deducted=False`) and `order_items` (no stock deduction yet).
-   2. Optionally transition order to `confirmed`.
-   3. Trigger `/orders/{id}/fulfill`: acquire DB row locks (`FOR UPDATE`) on `orders` and target `inventory` rows.
-   4. Verify `order.inventory_deducted == False` and `order.order_status` is eligible (`draft`/`pending`/`confirmed`).
-   5. For every item, verify `inventory.current_quantity >= order_item.quantity`.
-   6. Deduct `inventory.current_quantity` and insert `sale_fulfillment` (`delta = -quantity`) in `inventory_movements`.
-   7. Mark `orders.order_status = 'fulfilled'` and `inventory_deducted = True`.
-   8. Create linked completed `sales`/`transactions` record + line items (`source_origin='operational'`).
-   9. Generate linked `invoices` & `invoice_items` (`DECIMAL` subtotal, tax, grand total) in `Billing & Finance` (or enable one-click invoice creation).
-   10. Create internal `shipments` (`pending`) and generate pick list / packing slip / routing label; update status to `packed` → `dispatched` → `delivered`.
-4. **Database Entities Affected:** `orders`, `order_items`, `inventory`, `inventory_movements`, `transactions`/`transaction_items`, `invoices`/`invoice_items`, `shipments`, `shipment_items`, `packing_slips`, `shipment_events`, `audit_logs`.
-5. **Transaction Boundary:** Steps 3–8 MUST occur in one atomic transaction guaranteeing stock deduction, movement log, order fulfillment flag, and sales creation succeed or fail together.
-6. **Audit Events:** `ORDER_CREATED`, `ORDER_FULFILLED`, `SALE_COMPLETED`, `INVOICE_GENERATED`, `SHIPMENT_STATUS_UPDATED`.
-7. **Failure & Rollback:** Insufficient stock on any item in step 5 rolls back the entire fulfillment transaction, leaving `inventory_deducted=False` and `current_quantity` untouched, and records `ORDER_FULFILLMENT_FAILED` in audit history.
-8. **Expected Final State:** Stock decremented once, movements logged, sale + invoice finalized, shipment delivered.
+   1. Create `orders` (`status='draft'`/`'pending'`, `order_demand_type`, `requested_delivery_date`, `inventory_deducted=False`) and `order_items` (no stock reservation or deduction yet).
+   2. Transition to `confirmed` (`DDR-03` & `DDR-06`): validate `Available Stock >= quantity`, atomically increment `inventory.reserved_quantity` (`Reserved Stock`), establish confirmed B2B demand (flagging `is_censored_demand = True` if constrained), and log Tier 1 audit.
+   3. Trigger `/orders/{id}/fulfill` for a partial or full batch (`DDR-05`): acquire `SELECT ... FOR UPDATE` row locks on `orders`, `order_items`, and target `inventory` rows.
+   4. Validate unique fulfillment `idempotency_key` (`order_fulfillments`) and verify `order_item.fulfilled_quantity + batch_qty <= order_item.quantity` and `inventory.current_quantity >= batch_qty`.
+   5. Deduct **only the batch quantity actually fulfilled** (`current_quantity -= batch_qty` and release `reserved_quantity -= batch_qty`), and insert `sale_fulfillment` (`delta = -batch_qty`) in `inventory_movements`.
+   6. Update `order_items.fulfilled_quantity += batch_qty`; set `orders.order_status = 'fulfilled'` (and `inventory_deducted = True`) **only if all lines are 100% fulfilled**, otherwise set `'partially_fulfilled'` keeping unfulfilled quantities pending/reserved.
+   7. Create linked completed `sales`/`transactions` record + line items (`source_origin='operational'`), and emit **Smart Alert** (`SYS-03`) if `Available Stock` reaches or falls below reorder threshold (recommend-only; zero auto-PO per `EXCL-03`).
+   8. Generate linked `invoices` & `invoice_items` (`INR` default currency, centralized `DECIMAL` tax snapshot per `DDR-04`, never overriding `M12` demand timing).
+   9. Create internal split or full `shipments` (`1:N` per order under `DDR-05`) with `shipment_items`, pick list / packing slip / routing label, and progress independently through `packed` → `dispatched` → `delivered`.
+4. **Database Entities Affected:** `orders`, `order_items`, `order_fulfillments`, `inventory`, `inventory_movements`, `transactions`/`transaction_items`, `invoices`/`invoice_items`, `shipments`, `shipment_items`, `packing_slips`, `shipment_events`, `alerts`, `audit_logs`.
+5. **Transaction Boundary:** Steps 3–7 MUST occur in one atomic InnoDB transaction paired with **DDR-10 Tier 1 fail-closed** `audit_logs` insert (if audit write fails, entire fulfillment rolls back cleanly and emits external failure telemetry).
+6. **Audit Events:** `ORDER_CREATED` (Tier 2), `ORDER_CONFIRMED`, `ORDER_PARTIALLY_FULFILLED` / `ORDER_FULFILLED`, `SALE_COMPLETED`, `INVOICE_GENERATED`, `SHIPMENT_STATUS_UPDATED` (Tier 1 fail-closed on fulfillment/sales/invoices).
+7. **Failure & Rollback:** Duplicate `idempotency_key`, over-fulfillment, insufficient stock, or Tier 1 audit write failure rolls back the entire fulfillment transaction atomically, leaving `current_quantity`, `reserved_quantity`, and `fulfilled_quantity` untouched.
+8. **Expected Final State:** Actually fulfilled units deducted once, remaining unfulfilled quantities cleanly tracked (`partially_fulfilled`), movements & Tier 1 audit logged, split shipments progressing independently, and threshold alerts surfaced.
 
 ```mermaid
 sequenceDiagram
@@ -1419,43 +1455,43 @@ sequenceDiagram
         API->>DB: "Record Failure Audit Event"
         API-->>UI: "409 Conflict (Clear Error Message)"
     else "Valid & Sufficient Stock"
-        API->>DB: "Update inventory.current_quantity (-qty)"
-        API->>DB: "Insert inventory_movements (sale_fulfillment)"
-        API->>DB: "Set order.status='fulfilled', inventory_deducted=True"
-        API->>DB: "Insert sales transaction & audit log"
+        API->>DB: "Update inventory (physical -= batch_qty, reserved -= batch_qty)"
+        API->>DB: "Insert inventory_movements (sale_fulfillment) & order_fulfillments (idempotency_key)"
+        API->>DB: "Update fulfilled_quantity & status ('partially_fulfilled' or 'fulfilled')"
+        API->>DB: "Insert sales transaction & mandatory Tier 1 audit_logs (rollback if fails)"
         API->>DB: "COMMIT"
         API-->>UI: "200 OK (Order Fulfilled + Ready for Billing & Shipping)"
     end
 ```
 
-## Workflow C — Procurement and Replenishment
-1. **Trigger:** Purchase Manager / Store Manager runs Predictive Planner or inspects `CRITICAL`/`ELEVATED` stock risk.
-2. **Preconditions:** Product exists with inventory balance, ML forecast generated, active supplier with valid `lead_time_days`.
+## Workflow C — Procurement and Replenishment *(Updated for `DDR-01`, `DDR-02`, `DDR-07`, `DDR-09`, `DDR-10`)*
+1. **Trigger:** Purchase Manager or Store Manager reviews `CRITICAL`/`ELEVATED` stock risks in Predictive Planner or runs what-if procurement simulations (`EXCL-03` human review mandatory; zero auto-POs).
+2. **Preconditions:** Active SKU & inventory balances (`Physical`, `Reserved`, `Available`, `Incoming`), ML forecast available, supplier-product (`supplier_products`) or supplier fallback `lead_time_days` resolved (`UNAVAILABLE` flagged cleanly if neither exists per `DDR-01`).
 3. **Ordered Processing Steps:**
-   1. Query `Demand Forecasting` ML predictions + live `inventory` + supplier `lead_time_days`.
-   2. Evaluate "what-if" buffers in `Purchase Planning Simulator` (`POST /simulator/calculate`).
-   3. Convert simulation into a `draft` Purchase Order (`POST /purchase-orders`) and `submit` for review.
-   4. Human reviewer inspects PO and executes `/approve` (or `/reject` with reason).
-   5. When goods physically arrive at warehouse, staff submit `/receive` with actual delivered counts per line item.
-   6. Lock PO items + inventory rows, validate `received_quantity + delta <= ordered_quantity`, increment `inventory.current_quantity`, append `purchase_receipt` (`+delta`) to `inventory_movements`, update PO status (`partially_received` or `received`), and audit.
-4. **Database Entities Affected:** `forecasts`, `purchase_orders`, `purchase_order_items`, `inventory`, `inventory_movements`, `audit_logs`.
-5. **Transaction Boundary:** Steps 6 execute atomically in one transaction on receipt.
-6. **Audit Events:** `PO_CREATED`, `PO_SUBMITTED`, `PO_APPROVED`/`PO_REJECTED`, `PO_PARTIAL_RECEIVED`/`PO_FULLY_RECEIVED`.
-7. **Failure & Rollback:** Receipt on unapproved PO or over-quantity receipt rolls back cleanly (`409`/`422`), zero phantom inventory increases.
-8. **Expected Final State:** Stock increased by verified delivery amount, `purchase_receipt` ledger updated, PO closed/partially tracked.
+   1. Evaluate lead-time demand `(Forecast / Horizon) × Lead Time`, threshold (`Lead-Time Demand × Safety Factor`), and `Projected Available Stock` (`Available + approved/partially_received Incoming` per `DDR-02`/`DDR-03`) identically across `M14` & `M11`.
+   2. Convert recommendation into a `draft` Purchase Order (`POST /purchase-orders`) and `submit` for dual-control review (non-binding until approved).
+   3. Run `DDR-09` routing checks: compare `total_cost` against central `Tier 1 Spending Limit`, scan for same-supplier PO splitting inside `po_split_window_days`, and check `DDR-08` procurement anomalies / price spikes / non-preferred supplier switches.
+   4. **Approval Gate (`DDR-09`):** Routine POs `<= Tier 1 Limit` with zero triggers may be approved by `Purchase Manager` (emitting a non-blocking digest to Store Manager); POs exceeding limit or flagged/escalated require `Store Manager (Admin)` approval (approval changes DB state only—zero auto-dispatch per `EXCL-03`). Approved outstanding units now enter `Incoming Stock` (`DDR-02`). Any post-approval edit to supplier/qty/unit_price/total invalidates approval and restarts review.
+   5. When goods arrive physically, staff execute `/receive`: lock PO items + `inventory`, validate `received_quantity + delta <= ordered_quantity`, increment `inventory.current_quantity` (`Physical Stock`, shifting units out of `Incoming Stock`), append `purchase_receipt` (`+delta`) to `inventory_movements`, update PO status (`partially_received` or `received`), and commit mandatory **Tier 1 fail-closed `audit_logs` (`DDR-10`)**.
+4. **Database Entities Affected:** `forecasts`, `supplier_products`, `suppliers`, `purchase_orders`, `purchase_order_items`, `inventory`, `inventory_movements`, `alerts`, `audit_logs`.
+5. **Transaction Boundary:** PO approvals, rejections, approval invalidations, and stock receipts execute inside single atomic ACID transactions with mandatory **DDR-10 Tier 1 fail-closed** `audit_logs` writes.
+6. **Audit Events:** `PO_CREATED`, `PO_SUBMITTED`, `PO_APPROVED`, `PO_REJECTED`, `PO_ESCALATED`, `PO_APPROVAL_INVALIDATED`, `PO_TIER1_OVERSIGHT_DIGEST_EMITTED`, `PO_PARTIAL_RECEIVED`, `PO_FULLY_RECEIVED`.
+7. **Failure & Rollback:** Over-receipt (`422`), receipt on unapproved PO (`409`), escalated PO approval attempted outside Store Manager context (`409`/`403` workflow gate), or Tier 1 audit write failure triggers full atomic rollback.
+8. **Expected Final State:** Only verified approved open PO quantities count as `Incoming Stock`; received deliveries increment `Physical Stock` with exact movement + Tier 1 audit traceability.
 
 ## Workflow D — Customer Return and Refund
 1. **Trigger:** Customer returns merchandise; Finance Staff or Store Manager initiates return against an original order/sale/invoice.
 2. **Preconditions:** Original fulfilled order/sale/invoice exists; remaining returnable unit balance $> 0$.
 3. **Ordered Processing Steps:**
    1. Validate `return_quantity <= (sold_quantity - previously_returned_quantity)`.
-   2. Record `returns` & `return_items` with reason and disposition (`restock` or `damaged`).
+   2. Record `returns` & `return_items` with mandatory reason, B2B classification (`excess_stock` vs. `defective`/`damaged` per `DDR-06`), and physical disposition (`restock` or `damaged`).
    3. For `restock` items: atomically add `+return_quantity` to `inventory.current_quantity` and insert `return_restock` in `inventory_movements`.
-   4. For `damaged` items: keep sellable `current_quantity` unchanged while logging explicit `damaged` disposition traceability (or record `damaged` write-off delta if originally added to stock).
-   5. Generate linked `credit_notes` record (`amount <= remaining refundable invoice grand_total`) and update `invoice.payment_status`.
-   6. Append `RETURN_COMPLETED` and `CREDIT_NOTE_ISSUED` to audit ledger.
-4. **Database Entities Affected:** `returns`, `return_items`, `inventory`, `inventory_movements`, `credit_notes`, `invoices`, `audit_logs`.
-5. **Transaction Boundary:** Return persistence + inventory/movement updates + credit note adjustment committed atomically.
+   4. For `damaged` items: keep sellable `current_quantity` unchanged while logging explicit `damaged` disposition traceability.
+   5. **Demand Adjustment Rule (`DDR-06`):** If classified `excess_stock`, insert a linked net-demand reduction row into `demand_adjustments` citing `(order_id, order_item_id)` to prevent duplicate deductions; if classified `defective`/`damaged`, leave original confirmed B2B demand unreduced.
+   6. Generate linked `credit_notes` record (`amount <= remaining refundable invoice grand_total` in `DECIMAL` per `DDR-04`) and update `invoice.payment_status`.
+   7. Append **Tier 1 fail-closed (`DDR-10`)** `RETURN_COMPLETED` and `CREDIT_NOTE_ISSUED` audit rows in the same commit.
+4. **Database Entities Affected:** `returns`, `return_items`, `inventory`, `inventory_movements`, `demand_adjustments`, `credit_notes`, `invoices`, `audit_logs`.
+5. **Transaction Boundary:** Return persistence + inventory/movement updates + `demand_adjustments` + credit note adjustment + Tier 1 audit committed atomically.
 6. **Audit Events:** `RETURN_CREATED`, `RETURN_COMPLETED`, `CREDIT_NOTE_ISSUED`.
 7. **Failure & Rollback:** Over-return or credit exceeding invoice total triggers atomic rollback (`422`/`409`).
 8. **Expected Final State:** Return linked to parent invoice/sale, physical disposition logged, financial credit applied safely.
@@ -1470,7 +1506,7 @@ sequenceDiagram
    4. Insert `adjustment` or `damaged` entry into `inventory_movements` with `previous_quantity`, `quantity_delta`, `resulting_quantity`, and `reason`.
    5. Insert `STOCK_ADJUSTED` into `audit_logs` with before/after JSON snapshots.
 4. **Database Entities Affected:** `inventory`, `inventory_movements`, `audit_logs`.
-5. **Transaction Boundary:** Single atomic ACID transaction for steps 1–5.
+5. **Transaction Boundary:** Single atomic ACID transaction for steps 1–5 (**DDR-10 Tier 1 fail-closed**: rollback entire adjustment + emit independent telemetry if `audit_logs` insert fails).
 6. **Audit Events:** `STOCK_ADJUSTED`.
 7. **Failure & Rollback:** Missing reason (`422`) or negative resulting quantity (`409`) aborts transaction cleanly.
 8. **Expected Final State:** Live stock matches physical shelf count; movement ledger and centralized audit match 1:1.
@@ -1501,7 +1537,7 @@ sequenceDiagram
    3. Operator opens History/Reports panel in Page 2, sets filters (`date_from`, `date_to`, `module`, `outcome`, `selected_workspace`, `entity_id`).
    4. Backend returns paginated audit timeline or generates sanitized CSV/JSON export (`Reports & Export`) and records `REPORT_EXPORTED`.
 4. **Database Entities Affected:** `audit_logs` (read for query, insert for export event), target module tables (read-only for reports).
-5. **Transaction Boundary:** Audit write committed cleanly (see Section 9 & `[DESIGN DECISION REQUIRED]` regarding strict rollback vs. fallback recording on audit write error).
+5. **Transaction Boundary:** Governed by **`DDR-10` Tiered Audit Failure Handling** (Section 9.5): Tier 1 critical writes commit/roll back atomically with the business mutation (`audit_logs`); Tier 2 routine events fall back safely to the persistent `audit_outbox` queue with retry and dead-letter handling.
 6. **Audit Events:** Meta-auditing logs `REPORT_EXPORTED` / `AUDIT_EXPORTED`.
 7. **Failure & Rollback:** Invalid filter ranges return `422`; delete/edit attempts on `audit_logs` return `405`/`403`.
 8. **Expected Final State:** Complete traceable timeline persisted across restarts; reproducible downloads generated safely.
@@ -1515,11 +1551,11 @@ All operational modules must implement **real, database-persisted CRUD operation
 | Domain | Create | Read | Update | Delete / Reversal Strategy |
 | :--- | :---: | :---: | :---: | :--- |
 | **Products, Suppliers, Customers** | Yes | Yes | Yes | **Soft-Deactivate** (`is_active=False`) when referenced by historical records |
-| **Orders** | Yes (`draft`/`pending`) | Yes | Yes (pre-fulfillment only) | **Cancel** (`cancelled` status; reverses/credits if already fulfilled) |
+| **Orders** | Yes (`draft`/`pending`) | Yes | Yes (pre-confirmation; post-confirm via controlled amend) | **Cancel** (`cancelled` releases remaining `reserved_quantity` + `demand_adjustments`; supports `partially_fulfilled` before `fulfilled`) |
 | **Sales (`transactions`)** | Via Order Fulfillment | Yes | Forbidden once completed | **Traceable Reversal / Cancellation** (immutable original row) |
 | **Inventory** | Auto on Product Onboarding | Yes | Settings (`min`, `safety`) only; Qty via Adjustments | **No Deletion** (quantity resets via audited `adjustment` movement) |
 | **Stock Movements** | Atomic side effect only | Yes | **Immutable** | **Append-Only (Forbidden)** |
-| **Purchase Orders** | Yes (`draft`) | Yes | Yes (`draft` state only) | **Reject / Cancel** (`rejected`/`cancelled`; never delete approved/received POs) |
+| **Purchase Orders** | Yes (`draft`) | Yes | Draft edits; editing supplier/qty/cost after approval **invalidates approval** (`DDR-09`) | **Reject / Cancel** (`rejected`/`cancelled`; rejected history preserved; never delete approved/received POs) |
 | **Returns** | Linked to Order/Sale/Invoice | Yes | Status transitions only | **Append-Only once Completed** |
 | **Invoices, Payments, Credit Notes** | Yes | Yes | Payment status transitions via new Payments/Credit Notes | **Immutable Accounting Ledger (Forbidden to Delete)**; adjust via Credit Notes |
 | **Shipments & Packing Slips** | Yes (from Order/Invoice) | Yes | Status progression + notes | **Cancel prior to dispatch**; status history immutable |
@@ -1527,7 +1563,7 @@ All operational modules must implement **real, database-persisted CRUD operation
 
 ---
 
-# 9. Centralized History & Audit Architecture *(Planned — Major v2.0/v2.1 Requirement)*
+# 9. Centralized History & Audit Architecture *(Planned — Consolidated with DDR-10 in v2.2)*
 
 ## 9.1 Persistent Audit Specification
 NEXORA maintains a unified **Centralized History & Audit** ledger in MySQL InnoDB that **persists across backend restarts**. It provides operational traceability across all 18 modules, diagnostic visibility into failed requests, and before/after mutation accountability.
@@ -1536,8 +1572,8 @@ NEXORA maintains a unified **Centralized History & Audit** ledger in MySQL InnoD
 - **Catalog & Partners:** Product/category/supplier/customer creations, edits (price, lead time, address), and soft-deactivations.
 - **Orders & Sales:** Order creation, item modifications, confirmations, fulfillments, cancellations, and sales reversals.
 - **Inventory & Movements:** Manual cycle-count adjustments, damaged stock write-offs, safety factor / minimum stock updates, and blocked negative-stock attempts.
-- **Procurement:** Draft PO creation, submissions, human approvals, rejections (with notes), partial/full deliveries received, and cancellations.
-- **AI & Intelligence:** Demand forecast inference runs, Predictive Planner recommendations, anomaly scan runs, threshold configuration edits.
+- **Procurement (`DDR-09`):** Draft PO creation, submissions, Tier 1 & Tier 2 approvals, non-blocking Tier 1 oversight digests, PO split/anomaly escalations, post-approval invalidations, rejections (with notes), partial/full deliveries received, cancellations, and Tier 1 limit / window config changes.
+- **AI, Intelligence & Settings (`DDR-04`, `DDR-06`, `DDR-08`):** Demand forecast inference runs, quarantined malformed demand inputs, Predictive Planner recommendations, anomaly scan runs, manual `Discontinued` transitions, and centralized threshold/tax/currency configuration updates (recording timestamp, workspace, optional operator reference, previous values, and new values).
 - **Returns, Billing & Shipping:** Return approvals/dispositions, invoice creations, manual payment recordings, credit note issuances, shipment creations, packing slip/label generations, delivery status transitions.
 - **Reporting & System Events:** Report generations/exports, FastAPI startup model loads/errors, unexpected API `500`/`422`/`409` exceptions.
 
@@ -1554,7 +1590,9 @@ NEXORA maintains a unified **Centralized History & Audit** ledger in MySQL InnoD
 | `outcome` | `ENUM('SUCCESS', 'FAILURE', 'REJECTED')` | Outcome classification |
 | `action_source` | `ENUM('UI', 'API', 'SYSTEM', 'ML_ENGINE')` | Trigger channel |
 | `selected_workspace` | `VARCHAR(32)` (Nullable, Indexed) | `store_manager`, `inventory_staff`, `purchase_manager`, `finance_staff`, or `NULL` for direct API/system tasks |
+| `operator_ref` *(Optional `user_id` slot)* | `VARCHAR(64)` (Nullable) | Optional operator attribution when supplied on config/workflow requests (`NULL` in login-free mode; never fabricated as authenticated user identity) |
 | `correlation_id` | `VARCHAR(64)` (Indexed) | UUID request trace ID linking HTTP requests, service calls, and sub-events |
+| `idempotency_key` | `VARCHAR(128)` (Nullable, `UNIQUE`) | Deduplication token preventing duplicate audit inserts across `audit_outbox` retries (`DDR-10`) |
 | `before_values` | `JSON` (Nullable) | Redacted state snapshot before mutation |
 | `after_values` | `JSON` (Nullable) | Redacted state snapshot after mutation or error context summary |
 
@@ -1565,11 +1603,13 @@ To avoid confusing redundancy across tables:
 3. **Centralized History & Audit Records** (`audit_logs`): Unified cross-module timeline tracking **who (which workspace/source) changed or attempted to change what, when, with what before/after snapshot, and under which correlation ID**. An order fulfillment logs one high-level `ORDER_FULFILLED` audit summary (referencing order/sale IDs), rather than spamming duplicate raw SQL dumps.
 4. **API Error & System Events:** Captured inside `audit_logs` with `outcome='FAILURE'`/`'REJECTED'` and sanitized error metadata (plus structured stdout/file server logs during runtime), avoiding duplicate error database tables.
 
-## 9.5 Append-Only Governance, Privacy & Failure Handling
-- **Append-Only:** Neither UI operators (including Store Manager) nor standard API endpoints may modify or delete rows in `audit_logs`.
-- **No Sensitive Leakage:** Secrets, database credentials, API keys, tokens, and sensitive payment details (e.g., raw card numbers/CVVs) must **never** be captured inside `before_values`, `after_values`, or error summaries. Explicit payload redaction filters strip forbidden keys prior to audit serialization.
-- **No Fabricated User Identity:** Because workspace selection is unauthenticated UI state, `audit_logs` captures `selected_workspace` and `action_source` truthfully rather than inventing authenticated employee usernames or emails.
-- `[DESIGN DECISION REQUIRED]` **Audit Persistence Failure Policy:** When a business mutation (e.g., recording an invoice or fulfillment) succeeds in memory before `COMMIT`, and inserting the accompanying `audit_logs` row fails due to a DB error, decide whether to (a) **abort and roll back the entire business transaction** (strict guarantee: zero unaudited operations), or (b) **commit the business transaction while writing an emergency structured fallback error log/retry queue** (high availability without falsely reporting audit persistence succeeded).
+## 9.5 Append-Only Governance, Database Permissions & Tiered Failure Handling (`DDR-10` Resolved)
+- **Strict Append-Only Design & DB Role Privileges:** Neither UI operators nor FastAPI endpoints expose updates/deletes on `audit_logs`. Furthermore, **MySQL application database role permissions MUST grant `SELECT` and `INSERT` only on `audit_logs`—`UPDATE` and `DELETE` privileges MUST NOT be granted to application DB users** (`DDR-10`).
+- **No Sensitive Leakage:** Secrets, database credentials, API keys, tokens, and raw payment details (card PANs/CVVs) must **never** be stored inside `before_values`, `after_values`, outbox payloads, or error telemetry.
+- **No Fabricated User Identity:** Because NEXORA enforces zero login/JWT authentication, `audit_logs` captures `selected_workspace`, `action_source`, and optional explicitly provided `operator_ref` cleanly rather than simulating authenticated RBAC identities.
+- **Tiered Audit Failure Architecture (`DDR-10` Resolved):**
+  - **Tier 1 Critical Operations — Strict Fail-Closed:** Covers **PO approvals** (and rejections/escalations/invalidations), **manual inventory adjustments**, **returns and cancellations**, **sales fulfillment**, **threshold/configuration changes** (`DDR-04`/`08`/`09`), and **financial transactions** (invoices, payments, credit notes). Both the business mutation and the mandatory `audit_logs` `INSERT` MUST execute inside the **same atomic ACID InnoDB database transaction**. If the `audit_logs` insert fails for any reason, **the entire database transaction rolls back** so zero unaudited Tier 1 mutations can persist, and **independent failure telemetry** emits outside the rolled-back DB transaction (structured critical error telemetry log/sink).
+  - **Tier 2 Non-Critical Events — Graceful Degradation & Durable Async Reconciliation:** Covers routine `draft` edits, `SYS-03` notification acknowledgements, UI view/filter events, and non-mutating telemetry. If direct `audit_logs` persistence encounters transient failure, the event routes through a **durable persistent `audit_outbox` queue** with background **retry** attempts, **dead-letter (`DEAD_LETTER`) quarantine** for exhausted retries, independent failure telemetry, and deterministic **`idempotency_key` + `correlation_id`** protection guaranteeing zero duplicate `audit_logs` rows during retries.
 
 ---
 
@@ -1610,7 +1650,7 @@ The Phase 1 ML subsystem is a verified, tested foundation (`60` passing tests on
   - Read-only `.joblib` startup caching inside `PredictionService.load_models()` via FastAPI `lifespan`.
   - Strict non-negativity post-processing: $\hat{y} = \max(0.0, \hat{y})$ and finite checks.
   - Native unseen-SKU safety via infrequent OHE bucket with API `warnings` feedback.
-  - Clear distinction: Phase 1 pipelines accept explicit lag/rolling vectors or use UCI CSV history; integrating ongoing MySQL operational sales rows into daily aggregation for automated feature construction (`[DESIGN DECISION REQUIRED]` in Module 12) will feed the *existing* estimators cleanly without modifying Phase 1 training logic.
+  - **B2B Operational Integration & Scheduled Retraining (`DDR-06` Resolved):** Operational confirmed B2B sales orders (timed by `requested_delivery_date` or `created_at` for immediate fulfillment, converted cleanly via historically traceable `uom_conversions`, adjusted by `demand_adjustments`, validated with malformed records routed to `demand_quarantine`, with `one_time_bulk`/`tender` spikes isolated from recurring baseline and `is_censored_demand` periods flagged) feed validated daily/weekly aggregates into the exact 10-column feature contract compatible with existing Phase 1 `.joblib` estimators. Future retraining executes strictly on an **offline batch schedule** paired with WAPE/feature drift monitoring—never inside FastAPI HTTP requests.
 
 ---
 
@@ -1618,33 +1658,39 @@ The Phase 1 ML subsystem is a verified, tested foundation (`60` passing tests on
 
 Predictive Planner (**Module 14**) and Purchase Planning Simulator (**Module 11**) MUST compute stockout risk and replenishment recommendations using **identical, consistent mathematics**.
 
-## 11.1 Verified Phase 1/v1.0 Baseline Formula
-For a selected forecast horizon $H \in \{7, 15, 30, 90\}$ with ML prediction $\hat{y}_H$, live on-hand inventory $S_{\text{current}}$, and configurable safety factor $\alpha \ge 1.0$ (default `1.20`):
+## 11.1 Canonical Stock Definitions (`DDR-02` & `DDR-03`)
+All modules (`M05`, `M09`, `M11`, `M14`) must maintain and **always display separately**:
+1. **Physical Stock** ($S_{\text{physical}}$): Exact quantity physically held in warehouse (`inventory.current_quantity`).
+2. **Reserved Stock** ($S_{\text{reserved}}$): Quantity allocated to confirmed, unfulfilled (and remaining `partially_fulfilled`) customer orders (`inventory.reserved_quantity`).
+3. **Available Stock** ($S_{\text{available}}$): $S_{\text{physical}} - S_{\text{reserved}}$ (`>= 0`).
+4. **Incoming Stock** ($S_{\text{incoming}}$): Outstanding quantities strictly from **`approved`** and **`partially_received`** Purchase Orders:
+   $$S_{\text{incoming}} = \sum_{\text{status} \in \{\text{approved},\, \text{partially\_received}\}} \max(0,\; \text{ordered\_quantity} - \text{received\_quantity})$$
+   - *Excluded (`0` contribution):* `draft`, `submitted`, `rejected`, fully `received`, and `cancelled` remaining quantities. `Incoming Stock` is **never** merged into `Physical` or `Available` stock before receipt.
+5. **Projected Available Stock** ($S_{\text{projected\_available}}$): $S_{\text{available}} + S_{\text{incoming}}$.
 
-$$\text{Reorder Threshold } (R) = \hat{y}_H \times \alpha$$
-$$\text{Suggested Purchase Quantity } (Q_{\text{order}}) = \max(0, \lceil R - S_{\text{current}} \rceil)$$
+## 11.2 Supplier Lead-Time Resolution & Unified Risk Equations (`DDR-01` & `DDR-07`)
+1. **Lead-Time Hierarchy ($L$):**
+   - **Primary:** Product-specific `supplier_products.lead_time_days` (`is_active = True`; preferred or selected supplier).
+   - **Fallback:** Supplier-level default `suppliers.lead_time_days` when product-specific lead time is null.
+   - **Unavailable Rule:** If neither provides a valid integer lead time (`>= 1`), **never invent a default lead time**—mark supplier lead-time-based risk **`UNAVAILABLE`**.
+2. **Primary Lead-Time Equations (When Valid Lead Time $L$ Exists):**
+   Given ML forecast $\hat{y}_H$ over horizon $H \in \{7, 15, 30, 90\}$ and safety factor $\alpha \ge 1.00$ (initial default `1.20`):
+   $$\text{Lead-Time Demand } (D_{\text{lead}}) = \left(\frac{\hat{y}_H}{H}\right) \times L$$
+   $$\text{Replenishment Risk Threshold } (R) = D_{\text{lead}} \times \alpha$$
+   $$\text{Suggested Purchase Quantity } (Q_{\text{order}}) = \max(0,\; \lceil R - S_{\text{projected\_available}} \rceil)$$
+   *Worked Example:* With $H = 30$, $\hat{y}_{30} = 300$, $L = 10$ days, $\alpha = 1.20$, $S_{\text{available}} = 80$, and $S_{\text{incoming}} = 0$: `Lead-Time Demand` $= (300 / 30) \times 10 = 100$ units; `Replenishment Risk Threshold` $= 100 \times 1.20 = 120$ units; `Suggested Purchase Quantity` $= \max(0, 120 - 80) = 40$ units.
 
-*Worked Example:* Predicted 7-day demand = `100`, safety factor $\alpha = 1.2$ $\rightarrow$ `Reorder Threshold` = `120`. With `Current Stock` = `80`, `Suggested Purchase Quantity` = `max(0, 120 - 80) = 40` units.
-
-## 11.2 Deterministic Risk Classification Rules
+## 11.3 Deterministic Risk Classification & Horizon Fallback Display (`DDR-01` & `DDR-03`)
 
 | Mathematical Condition | Risk Level | Operational Meaning |
 | :--- | :---: | :--- |
-| $S_{\text{effective}} < D_{\text{projected}}$ | **CRITICAL** | Available stock does not cover projected demand; urgent replenishment needed |
-| $D_{\text{projected}} \le S_{\text{effective}} < R$ | **ELEVATED** | Projected demand is covered, but stock falls below desired safety threshold |
-| $S_{\text{effective}} \ge R$ | **SAFE** | Stock adequately covers projected demand plus safety margin |
+| Lead time $L$ missing / unavailable | **`UNAVAILABLE`** *(Lead-Time Basis)* | Supplier lead-time-based risk cannot be calculated; never fabricate lead times |
+| $S_{\text{projected\_available}} < D_{\text{lead}}$ | **`CRITICAL`** | Projected available stock falls below expected lead-time demand |
+| $D_{\text{lead}} \le S_{\text{projected\_available}} < R$ | **`ELEVATED`** | Covers lead-time demand, but falls below safety replenishment threshold |
+| $S_{\text{projected\_available}} \ge R$ | **`SAFE`** | Projected available stock covers lead-time demand plus safety buffer |
 
-*(Reminder: Stock risk indicators are empirical decision-support warnings, not physical stockout guarantees.)*
-
-## 11.3 Lead-Time & Incoming Stock Alignment `[DESIGN DECISION REQUIRED]`
-Because Blueprint v2.1 introduces **Supplier `lead_time_days`** ($L$) and **Incoming Open Purchase Orders** ($S_{\text{incoming}}$), two formal design confirmations are required before implementing `inventory_service.py` / `simulator_service.py` so both modules share identical equations:
-
-1. `[DESIGN DECISION REQUIRED]` **Lead-Time Demand Calculation ($D_{\text{projected}}$):** Should $D_{\text{projected}}$ use:
-   - *Option A (Horizon Direct):* The selected ML horizon forecast $\hat{y}_H$ directly (with lead time used only to project stock exhaustion timing / PO arrival date), OR
-   - *Option B (Lead-Time Scaled):* Daily run-rate scaled by supplier lead time plus planning buffer, e.g., $D_{\text{lead}} = \left(\frac{\hat{y}_H}{H}\right) \times L$, setting $\text{Reorder Threshold} = D_{\text{lead}} \times \alpha$?
-2. `[DESIGN DECISION REQUIRED]` **Effective Stock Definition ($S_{\text{effective}}$):** Should `Effective Available Stock` equal $S_{\text{current}} + S_{\text{incoming\_approved}}$ (counting only `approved`/`partially_received` PO units, excluding `draft`/`submitted`) vs. $S_{\text{current}}$ alone?
-
-Until formally ratified, implementers must apply the verified Section 11.1 formula cleanly as baseline and parameterize lead-time offsets explicitly.
+- **Distinguished Horizon-Based Risk View:** When supplier lead time is unavailable, systems may still evaluate and render a clearly labeled **horizon-based stock check** ($\hat{y}_H$ vs. $S_{\text{available}}$ / $S_{\text{projected\_available}}$ with threshold $\hat{y}_H \times \alpha$), **explicitly distinguished** from supplier lead-time-based risk (`risk_basis = 'horizon_fallback_no_lead_time'`).
+- *(Reminder: Risk indicators are empirical decision-support recommendations requiring human review; they never auto-create Purchase Orders (`EXCL-03`).)*
 
 ---
 
@@ -1665,8 +1711,15 @@ erDiagram
 
     CUSTOMERS ||--o{ ORDERS : places
     CUSTOMERS ||--o{ INVOICES : billed_to
+    SUPPLIERS ||--o{ SUPPLIER_PRODUCTS : maps_terms
+    PRODUCTS ||--o{ SUPPLIER_PRODUCTS : sourced_by
+    PRODUCTS ||--o{ UOM_CONVERSIONS : converts
+    PRODUCTS ||--o{ PRODUCT_LIFECYCLE_SNAPSHOTS : tracks_stage
+
     ORDERS ||--|{ ORDER_ITEMS : contains
-    ORDERS ||--o| TRANSACTIONS : completes_as
+    ORDERS ||--o{ ORDER_FULFILLMENTS : fulfills
+    ORDERS ||--o{ DEMAND_ADJUSTMENTS : adjusts_demand
+    ORDERS ||--o{ TRANSACTIONS : completes_as
     ORDERS ||--o{ INVOICES : bills
     ORDERS ||--o{ RETURNS : receives
     ORDERS ||--o{ SHIPMENTS : dispatches
@@ -1693,33 +1746,40 @@ erDiagram
 | Domain | Logical Entity | Primary Key & Important Fields | Key Relationships (FKs) & Constraints | Lifecycle / Retention Rule |
 | :--- | :--- | :--- | :--- | :--- |
 | **Retail Foundation** | `categories` | `id` (PK), `name` (UNIQUE), `description`, `is_active`, `created_at` | Referenced by `products.category_id` (nullable) | Update & Soft-Deactivate (`is_active`) |
-| **Retail Foundation** | `products` | `id` (PK), `stock_code` (UNIQUE, idx), `description`, `category_id`, `current_unit_price` (`DECIMAL(10,2)`), `is_uci_baseline`, `is_active`, `created_at`, `updated_at` | `category_id -> categories.id` | Update & Soft-Deactivate; retain if referenced |
-| **Retail Foundation** | `suppliers` | `id` (PK), `supplier_name` (idx), `contact_person`, `email`, `phone`, `address`, `lead_time_days` (`INT >= 1`), `is_active`, `created_at`, `updated_at` | Referenced by `purchase_orders.supplier_id` | Update & Soft-Deactivate; retain if referenced |
+| **Retail Foundation** | `products` | `id` (PK), `stock_code` (UNIQUE, idx), `description`, `category_id`, `base_uom`, `current_unit_price` (`DECIMAL(10,2)`), `lifecycle_stage` (`Introduction`..`Discontinued`), `is_uci_baseline`, `is_active`, `created_at`, `updated_at` | `category_id -> categories.id` | Update & Soft-Deactivate; `Discontinued` requires manual auth change |
+| **Retail Foundation** | `uom_conversions` | `id` (PK), `product_id`, `uom_code`, `conversion_to_base` (`DECIMAL(12,6) > 0`), `effective_from`, `effective_to`, `is_active`, `created_at` | `product_id -> products.id` | Product-specific, historically traceable (`DDR-06`) |
+| **Retail Foundation** | `suppliers` | `id` (PK), `supplier_name` (idx), `contact_person`, `email`, `phone`, `address`, `lead_time_days` (`INT >= 1`, nullable fallback), `is_active`, `created_at`, `updated_at` | Referenced by `supplier_products`, `purchase_orders` | Update & Soft-Deactivate; retain if referenced |
+| **Retail Foundation** | `supplier_products` | `id` (PK), `supplier_id`, `product_id`, `supplier_product_code`, `purchase_price` (`DECIMAL(10,2)`), `lead_time_days` (`INT >= 1`, nullable), `minimum_order_quantity` (`INT >= 1`), `is_preferred`, `is_active`, `created_at`, `updated_at` | `supplier_id -> suppliers.id`, `product_id -> products.id` (`DDR-07`) | **Retain inactive rows for historical traceability** |
 | **Retail Foundation** | `customers` | `id` (PK), `uci_customer_ref` (nullable idx), `customer_name`, `phone`, `email`, `billing_address`, `shipping_address`, `city`, `state`, `postal_code`, `country`, `is_active`, `created_at` | Referenced by `orders`, `transactions`, `invoices` | Update & Soft-Deactivate; retain if referenced |
-| **Retail Foundation** | `orders` | `id` (PK), `order_number` (UNIQUE), `customer_id`, `order_status`, `inventory_deducted` (`BOOL DEFAULT FALSE`), `subtotal` (`DECIMAL(12,2)`), `notes`, `selected_workspace`, `created_at`, `updated_at` | `customer_id -> customers.id` | Editable pre-fulfillment; transitions to `fulfilled` or `cancelled` |
-| **Retail Foundation** | `order_items` | `id` (PK), `order_id`, `product_id`, `quantity` (`INT > 0`), `unit_price` (`DECIMAL(10,2)`), `line_total` (`DECIMAL(12,2)`) | `order_id -> orders.id` (CASCADE draft), `product_id -> products.id` | Immutable once order is `fulfilled` |
-| **Retail Foundation** | `transactions` *(Sales)* | `id` (PK), `invoice_number` (idx), `order_id` (nullable), `customer_id` (nullable), `uci_customer_ref` (nullable), `transaction_date` (idx), `country`, `transaction_type` (`standard`/`cancellation`/`return`/`exceptional`), `source_origin` (`uci_historical`/`operational`), `total_amount` (`DECIMAL(12,2)`), `status` (`completed`/`cancelled`/`reversed`), `created_at` | `order_id -> orders.id`, `customer_id -> customers.id` | **Retain Permanently**; reverse via state + credit/compensating rows |
+| **Retail Foundation** | `orders` | `id` (PK), `order_number` (UNIQUE), `customer_id`, `order_status` (`draft`..`partially_fulfilled`..`fulfilled`/`cancelled`), `order_demand_type`, `requested_delivery_date`, `is_censored_demand`, `inventory_deducted` (`BOOL DEFAULT FALSE`), `subtotal` (`DECIMAL(12,2)`), `notes`, `selected_workspace`, `created_at`, `updated_at` | `customer_id -> customers.id` | Confirmed B2B orders establish demand (`DDR-05`/`06`) |
+| **Retail Foundation** | `order_items` | `id` (PK), `order_id`, `product_id`, `quantity` (`INT > 0`), `fulfilled_quantity` (`0..quantity`), `uom_code`, `base_uom_conversion_factor` (`DECIMAL(12,6)`), `unit_price` (`DECIMAL(10,2)`), `line_total` (`DECIMAL(12,2)`) | `order_id -> orders.id`, `product_id -> products.id` | Tracks partial fulfillment cleanly (`DDR-05`) |
+| **Retail Foundation** | `order_fulfillments` | `id` (PK), `order_id` (idx), `idempotency_key` (UNIQUE), `fulfillment_status`, `selected_workspace`, `fulfilled_at` | `order_id -> orders.id` | Prevents duplicate stock deduction per fulfillment batch (`DDR-05`) |
+| **Retail Foundation** | `demand_adjustments` | `id` (PK), `order_id` (idx), `order_item_id` (idx), `return_id` (nullable), `adjustment_reason` (`excess_stock_return`/`cancellation`), `quantity_delta` (`INT < 0`), `base_uom_quantity_delta` (`DECIMAL(14,4)`), `effective_date`, `created_at` | `order_id`, `order_item_id`, `return_id` (`DDR-06`) | Append-only demand adjustment ledger (excludes defective returns) |
+| **Retail Foundation** | `demand_quarantine` | `id` (PK), `source_reference`, `raw_payload` (JSON), `failure_reason`, `quarantine_status` (`pending_review`/`resolved`/`rejected`), `quarantined_at` | None | Isolates malformed demand inputs for inspection (`DDR-06`) |
+| **Retail Foundation** | `transactions` *(Sales)* | `id` (PK), `invoice_number` (idx), `order_id` (nullable), `customer_id` (nullable), `uci_customer_ref` (nullable), `transaction_date` (idx), `country`, `transaction_type` (`standard`/`cancellation`/`return`/`exceptional`), `source_origin` (`uci_historical`/`operational`), `currency_code` (`CHAR(3)`), `total_amount` (`DECIMAL(12,2)`), `status` (`completed`/`cancelled`/`reversed`), `created_at` | `order_id -> orders.id`, `customer_id -> customers.id` | **Retain Permanently**; reverse via state + credit/compensating rows |
 | **Retail Foundation** | `transaction_items` | `id` (PK), `transaction_id`, `product_id`, `quantity` (`INT`), `unit_price` (`DECIMAL(10,2)`), `line_total` (`DECIMAL(12,2)`) | `transaction_id -> transactions.id`, `product_id -> products.id` | **Retain Permanently** |
-| **Inventory** | `inventory` | `id` (PK), `product_id` (UNIQUE), `current_quantity` (`INT >= 0`), `minimum_stock` (`INT >= 0`), `safety_factor` (`DECIMAL(4,2) >= 1.00`), `updated_at` | `product_id -> products.id` (`1:1`) | Mutated only via transactional workflows + settings |
+| **Inventory** | `inventory` | `id` (PK), `product_id` (UNIQUE), `current_quantity` (`Physical >= 0`), `reserved_quantity` (`Reserved >= 0`, `<= current_quantity`), `minimum_stock` (`INT >= 0`), `safety_factor` (`DECIMAL(4,2) >= 1.00`), `updated_at` | `product_id -> products.id` (`1:1`) (`DDR-03`) | Mutated only via transactional workflows + settings |
 | **Inventory** | `inventory_movements` | `id` (PK), `product_id` (idx), `movement_type`, `quantity_delta` (`INT != 0`), `previous_quantity` (`>= 0`), `resulting_quantity` (`>= 0`), `reference_type`, `reference_id`, `reason`, `selected_workspace`, `created_at` (idx) | `product_id -> products.id` | **Append-Only (Immutable Forever)** |
-| **Purchasing** | `purchase_orders` | `id` (PK), `po_number` (UNIQUE), `supplier_id`, `order_status`, `order_date`, `expected_delivery_date`, `total_cost` (`DECIMAL(12,2)`), `created_workspace`, `reviewed_workspace`, `review_notes`, `reviewed_at`, `created_at`, `updated_at` | `supplier_id -> suppliers.id` | Draft editable; human-gated transitions; **Retain after Approval/Receipt** |
+| **Purchasing** | `purchase_orders` | `id` (PK), `po_number` (UNIQUE), `supplier_id`, `order_status`, `order_date`, `expected_delivery_date`, `total_cost` (`DECIMAL(12,2)`), `approval_tier`, `escalation_required`, `escalation_reason`, `split_review_flagged`, `created_workspace`, `reviewed_workspace`, `review_notes`, `reviewed_at`, `created_at`, `updated_at` | `supplier_id -> suppliers.id` (`DDR-02`/`09`) | Draft editable; human dual-control; **Retain after Approval/Reject/Receipt** |
 | **Purchasing** | `purchase_order_items` | `id` (PK), `purchase_order_id`, `product_id`, `ordered_quantity` (`> 0`), `received_quantity` (`0..ordered_quantity`), `unit_cost` (`DECIMAL(10,2) >= 0`), `line_total` (`DECIMAL(12,2)`) | `purchase_order_id -> purchase_orders.id`, `product_id -> products.id` | Tracks cumulative receipts |
 | **Returns** | `returns` | `id` (PK), `return_number` (UNIQUE), `order_id`, `sale_id`, `invoice_id`, `return_status`, `total_refund_amount` (`DECIMAL(12,2)`), `selected_workspace`, `created_at` | `order_id`, `sale_id` (`transactions.id`), `invoice_id` | **Retain Permanently** once completed |
-| **Returns** | `return_items` | `id` (PK), `return_id`, `product_id`, `quantity` (`> 0`), `unit_price` (`DECIMAL(10,2)`), `line_refund` (`DECIMAL(12,2)`), `disposition` (`restock`/`damaged`), `reason` | `return_id -> returns.id`, `product_id -> products.id` | **Retain Permanently** |
-| **Finance** | `invoices` | `id` (PK), `invoice_number` (UNIQUE, idx), `order_id` (nullable), `customer_id`, `billing_snapshot` (JSON), `invoice_date`, `subtotal` (`DECIMAL(12,2)`), `tax_rate` (`DECIMAL(5,2)`), `tax_amount` (`DECIMAL(12,2)`), `grand_total` (`DECIMAL(12,2)`), `amount_paid` (`DECIMAL(12,2)`), `payment_status`, `selected_workspace`, `created_at` | `customer_id -> customers.id`, `order_id -> orders.id` | **Immutable Accounting Ledger (Never Deleted)** |
+| **Returns** | `return_items` | `id` (PK), `return_id`, `order_item_id`, `product_id`, `quantity` (`> 0`), `unit_price` (`DECIMAL(10,2)`), `line_refund` (`DECIMAL(12,2)`), `return_classification` (`excess_stock`/`defective`/`damaged`/`other`), `disposition` (`restock`/`damaged`), `reason` | `return_id -> returns.id`, `order_item_id -> order_items.id`, `product_id -> products.id` | **Retain Permanently** (`DDR-06`) |
+| **Finance** | `invoices` | `id` (PK), `invoice_number` (UNIQUE, idx), `order_id` (nullable), `customer_id`, `billing_snapshot` (JSON), `currency_code` (`CHAR(3)` DEFAULT `'INR'`), `invoice_date`, `subtotal` (`DECIMAL(12,2)`), `tax_rate` (`DECIMAL(5,2)`), `tax_amount` (`DECIMAL(12,2)`), `grand_total` (`DECIMAL(12,2)`), `amount_paid` (`DECIMAL(12,2)`), `payment_status`, `selected_workspace`, `created_at` | `customer_id -> customers.id`, `order_id -> orders.id` (`DDR-04`) | **Immutable Accounting Ledger (Preserves Original Tax & Currency Snapshot)** |
 | **Finance** | `invoice_items` | `id` (PK), `invoice_id`, `product_id`, `description`, `quantity` (`> 0`), `unit_price` (`DECIMAL(10,2)`), `line_total` (`DECIMAL(12,2)`) | `invoice_id -> invoices.id`, `product_id -> products.id` | **Immutable** |
 | **Finance** | `payments` | `id` (PK), `invoice_id` (idx), `payment_reference`, `amount` (`DECIMAL(12,2) > 0`), `payment_method`, `payment_date`, `notes`, `selected_workspace`, `created_at` | `invoice_id -> invoices.id` | **Immutable Financial Ledger** |
 | **Finance** | `credit_notes` | `id` (PK), `credit_note_number` (UNIQUE), `invoice_id` (idx), `return_id` (nullable), `amount` (`DECIMAL(12,2) > 0`), `reason`, `selected_workspace`, `created_at` | `invoice_id -> invoices.id`, `return_id -> returns.id` | **Immutable Financial Ledger** |
-| **Shipping** | `shipments` | `id` (PK), `shipment_number` (UNIQUE), `order_id` (idx), `invoice_id` (nullable), `shipping_address`, `delivery_method`, `shipping_status`, `internal_tracking_ref`, `created_at`, `updated_at` | `order_id -> orders.id`, `invoice_id -> invoices.id` | **Retain Delivery Trail** |
-| **Shipping** | `shipment_items` | `id` (PK), `shipment_id`, `product_id`, `quantity` (`> 0`) | `shipment_id -> shipments.id`, `product_id -> products.id` | Linked to shipment |
+| **Shipping** | `shipments` | `id` (PK), `shipment_number` (UNIQUE), `order_id` (idx), `order_fulfillment_id` (nullable), `invoice_id` (nullable), `shipping_address`, `delivery_method`, `shipping_status`, `internal_tracking_ref`, `created_at`, `updated_at` | `order_id -> orders.id`, `order_fulfillment_id -> order_fulfillments.id`, `invoice_id -> invoices.id` | `1:N` split shipments per order (`DDR-05`) |
+| **Shipping** | `shipment_items` | `id` (PK), `shipment_id`, `order_item_id`, `product_id`, `quantity` (`> 0`) | `shipment_id -> shipments.id`, `order_item_id -> order_items.id`, `product_id -> products.id` | Independent line quantities per parcel (`DDR-05`) |
 | **Shipping** | `packing_slips` | `id` (PK), `shipment_id`, `slip_number` (UNIQUE), `selected_workspace`, `generated_at` | `shipment_id -> shipments.id` | Document generation record |
 | **Shipping** | `shipment_events` | `id` (PK), `shipment_id` (idx), `status`, `notes`, `selected_workspace`, `event_at` | `shipment_id -> shipments.id` | **Append-Only Status Log** |
-| **ML & Intel** | `model_runs` | `id` (PK), `model_name`, `model_version`, `horizon_days`, `training_start_date`, `training_end_date`, `evaluation_metrics` (JSON), `created_at` | Referenced by `forecasts.model_run_id` | Immutable ML run manifest |
+| **ML & Intel** | `model_runs` | `id` (PK), `model_name`, `model_version`, `horizon_days`, `training_start_date`, `training_end_date`, `evaluation_metrics` (JSON), `drift_status`, `created_at` | Referenced by `forecasts.model_run_id` | Immutable ML run manifest |
 | **ML & Intel** | `forecasts` | `id` (PK), `product_id`, `model_run_id`, `forecast_date`, `horizon_days`, `predicted_quantity` (`DECIMAL(10,2) >= 0`), `status_flag`, `selected_workspace`, `created_at` | `product_id -> products.id`, `model_run_id -> model_runs.id` (idx on SKU/horizon/date) | Retain forecast audit trail |
-| **ML & Intel** | `anomaly_events` | `id` (PK), `product_id` (nullable), `anomaly_type`, `severity`, `detection_date`, `observed_value` (`DECIMAL(12,2)`), `expected_baseline` (`DECIMAL(12,2)`), `deviation_score` (`DECIMAL(8,4)`), `details` (JSON), `detected_at` | `product_id -> products.id` | Retain statistical anomaly evidence |
-| **ML & Intel** | `alerts` | `id` (PK), `product_id` (nullable), `source_module`, `anomaly_event_id` (nullable), `severity`, `title`, `message`, `alert_status` (`active`/`acknowledged`/`resolved`), `resolved_workspace`, `created_at`, `resolved_at` | `product_id -> products.id`, `anomaly_event_id -> anomaly_events.id` | State transitions only; retain history |
-| **Governance** | `audit_logs` | `id` (PK), `timestamp` (UTC idx), `module` (idx), `action` (idx), `entity_type`, `entity_id` (idx), `outcome`, `action_source`, `selected_workspace` (idx), `correlation_id` (idx), `before_values` (JSON), `after_values` (JSON) | Standalone append-only log (no restrictive delete FKs) | **Append-Only Forever (Never Modify/Delete)** |
-| **Config** | `operational_settings` | `id` (PK), `setting_key` (UNIQUE), `setting_value`, `value_type`, `description`, `updated_workspace`, `updated_at` | None | Update with before/after audit log |
+| **ML & Intel** | `product_lifecycle_snapshots` | `id` (PK), `product_id` (idx), `lifecycle_stage`, `rolling_velocity`, `order_frequency`, `sku_age_days`, `evaluated_at` | `product_id -> products.id` (`DDR-08`) | **Append-Only History** (future config edits never rewrite past snapshots) |
+| **ML & Intel** | `anomaly_events` | `id` (PK), `product_id` (nullable), `anomaly_type`, `detection_method`, `severity`, `detection_date`, `observed_value` (`DECIMAL(12,2)`), `expected_baseline` (`DECIMAL(12,2)`), `deviation_score` (`DECIMAL(8,4)`), `details` (JSON), `detected_at` | `product_id -> products.id` | **Retain Historical Evidence (`DDR-08`)** |
+| **ML & Intel** | `alerts` | `id` (PK), `product_id` (nullable), `source_module`, `anomaly_event_id` (nullable), `severity`, `title`, `message`, `alert_status` (`active`/`acknowledged`/`resolved`), `resolved_workspace`, `created_at`, `resolved_at` | `product_id -> products.id`, `anomaly_event_id -> anomaly_events.id` | Suppress duplicate unresolved alerts (`DDR-08`) |
+| **Governance** | `audit_logs` | `id` (PK), `timestamp` (UTC idx), `module` (idx), `action` (idx), `entity_type`, `entity_id` (idx), `outcome`, `action_source`, `selected_workspace` (idx), `operator_ref`, `correlation_id` (idx), `idempotency_key` (UNIQUE), `before_values` (JSON), `after_values` (JSON) | Standalone append-only log (no restrictive delete FKs; **zero `UPDATE`/`DELETE` DB grants**) | **Append-Only Forever (Tier 1 Atomic / Tier 2 Idempotent)** |
+| **Governance** | `audit_outbox` | `id` (PK), `idempotency_key` (UNIQUE), `correlation_id`, `payload` (JSON), `retry_count`, `status` (`pending`/`retrying`/`delivered`/`dead_letter`), `last_error`, `created_at`, `updated_at` | None (`DDR-10` Tier 2 async reconciliation) | Retry + dead-letter queue for non-critical audit resilience |
+| **Config** | `operational_settings` | `id` (PK), `setting_key` (UNIQUE), `setting_value`, `default_value`, `min_bound`, `max_bound`, `value_type`, `description`, `updated_workspace`, `updated_at` | None | Bounded config (`DDR-04`/`08`/`09`), reset-to-default, Tier 1 audited |
 
 ## 12.2 Mandatory Relational Integrity Rules
 1. Use MySQL **InnoDB** exclusively for ACID guarantees and enforced foreign keys.
@@ -1727,8 +1787,8 @@ erDiagram
 3. Enforce uniqueness on natural/business keys (`products.stock_code`, `orders.order_number`, `invoices.invoice_number`, `purchase_orders.po_number`, `returns.return_number`, `shipments.shipment_number`).
 4. Enforce `DECIMAL(10, 2)` or `DECIMAL(12, 2)` for all unit prices, unit costs, taxes, subtotals, payments, credits, and grand totals—zero `FLOAT`/`DOUBLE` monetary columns.
 5. Wrap multi-entity state mutations in explicit ACID database transactions with pessimistic locking (`FOR UPDATE`) on `inventory` rows during stock adjustments, fulfillments, and PO receipts.
-6. Retain financial, movement, and audit records permanently without destructive deletes.
-7. `[DESIGN DECISION REQUIRED]` **Optional Supplier-Product Catalog Mapping:** Confirm whether an explicit `supplier_products` associative table (mapping each SKU to default/eligible suppliers and last cost) should be included in `DATABASE_SCHEMA.md` alongside `purchase_orders`.
+6. Retain financial, movement, lifecycle snapshot, anomaly event, inactive `supplier_products`, and audit records permanently without destructive deletes.
+7. **Supplier-Product Mapping & Audit DB Privileges (`DDR-07` & `DDR-10`):** Include explicit many-to-many `supplier_products` in `DATABASE_SCHEMA.md`, and enforce MySQL least-privilege DB roles omitting `UPDATE` and `DELETE` permissions on `audit_logs` for all application accounts.
 
 ---
 
@@ -1774,13 +1834,13 @@ Verified existing endpoints on `main`:
 | API Domain Prefix | Module | Primary Operations & Methods | Audit Requirement |
 | :--- | :--- | :--- | :--- |
 | `/api/v1/products` | Product Management | `GET` list/detail, `POST` create (+ init inventory), `PUT` update, `PATCH /status` deactivate/reactivate | Log all creates, price/info edits, status toggles |
-| `/api/v1/suppliers` | Supplier Management | `GET` list/detail, `POST` create, `PUT` edit lead time/contact, `PATCH /status` | Log creates, lead-time changes, status changes |
+| `/api/v1/suppliers` | Supplier Management | `GET` list/detail, `POST` create, `PUT` edit lead time/contact, `PATCH /status`, `GET`/`POST`/`PUT`/`PATCH /{id}/products` (`supplier_products`) | Log vendor & supplier-product mapping creates, edits, status changes |
 | `/api/v1/customers` | Customer Management | `GET` search/detail, `POST` intake, `PUT` address edit, `PATCH /status` | Log creates, profile updates, deactivations |
 | `/api/v1/orders` | Order Management | `GET` list/detail, `POST` draft, `PUT` draft items, `POST /confirm`, `POST /fulfill`, `POST /cancel` | Log creates, transitions, fulfillments, failed stock checks |
 | `/api/v1/sales` | Sales Management | `GET` stream/source filterable sales, `GET` detail, `POST` complete, `POST /{id}/reverse` | Log completions and traceable reversals |
-| `/api/v1/inventory` | Inventory Control | `GET` stock master, `GET /{product_id}`, `GET /low-stock`, `POST /adjustments`, `PUT /{id}/settings` | Log adjustments and threshold config changes |
+| `/api/v1/inventory` | Inventory Control | `GET` stock master (`physical`, `reserved`, `available`, `incoming`, `projected_available`), `GET /{product_id}`, `GET /low-stock`, `POST /adjustments`, `PUT /{id}/settings` | Tier 1 fail-closed logging for adjustments & settings |
 | `/api/v1/inventory/movements` | Stock Movement Tracking | `GET` global & per-SKU immutable ledger (`movement_type`, dates, reference) | Read-only ledger; originating mutations logged |
-| `/api/v1/purchase-orders` | Purchase Planning (POs) | `GET` list/detail, `POST` draft, `PUT` draft, `POST /submit`, `/approve`, `/reject`, `/receive` | Log every draft, approval, rejection, and receipt |
+| `/api/v1/purchase-orders` | Purchase Planning (POs) | `GET` list/detail, `POST` draft, `PUT` draft/amend (invalidates approval on change), `POST /submit`, `/approve`, `/reject`, `/receive`, `/api/v1/settings/procurement` | Tier 1 fail-closed logging for approvals, escalations, invalidations, receipts & Tier 1 limit config |
 | `/api/v1/simulator` | Purchase Planning Simulator | `POST /calculate` stateless simulation, `POST /draft-po` handoff | Log saved draft triggers & errors |
 | `/api/v1/forecast` | Demand Forecasting | Existing `/horizons`, `/model-metrics`, `/model-info`, `/`, `/predict` + Planned `/by-sku` & `GET /{product_id}` | Log forecast requests & inference failures |
 | `/api/v1/predictive-planner` | Predictive Planner | `POST /recommend`, `GET /portfolio`, `POST /refresh` | Log risk scans & recommendation triggers |
@@ -1823,10 +1883,10 @@ All operational and analytical interfaces live within this single dashboard layo
 | **G1.5 Order Management** | Full Lifecycle & Fulfill | View Pick/Stock Queue | — | View Invoiced Orders |
 | **G2.6 Business Intelligence** | Full BI Dashboard | Stock Turnover Subset | Procurement Spend Subset | Revenue Analytics Subset |
 | **G2.7 Seasonal Demand Calendar** | Full Calendar & Heatmaps | Seasonal Buffer Ref | Seasonal Planning Ref | — |
-| **G2.8 Product Lifecycle Intel.** | Full Lifecycle & Config | Dead-Stock View | Lifecycle Before PO Check | — |
-| **G3.9 Inventory Control** | Full Stock, Adj & Config | Primary Stock & Adj | View Current Stock | — |
+| **G2.8 Product Lifecycle Intel.** | Full Lifecycle, Config & `Discontinued` | Dormant / Dead-Stock View | Lifecycle Before PO Check | — |
+| **G3.9 Inventory Control** | Full Stock (`Phys/Res/Avail/Inc/Proj`), Adj & Config | Primary Stock & Adj | View Available/Incoming Stock | — |
 | **G3.10 Stock Movement Tracking** | Full Movement Ledger | Full Movement Ledger | View `purchase_receipt` | View Return/Fulfill Audit |
-| **G3.11 Purchase Planning Simulator** | Full Sim, PO & Approval | View Incoming POs & Receive | Primary Sim, PO & Workflow | — |
+| **G3.11 Purchase Planning Simulator** | Sim, PO, Tier 2/Escalated Approval, Oversight Digest & Config | View Incoming POs & Receive | Primary Sim, PO Draft & Tier 1 Approval (`<= Limit`, non-escalated) | — |
 | **G4.12 Demand Forecasting** | Full Forecasts & Metrics | Forecast Inspection | Forecast Consumption | Optional Read Reference |
 | **G4.13 Price & Revenue Intel.** | Full Price/Rev Analytics | — | Cost vs Price Reference | Revenue Contribution View |
 | **G4.14 Predictive Planner** | Full Risk Portfolio | Critical/Elevated Monitoring | Primary Replenishment Hub | — |
@@ -1843,20 +1903,20 @@ All operational and analytical interfaces live within this single dashboard layo
 - **Typed API Client (`frontend/src/services/` & `types/`):** Strict TypeScript interfaces aligned 1:1 with backend Pydantic v2 schemas, injecting `X-NEXORA-Workspace` automatically on all API requests.
 - **Explicit UI State Handling:** Every async table, chart, and form must render clean **Loading** (skeleton/spinner), **Empty** (actionable zero-record guidance), **Validation Error** (field-level `422` messages), and **API Failure** states (human-readable banner + retry button).
 - **Safe Action Confirmation:** Mandatory confirmation modals before executing irreversible/critical actions (`Fulfill Order`, `Approve/Reject PO`, `Issue Credit Note`, `Reverse Sale`, `Deactivate Product`).
-- **Truthful Data Policy:** Never render hardcoded mock numbers as live MySQL or ML responses. Historical UCI figures must display explicit date badges (`Historical UCI 2010–2011 Baseline`).
+- **Truthful Data & Separate Stock Metrics Policy (`DDR-01`–`DDR-04`):** Never render hardcoded mock numbers as live MySQL or ML responses. Historical UCI figures must display explicit `GBP` / `Historical UCI 2010–2011 Baseline` badges distinct from live `INR` operations. Always render `Physical Stock`, `Reserved Stock`, `Available Stock`, `Incoming Stock`, and `Projected Available Stock` separately, and clearly label when supplier lead-time risk is `UNAVAILABLE` (distinguished from any horizon-based fallback view).
 
 ---
 
 # 15. Security, Privacy & Data Integrity
 
-1. **Honest Non-Authentication Boundary:** NEXORA v2.1 explicitly omits login/passwords/JWT. Documentation and UI must **never** claim that workspace selection verifies operator identity or enforces cryptographically secure server authorization. Backend integrity relies on strict business rules rather than simulated login barriers.
+1. **Honest Non-Authentication Boundary:** NEXORA v2.2 explicitly omits login/passwords/JWT. Documentation and UI must **never** claim that workspace selection verifies operator identity or enforces cryptographically secure server authorization. Tiered PO approval and configuration workflows (`DDR-04`, `DDR-08`, `DDR-09`) operate as UI-level workspace governance plus strict backend invariant enforcement rather than security RBAC.
 2. **Server-Side Input Validation:** Every incoming REST payload is rigorously validated by FastAPI + Pydantic v2 (numeric ranges, enums, non-empty strings, finite checks, `DECIMAL` formatting) regardless of frontend form validation.
 3. **SQL Injection Prevention:** All MySQL queries execute through SQLAlchemy 2.x ORM models and bound parameterized statements—zero string-formatted raw SQL concatenation.
 4. **Safe Error Responses:** Unhandled exceptions capture full trace details internally (stdout / server diagnostic logs) and record sanitized failure metadata in `audit_logs`, while returning safe HTTP `500`/`409`/`422` JSON payloads to clients without leaking DB passwords, stack traces, or filesystem paths.
 5. **Sensitive Information Exclusion:** Environment secrets (`.env`), DB passwords, tokens, API keys, and payment card details must never be stored in `audit_logs`, error responses, or `.gitignore` leaks.
 6. **Referential Integrity & Transaction Rollback:** MySQL InnoDB foreign keys block orphaned items; multi-step mutations wrap in atomic SQLAlchemy transactions (`with session.begin():`) so any mid-step failure cleanly rolls back partial state.
 7. **Concurrent Inventory Protection:** Simultaneous stock modifications acquire row-level locks (`SELECT ... FOR UPDATE`) to prevent lost updates, overselling, or duplicate fulfillment deductions.
-8. **Financial Precision & Non-Destructive Retention:** Python `decimal.Decimal` paired with MySQL `DECIMAL(10, 2)` / `DECIMAL(12, 2)` prevents IEEE-754 drift; completed financial, movement, and audit rows are never silently deleted.
+8. **Financial Precision & Append-Only DB Hardening (`DDR-04` & `DDR-10`):** Python `decimal.Decimal` paired with MySQL `DECIMAL(10, 2)` / `DECIMAL(12, 2)` (`INR` default operational currency) prevents IEEE-754 drift and preserves historical invoice tax/currency snapshots permanently. Completed financial, movement, and audit rows are never deleted, and application MySQL roles MUST lack `UPDATE` and `DELETE` privileges on `audit_logs`.
 9. **Export Formula Safety:** CSV reports generated by `Reports & Export` neutralize spreadsheet formula injection by escaping/quoting leading `=`, `+`, `-`, `@`, tab, and carriage-return characters.
 
 ---
@@ -1867,17 +1927,17 @@ Every completed module must pass automated verification inside `backend/.venv/Sc
 
 ## 16.1 Verification Layers
 - **Unit Tests:**
-  - Deterministic inventory risk formulas, reorder threshold math, lead-time calculations, `DECIMAL` invoice/tax/credit rounding (`ROUND_HALF_UP`), lifecycle classification logic, anomaly z-score zero-variance guards, valid status transition state machines, and ML feature lag/rolling leakage isolation.
+  - Deterministic `DDR-01` lead-time demand formulas, lead-time fallback hierarchy (`supplier_products` → `suppliers` → `UNAVAILABLE`), `DDR-02` incoming PO filtering (`approved`/`partially_received` only), `DDR-03` stock availability equations, `DECIMAL` `INR`/tax rounding (`ROUND_HALF_UP`), `DDR-06` `uom_conversions` / `demand_adjustments` / `demand_quarantine` rules, `DDR-08` lifecycle hysteresis & z-score zero-variance guards, valid status transition state machines, and ML feature lag/rolling leakage isolation.
 - **API Endpoint Tests (`TestClient` / `HTTPX`):**
   - Valid & malformed JSON payloads, HTTP `200`/`201`/`400`/`404`/`409`/`422`/`503` checks, duplicate `stock_code` `409` rejection, pagination/filtering accuracy, over-return `422`/`409` checks, and existing `test_forecast_api.py` compatibility.
 - **Database Tests (Test MySQL / Isolated Test Schema):**
   - Foreign-key constraint enforcement, `UNIQUE` indexes, atomic rollback when simulated failure triggers mid-fulfillment/mid-adjustment, row-locking consistency under stock edits, `DECIMAL` storage fidelity, and persistence verification across session resets.
 - **Integration Tests:**
-  - *Order-to-Sale-to-Inventory:* Order fulfillment deducts inventory once, logs `sale_fulfillment`, blocks second fulfill call (`409`), creates sale & invoice.
-  - *Procurement Flow:* Simulation $\rightarrow$ draft PO $\rightarrow$ submit $\rightarrow$ approve $\rightarrow$ partial receipt $\rightarrow$ final receipt increments stock accurately.
-  - *Return-to-Credit:* Partial return restocks inventory and issues bounded credit note while blocking over-returns.
-  - *Forecast-to-Planner:* ML inference feeds Predictive Planner risk labels and Smart Alerts.
-  - *Audit & Workspace Propagation:* `X-NEXORA-Workspace` and `X-Correlation-ID` appear in persisted `audit_logs` across all major operations and API error events.
+  - *Order-to-Sale-to-Inventory (`DDR-03` & `DDR-05`):* Order confirmation allocates `Reserved Stock`; partial fulfillment deducts `Physical` and `Reserved` stock solely for fulfilled units, supports `1:N` split shipments, blocks duplicate `idempotency_key` deductions (`409`), emits threshold alerts on low `Available Stock`, and reaches `fulfilled` only at 100% quantity fulfillment.
+  - *Procurement Flow (`DDR-01`, `DDR-02`, `DDR-09`):* Tier 1 routine PO approval (`<= limit`) emits Store Manager digest; escalated PO (`> limit`, same-supplier split flag, DDR-08 anomaly, or price spike) blocks until Store Manager approval; post-approval supplier/qty/price mutation invalidates prior approval; partial/full receipt transitions `Incoming Stock` to `Physical Stock`.
+  - *Return-to-Credit & Demand Adjustments (`DDR-06`):* Partial `excess_stock` return restocks inventory, reduces net demand in `demand_adjustments`, and issues bounded credit note, while `defective` return leaves original confirmed demand intact.
+  - *Forecast-to-Planner & Anomaly Governance (`DDR-01`, `DDR-06`, `DDR-08`):* Quarantined malformed B2B rows do not break aggregation; `UNAVAILABLE` lead times surface cleanly without fabrication; unresolved duplicate alerts are suppressed.
+  - *Tiered Audit Failure & DB Hardening (`DDR-10`):* Simulated DB failure on `audit_logs` insert rolls back Tier 1 fulfillment/adjustment/invoice/PO-approval/config mutations completely + emits failure telemetry; Tier 2 failures persist into `audit_outbox`, retry without duplicate `idempotency_key` rows, and dead-letter exhausted retries; application DB account fails on `UPDATE`/`DELETE audit_logs`.
 - **Frontend Tests:**
   - Page 1 (`"Welcome to NEXORA — Select Your Workspace"`) card rendering & routing to Page 2; in-dashboard workspace switcher filtering tabs accurately without leaving Page 2; CRUD modals triggering real API calls; Loading, Empty, `422` validation, and `500`/`503` error banner states; confirmation modals blocking accidental clicks.
 - **End-to-End Acceptance Run:**
@@ -1920,7 +1980,7 @@ LLM-Project1/
 │       ├── components/                  # WorkspaceSwitcher, ModuleTabs, Charts, Tables, Modals [Planned]
 │       ├── services/                    # Typed API clients + X-NEXORA-Workspace headers [Planned]
 │       └── types/                       # TypeScript schemas [Planned]
-└── docs/                                # Master Technical Blueprint v2.1 & knowledge registries
+└── docs/                                # Master Technical Blueprint v2.2 & knowledge registries
 ```
 
 ## 17.2 Revised Six-Phase Development Roadmap
@@ -1935,10 +1995,10 @@ flowchart LR
 ```
 
 - **Phase 1 — ML Engine & FastAPI Serving *(Completed on `main`)*:** Dataset profiling, 4-stream separation, continuous daily aggregation, leakage-free feature matrix, Ridge/RF/Baseline training, chronological purge/embargo evaluation, Joblib persistence, FastAPI `/forecast` API, and 60 passing automated tests.
-- **Phase 2 — MySQL Relational Core, Retail Foundation, Inventory & Centralized Audit *(Planned Next Target)*:** Configure MySQL 8.x + SQLAlchemy 2.x + Alembic; create initial tables (`categories`, `products`, `suppliers`, `customers`, `orders`, `order_items`, `transactions`, `transaction_items`, `inventory`, `inventory_movements`, `audit_logs`); implement Foundation CRUD, Order fulfillment with single-deduction locking, manual stock adjustments, and append-only Centralized Audit logging.
-- **Phase 3 — Two-Page React Frontend & Workspace Experience *(Planned)*:** Scaffold React + TypeScript + Tailwind CSS + Chart.js; build Page 1 (`"Welcome to NEXORA — Select Your Workspace"`) and Page 2 (Unified Retail Management Dashboard with live Workspace Switcher, Product/Supplier/Customer/Order/Inventory/History panels, and strict loading/empty/error states).
-- **Phase 4 — AI Predictive Integration, Business Intelligence & Smart Alerts *(Planned)*:** Persist `model_runs` & `forecasts`; integrate live MySQL stock with `Demand Forecasting` into `Predictive Planner`; implement `Business Intelligence`, `Seasonal Demand Calendar`, `Product Lifecycle Intelligence`, `Price & Revenue Intelligence`, `Anomaly Detection`, and `Smart Alerts`.
-- **Phase 5 — Procurement, Returns, Billing, Shipping & Reporting *(Planned)*:** Implement `Purchase Planning Simulator` + PO lifecycle + receipts, `Return Intelligence`, `Billing & Finance` (invoices, payments, credit notes, reconciliation), `Shipping & Delivery` (pick lists, packing slips, internal labels), and `Reports & Export`.
+- **Phase 2 — MySQL Relational Core, Retail Foundation, Inventory & Centralized Audit *(Planned Next Target)*:** Configure MySQL 8.x + SQLAlchemy 2.x + Alembic; create initial tables (`categories`, `products`, `suppliers`, `supplier_products`, `customers`, `orders`, `order_items`, `order_fulfillments`, `transactions`, `transaction_items`, `inventory`, `inventory_movements`, `audit_logs`, `audit_outbox`, `operational_settings`); implement Foundation CRUD, confirmed stock reservation, idempotent partial/full Order fulfillment, manual stock adjustments, and DDR-10 tiered fail-closed/outbox Centralized Audit logging with restricted DB role grants.
+- **Phase 3 — Two-Page React Frontend & Workspace Experience *(Planned)*:** Scaffold React + TypeScript + Tailwind CSS + Chart.js; build Page 1 (`"Welcome to NEXORA — Select Your Workspace"`) and Page 2 (Unified Retail Management Dashboard with live Workspace Switcher, separate `Physical`/`Reserved`/`Available`/`Incoming`/`Projected Available` stock views, Foundation/Order/Inventory/History panels, and strict loading/empty/error states).
+- **Phase 4 — AI Predictive Integration, Business Intelligence & Smart Alerts *(Planned)*:** Persist `model_runs`, `forecasts`, `uom_conversions`, `demand_adjustments`, `demand_quarantine`, and `product_lifecycle_snapshots`; integrate B2B validated demand aggregates + live stock + hierarchical lead times into `Predictive Planner` (`DDR-01`/`06`); implement `Business Intelligence`, `Seasonal Demand Calendar`, `Product Lifecycle Intelligence` (`Introduction`..`Discontinued` per `DDR-08`), `Price & Revenue Intelligence`, hybrid `Anomaly Detection`, and `Smart Alerts` (with duplicate suppression).
+- **Phase 5 — Procurement, Returns, Billing, Shipping & Reporting *(Planned)*:** Implement `Purchase Planning Simulator` + `DDR-09` tiered dual-control PO approval & anti-split escalation + receipts (`DDR-02`), `Return Intelligence` (`excess_stock` vs. `defective` per `DDR-06`), `Billing & Finance` (`INR` default + centrally configurable tax per `DDR-04`), `Shipping & Delivery` (`1:N` split shipments per `DDR-05`), and `Reports & Export`.
 - **Phase 6 — End-to-End Integration, QA Verification & Academic Demo Prep *(Planned)*:** Execute comprehensive DB/API/Integration/UI regression tests, validate `DECIMAL` accuracy and audit persistence across restarts, refine UX, and rehearse connected demonstration.
 
 ---
@@ -1970,7 +2030,7 @@ NEXORA targets clean **local development execution** for university development 
 
 # 19. Team Responsibilities & Development Governance
 
-## 19.1 Recommended Team Role Allocation *(Preserved Anonymous Slot Structure from v1.0, Aligned to v2.1)*
+## 19.1 Recommended Team Role Allocation *(Preserved Anonymous Slot Structure from v1.0, Aligned to v2.2)*
 For a 4-member student engineering team (combine backend/frontend slices cleanly for smaller teams):
 
 | Team Slot | Primary Functional Focus |
@@ -2015,43 +2075,46 @@ Every team member must understand end-to-end interactions across the ML engine, 
 
 1. **Workspace Selection (`Page 1`):** Open `/` showing `"Welcome to NEXORA — Select Your Workspace"` with 4 workspace cards and zero login forms.
 2. **Enter Store Manager Workspace (`Page 2`):** Click **Store Manager (Admin)** to load the unified dashboard showing all 18 module controls.
-3. **Product Onboarding (`M01 + M09`):** Create or inspect a catalog SKU (e.g., `NEX-DEMO-01`, unit price `£12.50`, opening stock `25`), verifying automatic inventory initialization.
+3. **Product Onboarding & Supplier Mapping (`M01 + M02 + M09`):** Create a catalog SKU (e.g., `NEX-DEMO-01`, unit price `₹250.00` INR, opening stock `25`) with a `supplier_products` mapping (`lead_time_days = 10`, purchase cost `₹160.00`), verifying automatic 1:1 `inventory` initialization (`Physical = 25, Reserved = 0, Available = 25`).
 4. **Customer Intake (`M03`):** Add or inspect customer billing and shipping details entered manually (`Jane Doe`, complete UK street address).
-5. **Order Creation, Sale Completion & Deduction (`M05 + M04 + M09`):** Create an order for `15` units and click **Fulfill**, proving single atomic stock deduction (`25 → 10` remaining) and completed sale recording.
+5. **Order Confirmation, Partial/Full Fulfillment & Stock Breakdown (`M05 + M04 + M09`):** Confirm an order for `15` units (`Physical = 25, Reserved = 15, Available = 10`), then fulfill (`15` units or partial `10` + `5` split shipments), proving idempotent deduction only for fulfilled quantities (`Physical = 10, Reserved = 0, Available = 10`) and linked sale recording.
 6. **Verify Stock Movement Ledger (`M10`):** Inspect the immutable inventory movement entry (`sale_fulfillment`, `-15` delta, `25 → 10`) linked to the fulfilled order.
 7. **Generate Demand Forecast (`M12` — *Backend API Currently Implemented*):** Request 7, 15, 30, and 90-day forecasts for a catalog SKU (`85123A` or unseen SKU), verifying non-negative predictions and evaluation WAPE benchmarks.
-8. **Review Predictive Planner (`M14 + G6.C`):** Inspect `CRITICAL` / `ELEVATED` risk status when live stock drops below forecast × safety factor (`1.20`), showing exact suggested order calculation and active Smart Alerts.
-9. **Simulate Purchase Recommendation (`M11 + M02`):** Simulate supplier `lead_time_days = 10` and adjusted safety factor in Purchase Planning Simulator without mutating live DB records.
-10. **Create & Approve Purchase Order (`M11`):** Convert the simulation into a draft Purchase Order, submit it, and execute explicit human approval.
-11. **Receive Approved Stock (`M11 + M10`):** Receive delivered PO quantities into the warehouse, confirming live stock increment and `purchase_receipt` ledger creation.
-12. **Demonstrate Billing, Return/Credit & Shipping (`M17 + M16 + M18`):** Inspect the `DECIMAL`-exact invoice, record payment, process a partial Return showing restock/credit note linkage without deleting original invoices, and progress shipment status (`pending → packed → dispatched → delivered`) with pick list and packing slip.
+8. **Review Predictive Planner (`M14 + G6.C`):** Inspect `CRITICAL` / `ELEVATED` lead-time risk status using `(Forecast / Horizon) × Lead Time × 1.20`, separately displaying `Physical`, `Reserved`, `Available`, `Incoming`, and `Projected Available Stock` alongside Smart Alerts (`UNAVAILABLE` when no lead time exists).
+9. **Simulate Purchase Recommendation (`M11 + M02`):** Simulate supplier-product `lead_time_days = 10` and adjusted safety factor in Purchase Planning Simulator without mutating live DB records.
+10. **Create & Dual-Control Approve Purchase Order (`M11`):** Draft & submit a PO, demonstrating Tier 1 Purchase Manager approval (and non-blocking Store Manager digest) vs. Store Manager approval when exceeding limit or triggering an escalation flag (zero auto-dispatch per `EXCL-03`; approved open units enter `Incoming Stock`).
+11. **Receive Approved Stock (`M11 + M10`):** Receive delivered PO quantities into the warehouse, shifting units out of `Incoming Stock` into `Physical Stock` with exact `purchase_receipt` ledger + Tier 1 audit entries.
+12. **Demonstrate Billing, Return/Credit & Split Shipping (`M17 + M16 + M18`):** Inspect the `INR` `DECIMAL` invoice with centrally configured tax snapshot, record payment, process a partial `excess_stock` vs. `defective` return showing restock, `demand_adjustments`, and bounded credit note linkage, and track independent split-shipment statuses (`pending → packed → dispatched → delivered`).
 13. **Switch Stakeholder Workspaces (`G6.A`):** Switch seamlessly inside Page 2's header to **Inventory Staff**, **Purchase Manager**, and **Finance Staff**, demonstrating tailored views without leaving Page 2.
 14. **Inspect Centralized History & Audit (`G6.B`):** Open Audit History and filter by workspace/entity to demonstrate persistent before/after records of the demo flow across modules.
 15. **Generate Report & Export (`G6.D`):** Export an operational inventory, procurement, or financial reconciliation CSV report cleanly.
 
 ---
 
-# 21. Scope Boundaries Summary & Open Design Decisions (`[DESIGN DECISION REQUIRED]`)
+# 21. Scope Boundaries Summary & Finalized Design Decision Register (`DDR-01`–`DDR-10`)
 
-## 21.1 Summary of Excluded Features
-Per Section 2.3, NEXORA strictly continues to exclude: government e-way bills (`EXCL-01`), live shipping carrier APIs (`EXCL-02`), autonomous supplier order dispatch (`EXCL-03`), autonomous price markdowns (`EXCL-04`), conversational AI chatbots (`EXCL-05`), market basket affinity mining (`EXCL-06`), multi-supplier algorithmic linear optimization (`EXCL-07`), and automated UCI customer address scraping (`EXCL-08`).
+## 21.1 Summary of Excluded Features *(Preserved Unchanged)*
+Per Section 2.3, NEXORA strictly continues to exclude: government e-way bills (`EXCL-01`), live shipping carrier APIs (`EXCL-02`), autonomous supplier order dispatch (`EXCL-03`), autonomous price markdowns (`EXCL-04`), conversational AI chatbots (`EXCL-05`), market basket affinity mining (`EXCL-06`), multi-supplier algorithmic linear optimization (`EXCL-07`), and automated UCI customer address scraping (`EXCL-08`). All ten finalized DDRs explicitly preserve these eight boundaries.
 
-## 21.2 Consolidated Register of Unresolved Design Decisions (`[DESIGN DECISION REQUIRED]`)
-Before database DDL completion (`DATABASE_SCHEMA.md`) and Phase 2–5 coding, the project owner must confirm the following ten explicit design decisions surfaced during this specification audit:
+## 21.2 Consolidated Register of Approved Design Decisions (`DDR-01` through `DDR-10` — Resolved in v2.2)
+All ten open Design Decisions surfaced in `v2.1` are now formally ratified and integrated throughout Technical Blueprint `v2.2`:
 
-| Decision Ref | Module / Area | Unresolved Specification Question |
-| :--- | :--- | :--- |
-| **`DDR-01`** | Module 11 & 14 (`Planner` / `Simulator`) | **Unified Lead-Time Demand Formula:** Should supplier `lead_time_days` scale the nearest ML horizon forecast pro-rata ($(\hat{y}_H / H) \times L$) inside `Reorder Threshold`, or remain strictly horizon-based ($\hat{y}_H \times \alpha$)? Both modules must share the identical finalized rule. |
-| **`DDR-02`** | Module 11 & 14 (`Planner` / `Simulator`) | **Incoming PO Stock Offset:** Should `approved` (not yet received) Purchase Order quantities be added into `Effective Available Stock` when computing stockout risk (`CRITICAL`/`ELEVATED`/`SAFE`) and `Suggested Purchase Quantity`? |
-| **`DDR-03`** | Module 5 & 9 (`Orders` / `Inventory`) | **Order Confirmation Soft Stock Reservation:** Confirm that physical `current_quantity` deducts only once at Order **Fulfillment** (already specified), and decide whether `confirmed` orders also maintain an explicit `reserved_quantity` column prior to fulfillment. |
-| **`DDR-04`** | Module 17 (`Billing & Finance`) | **Tax Rate Model & Display Currency:** Confirm whether invoice tax uses a single configurable global percentage, per-invoice editable rate, or per-SKU tax rules, and confirm standardized currency (`£` vs. configurable symbol). |
-| **`DDR-05`** | Module 18 (`Shipping & Delivery`) | **Partial Order Fulfillment / Multi-Shipment Policy:** Confirm whether one order maps `1:1` to one shipment or supports split/partial multi-parcel shipments via `shipment_items`. |
-| **`DDR-06`** | Module 12 (`Demand Forecasting`) | **Automated Operational History Lag Lookup:** Define the exact runtime aggregation pipeline feeding ongoing MySQL sales into the existing 10-column `.joblib` feature contract (blended UCI + live timeline vs. active operational window) without retraining Phase 1 models unnecessarily. |
-| **`DDR-07`** | Module 2 & 11 (and Section 12 Database) (`Suppliers`) | **Supplier-to-Product Association:** Confirm whether an optional `supplier_products` many-to-many link table (preferred supplier & vendor unit cost per SKU) is needed beyond direct supplier selection on POs. |
-| **`DDR-08`** | Module 8 & 15 (`Lifecycle` / `Anomaly`) | **Analytical Default Thresholds:** Ratify default growth/decline/inactivity day cutoffs for Product Lifecycle (`Emerging`..`Inactive`) and default rolling window sizes / z-score cutoffs for Anomaly Detection (`abs(z) >= 2.5` / `3.0`). |
-| **`DDR-09`** | Module 11 (`Procurement` / `Workspaces`) | **PO Approval Authority in No-Auth UI:** Decide whether **Purchase Manager** may click "Approve PO" inside their workspace or whether human separation requires switching to **Store Manager (Admin)** for PO approvals. |
-| **`DDR-10`** | Section 9 (`Centralized History & Audit`) | **Audit Write Failure Policy:** Decide whether an `audit_logs` DB write failure rolls back the enclosing business transaction (strict audit completeness) or commits the core business operation while writing an urgent diagnostic fallback log. |
+| Decision Ref | Status | Primary Impacted Areas | Finalized Blueprint v2.2 Decision Summary |
+| :--- | :---: | :--- | :--- |
+| **`DDR-01`** | **RESOLVED** | `M02`, `M11`, `M14`, `Sec 11` | Primary lead time from `supplier_products`, fallback `suppliers.lead_time_days`; never fabricate missing lead time (`UNAVAILABLE`). Formulas: `Lead-Time Demand = (Forecast Demand / Horizon) × Lead Time`, `Replenishment Risk Threshold = Lead-Time Demand × Safety Factor` (initial `1.20`), identical across `M11` & `M14`; optional horizon-based risk view clearly separated when lead time is unavailable. |
+| **`DDR-02`** | **RESOLVED** | `M09`, `M11`, `M14`, `Sec 11` | Only **`approved`** and **`partially_received`** POs count outstanding (`ordered - received`) units into `Incoming Stock`. `draft`, `submitted`, `rejected`, fully `received`, and `cancelled` remaining units are excluded (`0`). Always keep `Incoming Stock` separate from `Physical` and `Available` stock. |
+| **`DDR-03`** | **RESOLVED** | `M05`, `M09`, `M11`, `M14`, `Sec 11`, `Sec 12` | Maintain 5 distinct metrics: `Physical Stock` (`current_quantity`), `Reserved Stock` (`reserved_quantity` on confirmed unfulfilled order units), `Available Stock = Physical - Reserved`, `Incoming Stock`, and `Projected Available Stock = Available + Incoming`. Display all values separately; never treat incoming units as physically available before receipt. |
+| **`DDR-04`** | **RESOLVED** | `M01`, `M04`, `M06`, `M17`, `Sec 12`, `Sec 15` | **`INR`** is the default operational currency (`DECIMAL` precision everywhere). Tax rates are centrally configurable by `Store Manager (Admin)` without hardcoding across modules. Historical invoices/transactions preserve originally applied tax rate/amount; config updates affect future records only. |
+| **`DDR-05`** | **RESOLVED** | `M05`, `M09`, `M10`, `M16`, `M17`, `M18`, `SYS-03` | Customer orders support **multiple fulfillments & `1:N` split shipments** with independent parcel quantities and delivery statuses (`pending`→`delivered`). Stock deduction applies solely to actually fulfilled quantities with idempotency protection; order reaches `fulfilled` only when 100% of units are fulfilled. Decreasing `Available Stock` to/below threshold triggers recommend-only `Smart Alerts` (no auto-PO). |
+| **`DDR-06`** | **RESOLVED** | `M04`, `M05`, `M12`, `M16`, `Sec 10`, `Sec 12` | Confirmed B2B sales orders are actual demand timed by `requested_delivery_date` (or creation date if immediate; never invoice settlement dates). Confirmed demand != fulfilled qty. Separate `demand_adjustments` ledger reduces demand on excess-stock returns & full cancellations (linked to order/line) without letting defective returns reduce original demand. Classify `recurring_replenishment`/`one_time_bulk`/`contract`/`tender` (preventing spike distortion), flag censored demand, validate & quarantine (`demand_quarantine`) malformed inputs, keep product-specific historical `uom_conversions`, preserve Phase 1 ML contract + scheduled retraining + drift monitoring + human procurement review. |
+| **`DDR-07`** | **RESOLVED** | `M01`, `M02`, `M11`, `M14`, `Sec 12` | Explicit many-to-many `supplier_products` relationship tracking `supplier_id`, `product_id`, `supplier_product_code`, `purchase_price`, product-specific `lead_time_days` (with `suppliers.lead_time_days` fallback per `DDR-01`), `minimum_order_quantity`, `is_preferred`, and `is_active` while preserving inactive rows for historical traceability. |
+| **`DDR-08`** | **RESOLVED** | `M08`, `M15`, `SYS-02`, `SYS-03`, `Sec 12` | Five lifecycle stages (`Introduction`, `Growth`, `Maturity`, `Decline`, `Discontinued`) via rolling sales velocity, order frequency & SKU age + anti-flicker hysteresis; `Discontinued` requires explicit manual authorized change. Hybrid deterministic + statistical/ML anomaly engine spanning demand, inventory integrity, returns (integrating `DDR-06`), and procurement variance (`DDR-09`). Central defaults inside min/max bounds + reset-to-default + forward-only effect + immutable history + Tier 1 audit (`timestamp`, workspace/optional operator ref, prev/new) + duplicate unresolved alert suppression. |
+| **`DDR-09`** | **RESOLVED** | `Sec 4`, `M11`, `M15`, `SYS-03`, `Sec 14` | Dual-control tiered approval: `Purchase Manager` creates POs and approves routine POs `<= Tier 1 Spending Limit` (triggering non-blocking Store Manager digest); POs `> limit` OR flagged for same-supplier PO splitting within configurable rolling window / DDR-08 anomalies / price spikes / unapproved supplier changes escalate to `Store Manager (Admin)` (flagging split orders without presuming intent). Post-approval supplier/qty/price/total edits invalidate approval and restart flow; approval changes internal state only (`EXCL-03`); rejected history retained; limit edits never retroactively invalidate approved POs; Store Manager dashboard configures limits/windows with audit. |
+| **`DDR-10`** | **RESOLVED** | `Sec 7`, `Sec 9`, `Sec 12`, `Sec 15` | **Tier 1 critical operations** (PO approvals, manual stock adjustments, returns/cancellations, sales fulfillment, config/threshold edits, financial transactions) commit inside one atomic InnoDB transaction with mandatory `audit_logs` insert (fail-closed rollback + external failure telemetry if audit fails). **Tier 2 routine events** degrade gracefully via durable `audit_outbox` retry + dead-letter queue. Application DB roles lack `UPDATE`/`DELETE` privileges on `audit_logs`; `correlation_id` + `idempotency_key` prevent retry duplicates. |
+
+### Architecture Governance Note (Workspaces vs. RBAC)
+- Workspace scoping (`Store Manager (Admin)`, `Inventory Staff`, `Purchase Manager`, `Finance Staff`) remains a **two-page UI-level navigation and workflow governance layer—not cryptographic authentication or server-side security RBAC**. Threshold administration (`DDR-04`, `DDR-08`, `DDR-09`) and `Discontinued` approvals reside inside the **Store Manager (Admin)** workspace panel (fulfilling the "Store Manager or explicitly authorized Operations Lead" governance requirement cleanly without creating an unapproved 5th workspace), while audit records capture `selected_workspace`, `action_source`, and optional explicitly supplied non-auth `operator_ref` metadata without fabricating authenticated user accounts.
 
 ---
 
-**Document Authority:** This Technical Blueprint v2.1 supersedes Technical Blueprint v1.0 and v2.0 as the canonical architectural specification for NEXORA. All subsequent updates to `DATABASE_SCHEMA.md`, `FEATURES_STATUS.md`, `API_DOCUMENTATION.md`, `PROJECT_OVERVIEW.md`, `DEVELOPMENT_ROADMAP.md`, and `AGENTS.md` must synchronize cleanly with v2.1 following owner approval.
+**Document Authority:** This Technical Blueprint v2.2 supersedes Technical Blueprint v1.0, v2.0, and v2.1 as the canonical architectural specification for NEXORA. All subsequent updates to `DATABASE_SCHEMA.md`, `FEATURES_STATUS.md`, `API_DOCUMENTATION.md`, `PROJECT_OVERVIEW.md`, `DEVELOPMENT_ROADMAP.md`, and `AGENTS.md` must synchronize cleanly with v2.2.
