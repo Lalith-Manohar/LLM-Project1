@@ -825,11 +825,11 @@ Designed around **`DDR-06`** and **`DATABASE_SCHEMA.md` v2.8** (`uom_conversions
 When implemented under `M01 Product Management` (proposed path `GET / POST /api/v1/products/{product_id}/uom-conversions` ***[Illustrative]***), the API **must** enforce every v2.8 immediate-rollover invariant:
 
 1. **Strictly Immediate Operational Rollover:** Operational UoM changes take effect immediately at transaction execution time (`tx_now = NOW(6)` captured once on the MySQL database server inside `with session.begin():`).
-2. **Future-Dated and Backdated Rollovers Prohibited:** Caller-supplied `effective_from` or `effective_to` overrides **must be rejected with `HTTP 422 Unprocessable Content`** (or ignored strictly per explicit validation schema).
+2. **Future-Dated and Backdated Rollovers Prohibited:** Omitting caller-controlled effective timestamp fields entirely from the planned request schema is preferred; if a caller supplies an unsupported effective timestamp (such as `effective_from` or `effective_to`), the API **must reject the request with `HTTP 422 Unprocessable Content`** (caller timestamps must never override `tx_now`).
 3. **Half-Open Interval Closure & Single Active Factor Guarantee:** Within one locked transaction (`SELECT ... FOR UPDATE` on existing active conversion for `(product_id, uom_code)`):
    - Previous active row closes at exact database timestamp `effective_to = tx_now` and sets `is_active = FALSE`.
    - New row opens at exact database timestamp `[tx_now, NULL)` with `is_active = TRUE` and `conversion_to_base > 0`.
-   - Database generated column `active_uom_key` guarantees at most one active conversion per `(product_id, uom_code)`.
+   - Database `VIRTUAL` generated columns `active_product_id` and `active_uom_code` with unique constraint `uq_uom_one_active (active_product_id, active_uom_code)` guarantee at most one active conversion per `(product_id, uom_code)`.
 4. **Frozen Historical Snapshots Preserved:** Existing `order_items.base_uom_conversion_factor` and `demand_adjustments.base_uom_quantity_delta` retain their original point-in-time conversion snapshots and are **never** recalculated by subsequent UoM rollovers.
 
 ---
