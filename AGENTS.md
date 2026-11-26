@@ -48,7 +48,12 @@
 
 ## 2. Source-of-Truth Hierarchy
 
-Resolve documentation or design conflicts using verified implementation evidence alongside the approved v2.x specification suite:
+Distinguish two separate questions before resolving any documentation or implementation conflict:
+
+- **A. What architecture and requirements are approved?** [`docs/NEXORA — Technical Blueprint v1.0.md`](docs/NEXORA%20%E2%80%94%20Technical%20Blueprint%20v1.0.md) *(Version 2.2)* and `DDR-01`–`DDR-10` establish intended architecture and business requirements, while `DATABASE_SCHEMA.md` (v2.8), `API_DOCUMENTATION.md` (v2.0), and `DEVELOPMENT_ROADMAP.md` (v2.0) define approved relational, API, and execution specifications.
+- **B. What is actually implemented today?** Actual repository source code (`backend/`, `frontend/`), dependency/configuration files, and verified executed tests establish current implementation reality. `PROJECT_OVERVIEW.md`, `FEATURES_STATUS.md`, and other status documents summarize implementation but must never override contradictory direct code or executed test evidence.
+
+> Approved architecture documents define what NEXORA is intended to become; repository source code and executed tests establish what currently exists. Neither should be used as a substitute for the other.
 
 1. **Existing Working Source Code & Verified Executed Tests (`backend/`, `frontend/`):** Establishes what is actually implemented today. Never claim a feature is implemented just because it appears in a blueprint or schema.
 2. **Authoritative Target Architecture & Detailed Specifications (`docs/`):**
@@ -115,7 +120,7 @@ Do not introduce unapproved frameworks or dependencies without team consent. Str
 | **Group 1 — Retail Foundation** | **`M05` Order Management** | Order draft/edit, stock-reserving confirmation, partial/full fulfilment (`DDR-05`), cancellation |
 | **Group 2 — Business Intelligence** | **`M06` Business Intelligence** | Time-series sales, country breakdown, SKU rankings (`GBP` UCI vs. `INR` live separated) |
 | **Group 2 — Business Intelligence** | **`M07` Seasonal Demand Calendar** | Monthly and day-of-week clean demand intensity calendars |
-| **Group 2 — Business Intelligence** | **`M08` Product Lifecycle Intelligence** | `Introduction`–`Discontinued` stages w/ hysteresis & manual `Discontinued` auth (`DDR-08`) |
+| **Group 2 — Business Intelligence** | **`M08` Product Lifecycle Intelligence** | `Introduction`–`Discontinued` stages w/ hysteresis; `Discontinued` requires an explicit authorized Store Manager action and must not be assigned automatically (`DDR-08`) |
 | **Group 3 — Inventory & Procurement** | **`M09` Inventory Control** | Live 5-metric stock master (`DDR-03`), locked manual adjustments, safety thresholds |
 | **Group 3 — Inventory & Procurement** | **`M10` Stock Movement Tracking** | Read-only immutable `inventory_movements` physical delta ledger |
 | **Group 3 — Inventory & Procurement** | **`M11` Purchase Planning Simulator** | Stateless what-if simulation, PO drafting, `DDR-09` tiered approval, partial/full receipts |
@@ -164,11 +169,39 @@ Use strict status taxonomy (**`IMPLEMENTED`**, **`PARTIALLY IMPLEMENTED`**, **`E
 
 ---
 
-## 6. Inventory, Procurement and Business Logic Invariants (`DDR-01`–`DDR-10`)
+## 6. Inventory Risk Logic
 
-Consult [`DATABASE_SCHEMA.md`](docs/DATABASE_SCHEMA.md) v2.8 and [`Technical Blueprint v2.2`](docs/NEXORA%20%E2%80%94%20Technical%20Blueprint%20v1.0.md) for complete DDL and transaction steps; enforce these non-negotiable invariants across code:
+Inventory replenishment risk evaluation (`M11` and `M14`) follows [`DDR-01`](docs/NEXORA%20%E2%80%94%20Technical%20Blueprint%20v1.0.md) and `DDR-07`. See [`docs/DATABASE_SCHEMA.md`](docs/DATABASE_SCHEMA.md) v2.8 and [`Technical Blueprint v2.2`](docs/NEXORA%20%E2%80%94%20Technical%20Blueprint%20v1.0.md) for detailed schema columns and workflows.
 
-### 6.1 Five Inventory Metrics (`DDR-03`)
+### 6.1 Supplier Lead-Time Resolution
+Resolve supplier lead time strictly in this priority order (never invent or assume a missing lead time):
+1. Active supplier-product mapping lead time (`supplier_products.lead_time_days`).
+2. Supplier-level default lead time (`suppliers.lead_time_days`).
+3. If neither exists, supplier lead-time-based risk is **`UNAVAILABLE`**.
+
+### 6.2 Approved Formulas
+$$\text{Lead-Time Demand} = \left(\frac{\text{Forecast Demand}}{\text{Forecast Horizon Days}}\right) \times \text{Supplier Lead Time Days}$$
+$$\text{Replenishment Risk Threshold} = \text{Lead-Time Demand} \times \text{Safety Factor} \quad (\text{initial } 1.20)$$
+
+*(Never use an unscaled forecast-times-safety-factor threshold that omits scaling by supplier lead time and horizon days.)*
+
+### 6.3 Distinguish Risk Types
+When supplier lead time is missing:
+- Supplier lead-time-based risk must be shown explicitly as **`UNAVAILABLE`**.
+- A separate horizon-based stock risk calculation may still be presented if supported.
+- Clearly label both calculations and never imply that a horizon-based estimate is supplier lead-time-based.
+
+### 6.4 Implementation Guidance
+- Keep supplier-product lead-time resolution consistent with `DDR-07` across `M11` and `M14`.
+- Do not invent alternative risk formulas, alter the initial `1.20` safety factor, or duplicate/contradict [`docs/DATABASE_SCHEMA.md`](docs/DATABASE_SCHEMA.md) v2.8.
+
+---
+
+## 7. Inventory, Procurement and Business Logic Invariants
+
+Consult [`docs/DATABASE_SCHEMA.md`](docs/DATABASE_SCHEMA.md) v2.8 and [`Technical Blueprint v2.2`](docs/NEXORA%20%E2%80%94%20Technical%20Blueprint%20v1.0.md) for complete DDL and transaction steps; enforce these cross-module invariants across code (with supplier lead-time risk logic covered in Section 6 above):
+
+### 7.1 Five Inventory Metrics (`DDR-03`)
 Always maintain and display these five metrics separately (never treat incoming PO units as physically available before receipt):
 - **Physical Stock** = quantity physically held (`inventory.current_quantity`)
 - **Reserved Stock** = confirmed, unfulfilled customer order allocations (`inventory.reserved_quantity`)
@@ -176,32 +209,27 @@ Always maintain and display these five metrics separately (never treat incoming 
 - **Incoming Stock** = outstanding (`ordered - received`) quantities from **approved** Purchase Orders only
 - **Projected Available Stock** = $\text{Available Stock} + \text{Incoming Stock}$
 
-### 6.2 Supplier Lead Time & Replenishment Formulas (`DDR-01`, `DDR-07`)
-Resolve supplier lead time in strict priority: **(1)** active `supplier_products.lead_time_days` $\rightarrow$ **(2)** supplier default `suppliers.lead_time_days` $\rightarrow$ **(3)** **`UNAVAILABLE`**. **Never invent a missing lead time.**
-$$\text{Lead-Time Demand} = \left(\frac{\text{Forecast Demand}}{\text{Forecast Horizon Days}}\right) \times \text{Supplier Lead Time Days}$$
-$$\text{Replenishment Risk Threshold} = \text{Lead-Time Demand} \times \text{Safety Factor} \quad (\text{initial } 1.20)$$
-Keep horizon-based stock risk cleanly separated from supplier lead-time risk whenever lead time is `UNAVAILABLE`.
-
-### 6.3 Incoming Purchase Orders (`DDR-02`) & Procurement (`DDR-09`)
+### 7.2 Incoming Purchase Orders (`DDR-02`) & Procurement (`DDR-09`)
 - **Incoming Stock Rule:** Only `approved` and `partially_received` POs contribute remaining unreceived units to Incoming Stock; `draft`, `submitted`/`pending_approval`, `rejected`, `cancelled`, and `received` POs contribute `0`.
 - **Procurement Lifecycle:** Purchase simulation (`M11`) is not a PO. `draft`, `submitted`, `approved`, and `received` are distinct states; **human approval is mandatory**; Tier 1 (`Purchase Manager` `<= Limit`) emits a Store Manager oversight digest while escalations (`> Limit`, rolling-window split flags, anomalies, price spikes) require `Store Manager (Admin)`; post-approval edits invalidate prior approval; zero automatic supplier dispatch (`EXCL-03`).
 
-### 6.4 Orders, Sales, Partial Fulfilment & Reversal (`DDR-05`)
+### 7.3 Orders, Sales, Partial Fulfilment & Reversal (`DDR-05`)
 - **Orders (`orders`) vs. Realized Sales (`transactions`):** Confirmed orders reserve `Available Stock`; inventory is deducted **only** for actual fulfilled quantities via locked idempotent fulfilment batches (`order_fulfillments`); partial fulfilment and `1:N` split shipments (`M18`) operate independently; confirmed unfulfilled quantities remain reserved.
 - **Compensating Batch Reversal (`DATABASE_SCHEMA.md` v2.8 Section `6.2b`):** Allowed only when zero non-cancelled `shipments` reference the batch (`pending`/`packed`/`dispatched`/`delivered`, directing dispatched/delivered goods through `M16` returns) and, if invoiced, `SUM(credit_notes.amount) = invoice.grand_total` with `Open Refund Payable = 0.00`. Never update/delete original `sale_fulfillment` rows; append a positive `fulfillment_reversal` movement, restore Physical and Reserved stock together (Available remains invariant until explicit order cancellation), and commit atomically under Tier 1 audit & idempotency.
 
-### 6.5 UoM Conversion & Immediate Rollover (`DDR-06`, Schema v2.8)
+### 7.4 Operational Demand, UoM Conversion & Immediate Rollover (`DDR-06`, Schema v2.8)
+- Operational demand comes from confirmed B2B orders (`requested_delivery_date`), adjusted via `demand_adjustments` (`excess_stock` returns & cancellations, never `defective` returns), with malformed inputs routed to `demand_quarantine`.
 - `uom_conversions` rollovers are **strictly immediate**: capture one DB-server `tx_now = NOW(6)` timestamp inside the locked transaction (`[effective_from, effective_to)` half-open interval, `VIRTUAL` columns `active_product_id` & `active_uom_code` with `uq_uom_one_active`).
 - **Reject unsupported caller-supplied effective timestamps with `HTTP 422`** (prefer omitting effective timestamp fields from planned request schemas). Never use backdated or future-dated operational factors; preserve frozen `base_uom_conversion_factor` snapshots on existing documents.
 
-### 6.6 Billing, Returns (`DDR-04`, `DDR-06`) & Audit Integrity (`DDR-08`, `DDR-10`)
+### 7.5 Billing, Returns (`DDR-04`, `DDR-06`) & Audit Integrity (`DDR-08`, `DDR-10`)
 - **Finance (`DDR-04`):** `INR` (`DECIMAL`) default currency; central tax edits affect future records only; keep `invoices`, `payments`, `credit_notes` (`fully_credited`), and cash/bank `refunds` (`pending` reserve) strictly separate; refunds never mutate `payments`; enforce `uq_inv_fulfillment` against duplicate fulfilment billing.
-- **Returns & Governance (`DDR-06`, `DDR-08`):** Separate physical disposition (`restock`/`damaged`) from `demand_adjustments` (`excess_stock` vs. `defective`); lifecycle `Discontinued` requires explicit manual confirmation; suppress duplicate unresolved `alerts`.
+- **Returns & Governance (`DDR-06`, `DDR-08`):** Separate physical disposition (`restock`/`damaged`) from `demand_adjustments` (`excess_stock` vs. `defective`); lifecycle `Discontinued` requires an explicit authorized Store Manager action (must not be assigned automatically); suppress duplicate unresolved `alerts`.
 - **Audit Separation & Tiers (`DDR-10`):** Keep `audit_logs`, `audit_outbox`, `inventory_movements`, and `transactions` strictly separate. **Tier 1** critical mutations insert into `audit_logs` inside the exact ACID transaction (audit failure triggers rollback); **Tier 2** routine events degrade via `audit_outbox` idempotent retry/dead-letter. Runtime MySQL accounts must lack `UPDATE`/`DELETE` privileges on `audit_logs` *(DB privilege hardening — NOT application login or workspace RBAC)*.
 
 ---
 
-## 7. Database Development Rules
+## 8. Database Development Rules
 
 1. **Approved Target Schema:** [`docs/DATABASE_SCHEMA.md`](docs/DATABASE_SCHEMA.md) v2.8 specifies **`41` InnoDB tables** on **MySQL 8.x** managed via **SQLAlchemy 2.x** and **Alembic** migrations.
 2. **Exact Numeric Precision:** All monetary columns must use `DECIMAL(10, 2)` / `DECIMAL(12, 2)`, and UoM/base-unit quantities must use approved `DECIMAL(12, 6)` / `DECIMAL(14, 4)` — **never `FLOAT` or `DOUBLE`**.
@@ -211,7 +239,7 @@ Keep horizon-based stock risk cleanly separated from supplier lead-time risk whe
 
 ---
 
-## 8. Backend API Rules
+## 9. Backend API Rules
 
 Maintain clean separation across `backend/app/`: `api/routes/` (HTTP routing/status), `schemas/` (Pydantic v2 contracts), `services/` (orchestration & ML inference), `models/` (planned SQLAlchemy ORM declarations), and `core/` (config, DB engine, provenance utilities).
 1. Inspect existing routes/services/tests before creating or modifying modules.
@@ -226,7 +254,7 @@ Maintain clean separation across `backend/app/`: `api/routes/` (HTTP routing/sta
 
 ---
 
-## 9. Frontend Development Rules
+## 10. Frontend Development Rules
 
 1. Maintain strict TypeScript interfaces in `frontend/src/types/` aligned 1:1 with backend Pydantic schemas.
 2. Separate reusable UI components (`components/`), workspace views, and typed HTTP clients (`services/`).
@@ -241,7 +269,7 @@ Maintain clean separation across `backend/app/`: `api/routes/` (HTTP routing/sta
 
 ---
 
-## 10. Six-Phase Development Roadmap
+## 11. Six-Phase Development Roadmap
 
 Proceed sequentially per [`docs/DEVELOPMENT_ROADMAP.md`](docs/DEVELOPMENT_ROADMAP.md) v2.0 (**zero seventh phase, zero fabricated deadlines, zero artificial % completion**):
 
@@ -263,7 +291,7 @@ flowchart LR
 
 ---
 
-## 11. Multi-Agent Collaboration Rules
+## 12. Multi-Agent Collaboration Rules
 
 1. **Inspect Before Modifying:** Always read target code, schemas, and tests before editing.
 2. **Preserve Workspace Structure:** Never arbitrarily move, rename, or delete directories, database tables, or verified API endpoints.
@@ -274,7 +302,7 @@ flowchart LR
 
 ---
 
-## 12. Student-Friendly Coding Standards
+## 13. Student-Friendly Coding Standards
 
 1. **Self-Documenting Code:** Prefer clear domain-specific names over clever abstractions.
 2. **Explain the "Why":** Add concise inline comments on non-obvious invariants (lag shifts, zero-padding boundaries, `DDR-01`–`03` stock formulas, Section `6.2b` reversals, immediate `tx_now` UoM locks, and `DECIMAL` rounding).
@@ -283,7 +311,7 @@ flowchart LR
 
 ---
 
-## 13. Testing, Verification & Git Safety
+## 14. Testing, Verification and Git Safety
 
 1. **Empirical Verification:** Test every endpoint, business rule, migration, and calculation after your final edit (`pytest.ini` sets `pythonpath = backend` and `timeout = 30`). Never claim live MySQL validation until run against an actual MySQL server.
 2. **Honest Attribution & Reporting:** State the exact commit/scope of executed checks (`168/168` across `13` suites executed at `e74ae89`; unchanged source/tests through `d253cf8`). Never describe mock runs as full DB integration or doc-only commits as fresh test reruns.
@@ -291,7 +319,7 @@ flowchart LR
 
 ---
 
-## 14. Documentation & Knowledge-Tracking Rules
+## 15. Documentation and Knowledge-Tracking Rules
 
 - **Implementation Tasks:** Update [`docs/DEVELOPMENT_LOG.md`](docs/DEVELOPMENT_LOG.md) (newest entry at top), transition [`docs/FEATURES_STATUS.md`](docs/FEATURES_STATUS.md) statuses accurately, record major ADRs in [`docs/TECHNICAL_DECISIONS.md`](docs/TECHNICAL_DECISIONS.md), log bugs/fixes in [`docs/KNOWN_ISSUES.md`](docs/KNOWN_ISSUES.md), and keep [`API_DOCUMENTATION.md`](docs/API_DOCUMENTATION.md) / [`DATABASE_SCHEMA.md`](docs/DATABASE_SCHEMA.md) synchronized.
 - **Documentation-Only / Alignment Tasks:** Modify **only** the targeted document(s) unless the task explicitly authorizes broader registry updates — do not trigger unnecessary churn in `DEVELOPMENT_LOG.md`, `FEATURES_STATUS.md`, or code files.
@@ -299,7 +327,7 @@ flowchart LR
 
 ---
 
-## 15. Python Environment & Dependency Management
+## 16. Python Environment and Dependency Management
 
 ### 1. Mandatory Virtual Environment (`backend/.venv`)
 All Python scripts, ML pipelines, backend servers, and tests must execute exclusively inside:
@@ -325,7 +353,7 @@ Before adding packages, check whether existing dependencies already cover the ne
 
 ---
 
-## 16. Mandatory Agent Execution Workflow
+## 17. Mandatory Agent Execution Workflow
 
 ```text
   === BEFORE EDITING ===
