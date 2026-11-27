@@ -20,7 +20,7 @@
 1. **Frontend Presentation (React 18 + TypeScript + Vite):** Strictly **two primary pages** — `/` (*Stakeholder Workspace Selection*) and `/dashboard` (*Unified Retail Management Dashboard*) with an in-header Workspace Switcher. *(Currently a single-screen Phase 1 forecasting demo on `main`; Tailwind CSS, Chart.js, and Two-Page UI are planned in Phase 3.)*
 2. **Backend API & Orchestration (FastAPI + Pydantic v2):** Modular REST services under `/api/v1` handling schema validation, business invariants, deterministic replenishment math, forecast orchestration, and workspace/correlation provenance (`X-NEXORA-Workspace`, `X-Correlation-ID`).
 3. **Intelligence Engine (Python, Scikit-learn, Joblib):** Leakage-free multi-horizon demand pipelines (`7, 15, 30, 90` days), historical CSV lookup, and pre-trained `.joblib` models loaded read-only at startup.
-4. **Relational Persistence (MySQL 8.x InnoDB + SQLAlchemy 2.x + Alembic):** Planned **41-table** ACID schema (`DATABASE_SCHEMA.md` v2.8) for catalog, inventory, ledgers, orders, sales, procurement, returns, billing, shipping, ML runs, and centralized audit logs. *(Zero live tables, ORM models, or migrations exist yet on `main`.)*
+4. **Relational Persistence (MySQL 8.x InnoDB + SQLAlchemy 2.x + Alembic):** Planned **41-table** ACID schema (`DATABASE_SCHEMA.md` v2.9) for catalog, inventory, ledgers, orders, sales, procurement, returns, billing, shipping, ML runs, and centralized audit logs. *(Zero live tables, ORM models, or migrations exist yet on `main`.)*
 
 ```text
 +---------------------------------------------------------------+
@@ -50,7 +50,7 @@
 
 Distinguish two separate questions before resolving any documentation or implementation conflict:
 
-- **A. What architecture and requirements are approved?** [`docs/NEXORA — Technical Blueprint v1.0.md`](docs/NEXORA%20%E2%80%94%20Technical%20Blueprint%20v1.0.md) *(Version 2.2)* and `DDR-01`–`DDR-10` establish intended architecture and business requirements, while `DATABASE_SCHEMA.md` (v2.8), `API_DOCUMENTATION.md` (v2.0), and `DEVELOPMENT_ROADMAP.md` (v2.0) define approved relational, API, and execution specifications.
+- **A. What architecture and requirements are approved?** [`docs/NEXORA — Technical Blueprint v1.0.md`](docs/NEXORA%20%E2%80%94%20Technical%20Blueprint%20v1.0.md) *(Version 2.2)* and `DDR-01`–`DDR-10` establish intended architecture and business requirements, while `DATABASE_SCHEMA.md` (v2.9), `API_DOCUMENTATION.md` (v2.1), and `DEVELOPMENT_ROADMAP.md` (v2.0) define approved relational, API, and execution specifications.
 - **B. What is actually implemented today?** Actual repository source code (`backend/`, `frontend/`), dependency/configuration files, and verified executed tests establish current implementation reality. `PROJECT_OVERVIEW.md`, `FEATURES_STATUS.md`, and other status documents summarize implementation but must never override contradictory direct code or executed test evidence.
 
 > Approved architecture documents define what NEXORA is intended to become; repository source code and executed tests establish what currently exists. Neither should be used as a substitute for the other.
@@ -58,8 +58,8 @@ Distinguish two separate questions before resolving any documentation or impleme
 1. **Existing Working Source Code & Verified Executed Tests (`backend/`, `frontend/`):** Establishes what is actually implemented today. Never claim a feature is implemented just because it appears in a blueprint or schema.
 2. **Authoritative Target Architecture & Detailed Specifications (`docs/`):**
    - [`docs/NEXORA — Technical Blueprint v1.0.md`](docs/NEXORA%20%E2%80%94%20Technical%20Blueprint%20v1.0.md) *(Version 2.2)* — Approved system architecture, operational boundaries, `EXCL-01`–`EXCL-08`, and `DDR-01`–`DDR-10`.
-   - [`docs/DATABASE_SCHEMA.md`](docs/DATABASE_SCHEMA.md) *(Version 2.8)* — Authoritative `41`-table InnoDB relational target design and transaction/locking/rollover invariants.
-   - [`docs/API_DOCUMENTATION.md`](docs/API_DOCUMENTATION.md) *(Version 2.0)* — Verified implemented/experimental/partial endpoints and planned `/api/v1` domain contracts.
+   - [`docs/DATABASE_SCHEMA.md`](docs/DATABASE_SCHEMA.md) *(Version 2.9)* — Authoritative `41`-table InnoDB relational target design and transaction/locking/rollover invariants.
+   - [`docs/API_DOCUMENTATION.md`](docs/API_DOCUMENTATION.md) *(Version 2.1)* — Verified implemented/experimental/partial endpoints and planned `/api/v1` domain contracts.
    - [`docs/DEVELOPMENT_ROADMAP.md`](docs/DEVELOPMENT_ROADMAP.md) *(Version 2.0)* — Approved six-phase execution sequence, dependencies, and testable acceptance criteria.
    - [`docs/FEATURES_STATUS.md`](docs/FEATURES_STATUS.md) *(Version 2.3)* — Authoritative 277-feature registry (`IMPLEMENTED` / `PARTIALLY IMPLEMENTED` / `PLANNED` / `EXCLUDED`).
    - [`docs/PROJECT_OVERVIEW.md`](docs/PROJECT_OVERVIEW.md) *(Version 2.0)* — High-level approved architecture and implementation snapshot.
@@ -150,7 +150,7 @@ Use strict status taxonomy (**`IMPLEMENTED`**, **`PARTIALLY IMPLEMENTED`**, **`E
   - **`M12` Demand Forecasting:** Offline ML training and UCI CSV inference exist; operational confirmed B2B demand, `demand_quarantine`, `demand_adjustments`, MySQL `forecasts`/`model_runs`, and scheduled retraining remain **`PLANNED`**.
   - **`M14` Predictive Planner:** Stateless `POST /api/v1/inventory/recommend` exists as a limited caller-supplied-stock prototype; full MySQL-backed live stock + supplier lead-time planning remains **`PLANNED`**.
   - **Frontend:** Existing `frontend/` is a single-screen Phase 1 forecasting demo (`/health` & `POST /api/v1/forecast/` only); the Two-Page / 4-Workspace dashboard remains **`PLANNED`**.
-  - **Database:** Approved **41-table** `InnoDB` schema (`DATABASE_SCHEMA.md` v2.8) is a target specification only; **`0` live MySQL tables, `0` ORM models, and `0` Alembic migrations exist on `main`**.
+  - **Database:** Approved **41-table** `InnoDB` schema (`DATABASE_SCHEMA.md` v2.9) is a target specification only; **`0` live MySQL tables, `0` ORM models, and `0` Alembic migrations exist on `main`**.
 - **Test Baseline Rule:** `168 / 168` `pytest` tests across `13` suites executed and passed at commit `e74ae8970195a3609c8701799137154aa3f35d30` (`API_DOCUMENTATION.md`, `PROJECT_OVERVIEW.md`, and `DEVELOPMENT_ROADMAP.md` were documentation-only commits through `a4657bd`/`d253cf8` with unchanged source/tests). **Never claim tests were rerun on a later documentation commit unless actually executed.**
 
 ---
@@ -171,7 +171,7 @@ Use strict status taxonomy (**`IMPLEMENTED`**, **`PARTIALLY IMPLEMENTED`**, **`E
 
 ## 6. Inventory Risk Logic
 
-Inventory replenishment risk evaluation (`M11` and `M14`) follows [`DDR-01`](docs/NEXORA%20%E2%80%94%20Technical%20Blueprint%20v1.0.md) and `DDR-07`. See [`docs/DATABASE_SCHEMA.md`](docs/DATABASE_SCHEMA.md) v2.8 and [`Technical Blueprint v2.2`](docs/NEXORA%20%E2%80%94%20Technical%20Blueprint%20v1.0.md) for detailed schema columns and workflows.
+Inventory replenishment risk evaluation (`M11` and `M14`) follows [`DDR-01`](docs/NEXORA%20%E2%80%94%20Technical%20Blueprint%20v1.0.md) and `DDR-07`. See [`docs/DATABASE_SCHEMA.md`](docs/DATABASE_SCHEMA.md) v2.9 and [`Technical Blueprint v2.2`](docs/NEXORA%20%E2%80%94%20Technical%20Blueprint%20v1.0.md) for detailed schema columns and workflows.
 
 ### 6.1 Supplier Lead-Time Resolution
 Resolve supplier lead time strictly in this priority order (never invent or assume a missing lead time):
@@ -193,13 +193,13 @@ When supplier lead time is missing:
 
 ### 6.4 Implementation Guidance
 - Keep supplier-product lead-time resolution consistent with `DDR-07` across `M11` and `M14`.
-- Do not invent alternative risk formulas, alter the initial `1.20` safety factor, or duplicate/contradict [`docs/DATABASE_SCHEMA.md`](docs/DATABASE_SCHEMA.md) v2.8.
+- Do not invent alternative risk formulas, alter the initial `1.20` safety factor, or duplicate/contradict [`docs/DATABASE_SCHEMA.md`](docs/DATABASE_SCHEMA.md) v2.9.
 
 ---
 
 ## 7. Inventory, Procurement and Business Logic Invariants
 
-Consult [`docs/DATABASE_SCHEMA.md`](docs/DATABASE_SCHEMA.md) v2.8 and [`Technical Blueprint v2.2`](docs/NEXORA%20%E2%80%94%20Technical%20Blueprint%20v1.0.md) for complete DDL and transaction steps; enforce these cross-module invariants across code (with supplier lead-time risk logic covered in Section 6 above):
+Consult [`docs/DATABASE_SCHEMA.md`](docs/DATABASE_SCHEMA.md) v2.9 and [`Technical Blueprint v2.2`](docs/NEXORA%20%E2%80%94%20Technical%20Blueprint%20v1.0.md) for complete DDL and transaction steps; enforce these cross-module invariants across code (with supplier lead-time risk logic covered in Section 6 above):
 
 ### 7.1 Five Inventory Metrics (`DDR-03`)
 Always maintain and display these five metrics separately (never treat incoming PO units as physically available before receipt):
@@ -215,9 +215,9 @@ Always maintain and display these five metrics separately (never treat incoming 
 
 ### 7.3 Orders, Sales, Partial Fulfilment & Reversal (`DDR-05`)
 - **Orders (`orders`) vs. Realized Sales (`transactions`):** Confirmed orders reserve `Available Stock`; inventory is deducted **only** for actual fulfilled quantities via locked idempotent fulfilment batches (`order_fulfillments`); partial fulfilment and `1:N` split shipments (`M18`) operate independently; confirmed unfulfilled quantities remain reserved.
-- **Compensating Batch Reversal (`DATABASE_SCHEMA.md` v2.8 Section `6.2b`):** Allowed only when zero non-cancelled `shipments` reference the batch (`pending`/`packed`/`dispatched`/`delivered`, directing dispatched/delivered goods through `M16` returns) and, if invoiced, `SUM(credit_notes.amount) = invoice.grand_total` with `Open Refund Payable = 0.00`. Never update/delete original `sale_fulfillment` rows; append a positive `fulfillment_reversal` movement, restore Physical and Reserved stock together (Available remains invariant until explicit order cancellation), and commit atomically under Tier 1 audit & idempotency.
+- **Compensating Batch Reversal (`DATABASE_SCHEMA.md` v2.9 Section `6.2b`):** Allowed only when zero non-cancelled `shipments` reference the batch (`pending`/`packed`/`dispatched`/`delivered`, directing dispatched/delivered goods through `M16` returns) and, if invoiced, `SUM(credit_notes.amount) = invoice.grand_total` with `Open Refund Payable = 0.00`. Never update/delete original `sale_fulfillment` rows; append a positive `fulfillment_reversal` movement, restore Physical and Reserved stock together (Available remains invariant until explicit order cancellation), and commit atomically under Tier 1 audit & idempotency.
 
-### 7.4 Operational Demand, UoM Conversion & Immediate Rollover (`DDR-06`, Schema v2.8)
+### 7.4 Operational Demand, UoM Conversion & Immediate Rollover (`DDR-06`, Schema v2.9)
 - Operational demand comes from confirmed B2B orders (`requested_delivery_date`), adjusted via `demand_adjustments` (`excess_stock` returns & cancellations, never `defective` returns), with malformed inputs routed to `demand_quarantine`.
 - `uom_conversions` rollovers are **strictly immediate**: capture one DB-server `tx_now = NOW(6)` timestamp inside the locked transaction (`[effective_from, effective_to)` half-open interval, `VIRTUAL` columns `active_product_id` & `active_uom_code` with `uq_uom_one_active`).
 - **Reject unsupported caller-supplied effective timestamps with `HTTP 422`** (prefer omitting effective timestamp fields from planned request schemas). Never use backdated or future-dated operational factors; preserve frozen `base_uom_conversion_factor` snapshots on existing documents.
@@ -231,7 +231,7 @@ Always maintain and display these five metrics separately (never treat incoming 
 
 ## 8. Database Development Rules
 
-1. **Approved Target Schema:** [`docs/DATABASE_SCHEMA.md`](docs/DATABASE_SCHEMA.md) v2.8 specifies **`41` InnoDB tables** on **MySQL 8.x** managed via **SQLAlchemy 2.x** and **Alembic** migrations.
+1. **Approved Target Schema:** [`docs/DATABASE_SCHEMA.md`](docs/DATABASE_SCHEMA.md) v2.9 specifies **`41` InnoDB tables** on **MySQL 8.x** managed via **SQLAlchemy 2.x** and **Alembic** migrations.
 2. **Exact Numeric Precision:** All monetary columns must use `DECIMAL(10, 2)` / `DECIMAL(12, 2)`, and UoM/base-unit quantities must use approved `DECIMAL(12, 6)` / `DECIMAL(14, 4)` — **never `FLOAT` or `DOUBLE`**.
 3. **Mandatory Schema-to-Code Review & Change Control:** Before writing Phase 2 migrations, inspect the approved schema line-by-line; never casually simplify or alter tables during coding (raise a separate schema-review task if a genuine defect appears).
 4. **Live MySQL Validation Required:** Database implementation must be validated against an **actual MySQL 8.x instance** (constraints, triggers/checks, `FOR UPDATE` locking, Tier 1 rollback, restricted grants) — never rely solely on mocks or static checks.
@@ -283,7 +283,7 @@ flowchart LR
 ```
 
 1. **Phase 1 — ML Engine & Forecast API Foundation:** **Completed baseline** *(with `M12` B2B integration, `M14` operational planner, and Two-Page React UI explicitly partial)*.
-2. **Phase 2 — MySQL Core, Operational CRUD & Audit Foundation:** **Planned next major target** (`M01`–`M05`, `M09`–`M10`, `SYS-02`, 41-table Schema v2.8 via Alembic, real MySQL integration tests).
+2. **Phase 2 — MySQL Core, Operational CRUD & Audit Foundation:** **Planned next major target** (`M01`–`M05`, `M09`–`M10`, `SYS-02`, 41-table Schema v2.9 via Alembic, real MySQL integration tests).
 3. **Phase 3 — Two-Page React Application & Workspace UI:** Expand existing Phase 1 React SPA into Page 1 (`Welcome to NEXORA — Select Your Workspace`) & Page 2 (`/dashboard`) with Tailwind CSS, Chart.js, and Workspace Switcher (`SYS-01`).
 4. **Phase 4 — Predictive Integration, Business Intelligence & Alerts:** `M12` B2B demand/quarantine (`DDR-06`), operational `M14` (`DDR-01`–`03`), `M06`–`M08`, `M13`, `M15`, and `SYS-03`.
 5. **Phase 5 — Procurement, Returns, Billing, Shipping & Reports:** `M11` (`DDR-09`), `M16`, `M17` (`DDR-04`, `refunds`), `M18` (`DDR-05`), and `SYS-04`.
@@ -357,7 +357,7 @@ Before adding packages, check whether existing dependencies already cover the ne
 
 ```text
   === BEFORE EDITING ===
-  1. READ         --> Read AGENTS.md plus relevant v2.x docs/ (Blueprint v2.2, Schema v2.8, API v2.0, Roadmap v2.0).
+  1. READ         --> Read AGENTS.md plus relevant v2.x docs/ (Blueprint v2.2, Schema v2.9, API v2.1, Roadmap v2.0).
   2. VERIFY ENV   --> Confirm Python runs via backend/.venv/Scripts/python.exe (check node/npm for frontend/).
   3. INSPECT CODE --> Check actual backend/, frontend/, and backend/tests/ state; verify branch & git status.
   4. CHECK LOGS   --> Consult FEATURES_STATUS.md, DEVELOPMENT_LOG.md, TECHNICAL_DECISIONS.md, and KNOWN_ISSUES.md.

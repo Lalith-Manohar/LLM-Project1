@@ -109,7 +109,7 @@ Cross-cutting capabilities live in a **dedicated Group 6 supporting category** �
 
 ## 4. Core Business Workflows & Operating Principles
 
-NEXORA's operational design is governed by ten resolved Design Decisions (`DDR-01`–`DDR-10`) and [`DATABASE_SCHEMA.md`](DATABASE_SCHEMA.md) v2.8 invariants:
+NEXORA's operational design is governed by ten resolved Design Decisions (`DDR-01`–`DDR-10`) and [`DATABASE_SCHEMA.md`](DATABASE_SCHEMA.md) v2.9 invariants:
 
 1. **Orders vs. Realized Sales:** Confirmed customer orders (`orders`) represent demand commitments, while realized sales (`transactions`) record completed commercial revenue separately.
 2. **Exact Once-Only Stock Deduction:** Inventory (`inventory.current_quantity`) is deducted **only** for actually fulfilled quantities inside locked (`FOR UPDATE`) idempotent fulfilment batches (`order_fulfillments`).
@@ -122,7 +122,7 @@ NEXORA's operational design is governed by ten resolved Design Decisions (`DDR-0
 9. **Separated Return Disposition (`DDR-06`):** Returns track physical disposition (`restock` vs. `damaged`) alongside classification (`excess_stock` adjusts net demand in `demand_adjustments`, whereas `defective`/`damaged` leaves clean demand intact).
 10. **Distinct Financial Ledgers:** Invoices, `payments`, `credit_notes`, and actual payout `refunds` are separate immutable tables; crediting an unpaid invoice yields `fully_credited` (not `refunded`), and refunds never alter original payment rows.
 11. **`INR` Currency & Historical Tax Snapshots (`DDR-04`):** `INR` (`DECIMAL`) is default operational currency; centrally configured tax rates apply forward-only while issued invoices freeze historical tax snapshots.
-12. **Immediate UoM Rollovers & Frozen Snapshots (`DDR-06`, Schema v2.8):** `uom_conversions` updates execute immediately using one DB transaction timestamp `tx_now = NOW(6)` across `[effective_from, effective_to)` intervals (unsupported caller timestamps are rejected with `HTTP 422`), while existing documents retain frozen conversion factors.
+12. **Immediate UoM Rollovers & Frozen Snapshots (`DDR-06`, Schema v2.9):** `uom_conversions` updates execute immediately using one DB transaction timestamp `tx_now = NOW(6)` across `[effective_from, effective_to)` intervals (unsupported caller timestamps are rejected with `HTTP 422`), while existing documents retain frozen conversion factors.
 13. **Governed Lifecycle & Anomalies (`DDR-08`):** Threshold changes require bounded validation, cannot rewrite prior `product_lifecycle_snapshots` or `anomaly_events`, and reserve `Discontinued` for explicit manual confirmation.
 14. **Audit vs. Movement vs. Transaction Separation:** Cross-module `audit_logs` track operator actions/errors and remain completely distinct from unit `inventory_movements` and commercial `transactions`.
 15. **Tiered PO Approval & Audit Integrity (`DDR-09`, `DDR-10`):** Routine non-escalated POs within `Tier 1` limits approve under `Purchase Manager` with Store Manager oversight digest while escalations require `Store Manager (Admin)`; critical mutations enforce **Tier 1** atomic fail-closed audit writes while routine events use **Tier 2** `audit_outbox` retries.
@@ -159,7 +159,7 @@ Using strict repository verification standards (`FEATURES_STATUS.md` v2.3 & `API
 | **Experimental Task 12 & Store-Wide Macro Forecasting** | **`EXPERIMENTAL`** | `experimental_forecast.py` (`/api/v1/experimental/ready`, `/forecast/horizons`, `/model-metrics`, `/model-info`, `/predict`, `/forecast`, hidden `/forecast/`) + `models_task12/` + `PITPriceService` + `forecast.py` (`/evaluation-comparison`, `/store-wide`) in `models_experimental/` (`test_model_selection_task12.py`: `10/10`, `test_experimental_forecast.py`: `50/50`). |
 | **Stateless Inventory Replenishment Prototype (`M14` Subset)** | **`PARTIALLY IMPLEMENTED`** | `POST /api/v1/inventory/recommend` (`inventory.py`, `inventory_service.py`, `schemas/inventory.py`) runs piecewise horizon demand interpolation using **caller-supplied** `current_stock` and lead-time inputs (`test_inventory_recommend.py`: `13/13`). Not full MySQL/DDR-01–03 `M09` or `M14`. |
 | **React + TypeScript Frontend (`frontend/`)** | **`PARTIALLY IMPLEMENTED`** | Phase 1 single-screen demo SPA (`package.json`, `vite.config.ts`, `src/App.tsx`, `src/services/api.ts`, `src/types/forecast.ts`) calling `GET /health` & `POST /api/v1/forecast/`. Planned Two-Page (`/` & `/dashboard`), 4-workspace Tailwind/Chart.js UI & UI tests remain **`PLANNED`**. |
-| **MySQL Operational Database, ORM & Alembic** | **`PLANNED`** | `0` live MySQL tables, `0` SQLAlchemy ORM classes, `0` Alembic migrations/scripts, `0` DB connection pools in `backend/app/`; target 41-table schema defined in `DATABASE_SCHEMA.md` v2.8. |
+| **MySQL Operational Database, ORM & Alembic** | **`PLANNED`** | `0` live MySQL tables, `0` SQLAlchemy ORM classes, `0` Alembic migrations/scripts, `0` DB connection pools in `backend/app/`; target 41-table schema defined in `DATABASE_SCHEMA.md` v2.9. |
 | **Core Modules `M01`–`M11`, `M13`, `M15`–`M18` & `SYS-01`–`SYS-04`** | **`PLANNED`** | Zero retail/procurement/finance/shipping CRUD routers, audit/outbox services, alerts, or reports exist yet (`FEATURES_STATUS.md` v2.3: `22` Implemented, `8` Partially Implemented, `247` Planned across `277` tracked features; `168/168` pytest tests passing). |
 | **Out-of-Scope Capabilities (`EXCL-01`–`EXCL-08`)** | **`EXCLUDED`** | E-Way bills, carrier APIs, auto PO dispatch, auto markdowns, chatbots, affinity mining, multi-supplier solvers, address scraping. |
 
@@ -178,7 +178,7 @@ Using strict repository verification standards (`FEATURES_STATUS.md` v2.3 & `API
 > [!WARNING]
 > **Target Specification Only:** The relational schema is **not yet implemented on `main`** (`0` live MySQL tables exist). All operational routes remain **`PLANNED`**.
 
-The approved target persistence layer in [`DATABASE_SCHEMA.md`](DATABASE_SCHEMA.md) v2.8 specifies **41 MySQL 8.x InnoDB tables** across domain groups featuring:
+The approved target persistence layer in [`DATABASE_SCHEMA.md`](DATABASE_SCHEMA.md) v2.9 specifies **41 MySQL 8.x InnoDB tables** across domain groups featuring:
 - Strict foreign keys (`ON DELETE RESTRICT` on commercial/financial history) and pessimistic row locking (`SELECT ... FOR UPDATE`) for concurrent stock safety.
 - Exact `DECIMAL(10, 2)` / `DECIMAL(12, 2)` (`INR` money) and `DECIMAL(12, 6)` (UoM factors) with zero floating-point financial columns.
 - Separate immutable ledgers (`inventory_movements`, `transactions`, `invoices`, `payments`, `credit_notes`, `refunds`, `audit_logs`, `audit_outbox`), idempotency keys (`order_fulfillments`, `uq_inv_fulfillment`), and immediate `tx_now = NOW(6)` UoM rollovers.
@@ -210,8 +210,8 @@ Development follows the six-phase Blueprint v2.2 sequence (see [`Technical Bluep
 - **Master Architecture Specification:** [`docs/NEXORA — Technical Blueprint v1.0.md`](NEXORA%20%E2%80%94%20Technical%20Blueprint%20v1.0.md) *(Version 2.2)*
 - **Detailed Feature Status Registry:** [`docs/FEATURES_STATUS.md`](FEATURES_STATUS.md) *(Version 2.3)*
 - **User & System Workflow Reference:** [`docs/NEXORA — Application Functionality & System Workflow Guide.md`](NEXORA%20%E2%80%94%20Application%20Functionality%20%26%20System%20Workflow%20Guide.md) *(Version 1.0)*
-- **Target Relational Database Specification:** [`docs/DATABASE_SCHEMA.md`](DATABASE_SCHEMA.md) *(Version 2.8)*
-- **API Reference & Implementation Matrix:** [`docs/API_DOCUMENTATION.md`](API_DOCUMENTATION.md) *(Version 2.0)*
+- **Target Relational Database Specification:** [`docs/DATABASE_SCHEMA.md`](DATABASE_SCHEMA.md) *(Version 2.9)*
+- **API Reference & Implementation Matrix:** [`docs/API_DOCUMENTATION.md`](API_DOCUMENTATION.md) *(Version 2.1)*
 - **ML Pipeline Notes & Evaluation Archive:** [`docs/ML_DOCUMENTATION.md`](ML_DOCUMENTATION.md), [`docs/DEVELOPMENT_LOG.md`](DEVELOPMENT_LOG.md), [`docs/TECHNICAL_DECISIONS.md`](TECHNICAL_DECISIONS.md), [`docs/KNOWN_ISSUES.md`](KNOWN_ISSUES.md)
 
 ### Revision History

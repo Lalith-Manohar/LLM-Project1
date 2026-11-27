@@ -23,10 +23,6 @@ backend/ml/data/raw/*
 !backend/ml/data/raw/.gitkeep
 !backend/ml/data/raw/online_retail_II.csv
 
-backend/ml/data/processed/*
-!backend/ml/data/processed/.gitkeep
-!backend/ml/data/processed/daily_product_demand.csv
-
 backend/ml/models/*
 !backend/ml/models/.gitkeep
 !backend/ml/models/models_metadata.json

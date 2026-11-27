@@ -13,10 +13,10 @@ This document maintains an active registry of known technical issues, architectu
   - `docs/PROJECT_SPEC.md`
   - `docs/DATABASE_DESIGN.md`
   - `docs/ML_DESIGN.md`
-- **Description:** Three legacy markdown files from the earliest project drafts remain in `docs/`. While they do not break application logic, they contain partial schemas and draft notes that have been superseded by `PROJECT_OVERVIEW.md`, `ML_DOCUMENTATION.md`, `DATABASE_SCHEMA.md`, and `API_DOCUMENTATION.md`.
+- **Description:** Three legacy markdown files from the earliest project drafts remain in `docs/`. `docs/DATABASE_DESIGN.md` already carries the Task 10.2 `SUPERSEDED HISTORICAL DRAFT` notice directing readers to `docs/DATABASE_SCHEMA.md` v2.9, while `docs/PROJECT_SPEC.md` and `docs/ML_DESIGN.md` remain untouched historical drafts containing superseded patterns relative to `PROJECT_OVERVIEW.md`, `ML_DOCUMENTATION.md`, `DATABASE_SCHEMA.md` v2.9, and `API_DOCUMENTATION.md` v2.1.
 - **Current Status:** Open (Preserved per blueprint instructions: legacy notes must remain untouched unless team explicitly approves archival).
-- **Proposed Resolution:** Retain the files untouched for historical reference. Ensure all agents consult the modern core documentation per the Source-of-Truth hierarchy defined in `AGENTS.md`.
-- **Target Resolution Phase:** Phase 7 (Final cleanup).
+- **Proposed Resolution:** Retain the files for historical reference without modifying their preserved contents. Ensure all agents consult the authoritative v2.x documentation per the Source-of-Truth hierarchy defined in `AGENTS.md`.
+- **Target Resolution Phase:** Deferred — post-Phase 6 archival, subject to separate explicit team approval (not a scheduled `DEVELOPMENT_ROADMAP.md` v2.0 deliverable).
 
 ---
 
@@ -38,8 +38,9 @@ This document maintains an active registry of known technical issues, architectu
 - **Resolution Details:**
   1. Implemented `backend/app/schemas/inventory.py` defining Pydantic v2 validation models for `InventoryRecommendationRequest` and `InventoryRecommendationResponse`.
   2. Implemented `backend/app/services/inventory_service.py` utilizing piecewise linear interpolation across multi-horizon demand estimators ($D_7, D_{15}, D_{30}, D_{90}$) to calculate demand across arbitrary coverage windows ($T_{\text{cov}} = L + R$).
-  3. Implemented transparent, mathematically explainable replenishment formulas:
-     $\text{Daily Rate} = \hat{y}_{\text{cov}} / T_{\text{cov}}$, $\text{Safety Stock} = \text{Daily Rate} \times S$, $\text{Target Stock} = \hat{y}_{\text{cov}} + \text{Safety Stock}$, and $\text{Purchase Quantity} = \max(0, \lceil \text{Target Stock} - \text{Current Stock} \rceil)$.
+  3. Implemented transparent, mathematically explainable Phase 1 prototype formulas in `backend/app/services/inventory_service.py`:
+     $\text{Daily Rate} = \text{round}(\hat{y}_{\text{cov}} / T_{\text{cov}}, 4)$, $\text{Safety Stock} = \text{round}(\text{Daily Rate} \times S, 2)$, $\text{Target Stock} = \text{round}(\hat{y}_{\text{cov}} + \text{Safety Stock}, 2)$, and `recommended_purchase_quantity` $= \max(0.0, \text{round}(\text{Target Stock} - \text{Current Stock}, 2))$ (the JSON field retains up to two decimal places, whereas the human-readable `recommendation` string formats that quantity with `:.0f`).
+     *(Scope Note: This stateless Phase 1 endpoint uses caller-supplied stock and `safety_stock_days` and is strictly distinct from the planned MySQL-backed `M11`/`M14` `DDR-01` replenishment workflow, which resolves supplier/supplier-product `lead_time_days`, applies initial Safety Factor `1.20`, accounts for `Projected Available Stock`, and uses planned $\lceil \dots \rceil$ ceiling rounding in Phase 4.)*
   4. Classifies inventory risk into `CRITICAL`, `ELEVATED`, and `SAFE`.
   5. Implemented `POST /api/v1/inventory/recommend` in `backend/app/api/routes/inventory.py` with 404 for unknown SKUs, 422 for insufficient history, and 422 for negative stock quantities.
   6. Added 13 unit tests in `backend/tests/test_inventory_recommend.py`, bringing total passed tests to 168 / 168 (100% pass rate).
@@ -214,14 +215,14 @@ This document maintains an active registry of known technical issues, architectu
 
 ### ISSUE-001: Prediction API Request Schema Mismatch with Blueprint
 - **Severity:** Medium
-- **Module Affected:** Module 7 (Predictive Planner) / Backend API
+- **Module Affected:** Legacy Module 7 (Technical Blueprint v1.0) / Backend API *(maps in Technical Blueprint v2.2 & `API_DOCUMENTATION.md` v2.1 to `M12 Demand Forecasting`, distinct from `M14 Predictive Planner`)*
 - **Relevant Files:**
   - `backend/app/schemas/forecast.py`
   - `backend/app/api/routes/forecast.py`
   - `backend/app/services/prediction_service.py`
-- **Description:** Currently, `ForecastRequest` expected a single integer `horizon_days: int` (e.g., `{"stock_code": "85123A", "horizon_days": 30}`). However, Section 9 of the Technical Blueprint v1.0 specifies a multi-horizon request body taking a list of horizons: `{"stock_code": "85123A", "horizons": [7, 15, 30, 90]}` and returning predictions for all requested horizons in a single response.
+- **Description:** Historically, `ForecastRequest` expected a single integer `horizon_days: int` (e.g., `{"stock_code": "85123A", "horizon_days": 30}`). However, Section 9 of Technical Blueprint v1.0 (whose demand-forecasting API contract now resides under `M12 Demand Forecasting` in Technical Blueprint v2.2 and `API_DOCUMENTATION.md` v2.1, separately from `M14 Predictive Planner`) specified a multi-horizon request body taking a list of horizons: `{"stock_code": "85123A", "horizons": [7, 15, 30, 90]}` and returning predictions for all requested horizons in a single response.
 - **Resolution Date:** 2026-11-17 (Task 6).
-- **Resolution Details:** Refactored `ForecastRequest` to accept `horizons: List[int]` with validation that elements belong to `{7, 15, 30, 90}`, while preserving `horizon_days: Optional[int]` for backwards compatibility. Extended schemas to support nested historical features (`features: HistoricalFeatures`) alongside flat field access. Verified with 15 automated integration tests in `backend/tests/test_forecast_api.py` and live TCP HTTP requests.
+- **Resolution Details:** Refactored `ForecastRequest` to accept `horizons: List[int]` with validation that elements belong to `{7, 15, 30, 90}`, while preserving `horizon_days: Optional[int]` for backwards compatibility. Extended schemas to support nested historical features (`features: HistoricalFeatures`) alongside flat field access. Verified at Task 6 completion with 15 automated integration tests in `backend/tests/test_forecast_api.py` and live TCP HTTP requests (later expanded to 16 cases in `test_forecast_api.py`).
 
 ---
 
@@ -278,14 +279,13 @@ This document maintains an active registry of known technical issues, architectu
 
 ---
 
-### ISSUE-008: Pytest Indefinite Hang on Windows Loopback socketpair in Sandboxed Environments
+### ISSUE-018: Pytest Indefinite Hang on Windows Loopback socketpair in Sandboxed Environments
 - **Severity:** Medium
 - **Module Affected:** Test Infrastructure / TestClient Asyncio Portal
 - **Relevant Files:**
   - `backend/tests/test_forecast_api.py`
   - `backend/requirements.txt`
   - `pytest.ini`
-  - `docs/TEST_SUITE_VERIFICATION_REPORT.md`
 - **Description:** Running `pytest` in sandboxed or network-isolated Windows environments caused the test suite to hang indefinitely at `TestForecastAPI::test_01_supported_horizons_endpoint`. Starlette's `TestClient` initializes `anyio.from_thread.start_blocking_portal()`, which runs Python's Windows `ProactorEventLoop`. The proactor calls `_make_self_pipe()` -> `socket.socketpair()`, which attempts a TCP loopback connect to `127.0.0.1`. When sandbox policies drop local loopback packets, non-blocking `connect()` returns `WSAEWOULDBLOCK` (caught as `BlockingIOError`), and subsequent `lsock.accept()` blocks indefinitely in kernel space.
 - **Resolution Date:** 2026-11-17.
-- **Resolution Details:** Installed `pytest-timeout==2.4.0` in `backend/.venv/`, declared `pytest-timeout>=2.3.0,<3.0.0` in `backend/requirements.txt`, created a root `pytest.ini` with global `timeout = 30`, and added explicit `tearDownClass` in `test_forecast_api.py` for client lifecycle cleanup. Verified that all 59 backend tests pass in 8.77 seconds.
+- **Resolution Details:** Installed `pytest-timeout==2.4.0` in `backend/.venv/`, declared `pytest-timeout>=2.3.0,<3.0.0` in `backend/requirements.txt`, created a root `pytest.ini` with global `timeout = 30`, and added explicit `tearDownClass` in `test_forecast_api.py` for client lifecycle cleanup. Verified at that milestone (2026-11-17) that all 59 backend tests then in the repository passed in 8.77 seconds.

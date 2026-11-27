@@ -325,57 +325,65 @@ Maintains the vendor directory and supplier lead-time data required for procurem
 ### Module 3: Customer Management
 
 #### A. Module Purpose
-Manages retail customer records, contact information, and billing/shipping addresses. Bridges the UCI dataset limitation (where ~25% of rows omit `Customer ID` and 100% omit street addresses) with persistent customer directory records for orders, sales, billing, and internal shipping.
+Manages retail customer records, contact information, and billing/shipping addresses. Bridges the UCI dataset limitation (where ~25% of rows omit `Customer ID` and 100% omit street addresses) with persistent customer directory records for orders, sales, billing, and internal shipping while maintaining strict separation from `M17` transaction ownership.
 
 #### B. Functional Requirements
-- Create, read, search, filter, update, and soft-deactivate customer profiles.
-- Capture `customer_name`, `phone`, `email`, `billing_address`, `city`, `state`, `postal_code`, and `country`.
+- Create, read, search, filter, update, soft-deactivate, and reactivate customer profiles (`is_active` lifecycle toggle).
+- Capture `customer_name`, `billing_address`, `city`, `postal_code`, `country` (`'India'` default when omitted), optional `state`, optional `phone`/`email`, and optional separate `shipping_address`.
 - Allow rapid inline customer lookup or creation when drafting an Order (`Module 5`) or Invoice (`Module 17`).
-- Support explicit handling of walk-in/guest or historical unidentified customers (`legacy_uci_customer_id` / null linkage) without breaking relational constraints.
+- Support explicit handling of walk-in/guest operational orders/invoices via a designated operational guest convention alongside separate historical UCI reference handling (`uci_customer_ref` / nullable `transactions.customer_id`) without breaking relational constraints.
 
 #### C. Workspace Responsibilities
-- **Store Manager (Admin):** Full customer directory CRUD and deactivation.
-- **Finance Staff:** Customer creation, billing address updates, and profile lookup during invoicing and credit note management.
-- **Inventory Staff / Purchase Manager:** Read-only viewing where required for order/shipping context (typically excluded from Inventory/Purchase primary tabs unless browsing Store Manager views).
+- **Store Manager (Admin):** Full customer directory CRUD, deactivation, and reactivation via Page 2 navigation tab.
+- **Finance Staff:** Full customer directory CRUD, billing address updates, and profile lookup during invoicing and credit note management via Page 2 navigation tab.
+- **Inventory Staff / Purchase Manager:** **No M03 customer-management tab** in Page 2 navigation (reconciled with Section `14.3`). Customer names/addresses required downstream during warehouse dispatch are consumed inside `Order Management` (`M05`) and `Shipping & Delivery` (`M18`).
+- *Non-Auth Governance Note (`SYS-01`):* UI tab scoping and `X-NEXORA-Workspace` headers are operational context and audit provenance only; endpoints do **not** implement login, JWTs, employee identities, or server-side security RBAC.
 
 #### D. Inputs and Outputs
-- **Inputs:** Customer identity, email, phone, billing street/city/state/postal/country, optional separate shipping address, optional `customer_type` (`registered` / `walk_in`).
-- **Outputs:** Customer profile consumed by Order Management, Sales Management, Billing & Finance (invoices), and Shipping & Delivery (destination addresses).
+- **Inputs:** `customer_name`, optional `phone` and `email`, mandatory billing fields (`billing_address`, `city`, `postal_code`, `country` defaulting to `'India'`), optional `state` (nullable), optional separate `shipping_address`, optional `uci_customer_ref`, and `is_active` status transitions.
+- **Outputs:** Persistent `customers` master profiles consumed by `M04` Sales Management, `M05` Order Management, `M17` Billing & Finance (capturing immutable `billing_snapshot`), and `M18` Shipping & Delivery (resolving immutable `shipments.shipping_address`).
 
 #### E. Database Requirements
-- **Entities:** `customers`.
-- **Important Fields:** `id` (PK), `customer_code` / optional `uci_customer_ref` (VARCHAR, nullable, indexed), `customer_name` (VARCHAR, NOT NULL), `phone`, `email`, `billing_address` (TEXT), `shipping_address` (TEXT, nullable — defaults to billing if omitted), `city`, `state`, `postal_code`, `country` (NOT NULL DEFAULT `'United Kingdom'`), `is_active` (BOOLEAN DEFAULT TRUE), `created_at`, `updated_at`.
-- **Guest / Historical Handling:** Operational retail orders/invoices must link to a valid `customers.id` (including an explicit seeded `Walk-In / Guest Customer` or created customer record); historical imported UCI `transactions` retain optional string `uci_customer_ref` (allowing `NULL` matching raw UCI missing rates) without polluting newly entered customer address books.
+- **Entities:** `customers` (authoritative target specification in `DATABASE_SCHEMA.md` v2.9; zero unapproved columns such as `customer_type`, `is_guest`, or `customer_code`).
+- **Important Fields:** `id` (`BIGINT UNSIGNED` PK), `uci_customer_ref` (`VARCHAR(64) NULL`, indexed), `customer_name` (`VARCHAR(150) NOT NULL`), `phone` (`VARCHAR(50) NULL`), `email` (`VARCHAR(255) NULL`), `billing_address` (`TEXT NOT NULL`), `shipping_address` (`TEXT NULL`), `city` (`VARCHAR(100) NOT NULL`), `state` (`VARCHAR(100) NULL` — explicitly optional in API/UI), `postal_code` (`VARCHAR(20) NOT NULL`), `country` (`VARCHAR(100) NOT NULL DEFAULT 'India'` per `DDR-04`), `is_active` (`BOOLEAN NOT NULL DEFAULT TRUE`), `selected_workspace`, `action_source`, `operator_ref`, `created_at`, `updated_at`.
+- **Indexes & Uniqueness Policy:** Indexes cover `(customer_name, is_active)`, `(uci_customer_ref)`, and `(country)`. No database `UNIQUE` constraints exist on `email`, `phone`, or `customer_name`; any future application-level duplicate detection warning or check must define an explicit matching rule rather than promising unconditional global uniqueness across legitimately shared contacts.
+- **Guest / Historical Handling:** Operational `orders` and `invoices` require `customer_id NOT NULL` in `DATABASE_SCHEMA.md` v2.9. Where an operational workflow requires a shared walk-in/guest customer, systems use a designated seeded operational guest customer convention (configured during Phase 2 setup without hardcoding an arbitrary ID in docs or adding schema columns); this shared operational reference must be protected against ordinary M03 deactivation or destructive profile alteration. Historical UCI `transactions` remain strictly separate (`transactions.customer_id` nullable when `order_id IS NULL`, preserving `uci_customer_ref` for ~25% null rows without forcing unidentified UCI rows into the operational guest record and without automated address scraping per `EXCL-08`).
 
 #### F. API Requirements *(Planned)*
-- `GET /api/v1/customers` — Search customers by name, phone, email, or country.
-- `GET /api/v1/customers/{customer_id}` — Detailed customer profile with order/invoice summary.
+- `GET /api/v1/customers` — Search and filter customers (`name`, `email`, `phone`, `uci_customer_ref`, `country`, `is_active`) with pagination.
+- `GET /api/v1/customers/{customer_id}` — Detailed customer profile (`order`/`sales`/`invoice` history views consume `GET /api/v1/orders?customer_id=...`, `GET /api/v1/sales?customer_id=...`, and `GET /api/v1/invoices?customer_id=...` with spend aggregates grouped strictly by currency).
 - `POST /api/v1/customers` — Create customer (`201 Created`).
-- `PUT /api/v1/customers/{customer_id}` — Update billing/shipping details.
-- `PATCH /api/v1/customers/{customer_id}/status` — Soft-deactivate customer record.
+- `PUT /api/v1/customers/{customer_id}` — Update contact, billing, or shipping details (`200 OK`).
+- `PATCH /api/v1/customers/{customer_id}/status` — Soft-deactivate (`is_active = false`) or reactivate (`is_active = true`) customer record (`200 OK`; sole supported customer lifecycle endpoint; blocks deactivation on designated protected guest reference).
+- *(Lifecycle Policy: No `DELETE /api/v1/customers/{customer_id}` route, alternative hard-delete endpoint, or hard-delete UI action is provided. Hard deletion is prohibited for all customers, including unreferenced customers.)*
 
 #### G. CRUD and Business Operations
-- Create, Read, Update, Soft-Deactivate. Customers tied to completed orders, sales, or invoices cannot be hard-deleted.
+- Create, Read, Update, Soft-Deactivate (`is_active = FALSE`), and Reactivate (`is_active = TRUE`).
+- **Universal Hard-Delete Prohibition:** Customer records must **never** be hard-deleted through the NEXORA application — **including customers with zero existing business references** (neither UI action nor API `DELETE` route exists). Downstream `ON DELETE RESTRICT` foreign keys (`orders`, `transactions`, `invoices` -> `customers.id`) provide an additional database integrity safeguard rather than the sole reason hard deletion is prohibited; all customer records and historical relationships are retained permanently, and the designated shared operational guest customer cannot be deactivated or deleted through normal M03 operations.
 
 #### H. Business Rules and Validation
-- Required billing fields (`customer_name`, `billing_address`, `city`, `postal_code`, `country`) must be validated when creating customer profiles for shipping/invoicing (explicitly avoiding automated scraping from UCI records per `EXCL-08`).
-- Updating a customer's address updates future orders/shipments without mutating address snapshots frozen on already issued invoices or dispatched shipments.
+- Required creation/update fields follow `DATABASE_SCHEMA.md` v2.9: `customer_name`, `billing_address`, `city`, `postal_code`, and `country` (defaulting to `'India'` if omitted). **`state` is optional in both API and UI**, as are `phone` and `email`. Automated UCI address scraping is prohibited (`EXCL-08`).
+- **Shipping Destination Fallback & Snapshot Immutability:** `customers.shipping_address`, when provided, is the customer's default delivery destination. When omitted/`NULL`, `M18` deterministically composes the full destination string from billing components (`billing_address`, `city`, optional `state`, `postal_code`, `country`). `orders` stores **no** `shipping_address` column; `M18` resolves and freezes the effective destination inside `shipments.shipping_address` (`TEXT NOT NULL`) at shipment creation. Subsequent M03 updates never rewrite `invoices.billing_snapshot` or existing `shipments.shipping_address` snapshots.
+- **Deactivated Customer Lifecycle Rules:** Setting `is_active = FALSE` blocks **new business transactions** (`HTTP 409 Conflict`): new `M05` order creation, confirmation (`POST /orders/{id}/confirm`) of any pre-existing `draft`/`pending` order whose customer is inactive at confirmation time, new standalone operational `M04` sales, and new standalone `M17` invoices. Deactivation does **not** retroactively cancel confirmed/partially fulfilled orders or void existing invoices; already-confirmed orders, existing invoices, payments, returns, credit notes, refunds, and shipments continue their normal lifecycle and remain permanently readable.
+- **Currency-Safe Customer Spend Aggregation:** Customer financial history must never sum mixed `GBP` (UCI 2009–2011 `transactions`) and `INR` (operational `transactions`/`invoices`) totals into one combined figure; aggregates use `DECIMAL` precision grouped strictly by currency (`currency_code`), without implicit FX conversion.
 
 #### I. Module Dependencies
-- **Upstream:** None.
-- **Downstream:** `Order Management`, `Sales Management`, `Billing & Finance`, `Shipping & Delivery`, `Business Intelligence`.
+- **Upstream:** None (`M03` owns customer master data, contact/address details, status, and customer lookup).
+- **Downstream:** `Order Management` (`M05`), `Sales Management` (`M04`), `Billing & Finance` (`M17`), `Shipping & Delivery` (`M18`), `Business Intelligence` (`M06`). (`M03` never owns sales, order, invoice, payment, credit/refund, or shipment lifecycle records.)
 
 #### J. History & Audit Events
-- `CUSTOMER_CREATED`, `CUSTOMER_UPDATED` (before/after non-sensitive profile changes), `CUSTOMER_DEACTIVATED`.
+- **Governance Tier (`DDR-10`):** Customer mutations execute as **Tier 2** audited operations (`audit_logs` with durable **`audit_outbox`** fallback, automated retries, dead-letter quarantine, manual replay, `correlation_id`, `idempotency_key`, append-only integrity, and secret/payment-card redaction). Business mutations succeed cleanly while transient audit delays reconcile via `audit_outbox`.
+- **Standard Events:** `CUSTOMER_CREATED`, `CUSTOMER_UPDATED` (non-sensitive before/after snapshots), `CUSTOMER_DEACTIVATED`, `CUSTOMER_REACTIVATED`.
 
 #### K. Error and Edge-Case Handling
-- Incomplete billing fields for invoice-bound customers → HTTP `422`.
-- Missing customer on order/invoice creation → HTTP `404`.
-- Historical UCI transactions lacking `Customer ID` → handled cleanly via nullable historical reference rather than failing import.
+- Incomplete required operational fields (`customer_name`, `billing_address`, `city`, `postal_code`) or malformed payloads → HTTP `422` (never rejecting for omitted optional `state`).
+- Unknown `customer_id` on lookup/order/sale/invoice → HTTP `404`.
+- Attempted new order, draft confirmation, standalone operational sale, or standalone invoice for an inactive (`is_active = FALSE`) customer, or prohibited deactivation of a protected shared operational guest record → HTTP `409 Conflict`.
+- Historical UCI transactions lacking `Customer ID` → handled cleanly via `transactions.customer_id NULL` and nullable `uci_customer_ref` rather than failing import or mapping into the operational guest record.
 
 #### L. Acceptance Criteria
-- New customer addresses entered in UI persist in MySQL and auto-populate invoice billing and shipment destination forms.
-- Editing customer address leaves previously finalized historical invoices intact.
+- New customer addresses entered in UI persist in MySQL with `'India'` default `country`, optional `state`, and Tier 2 audit logging (`audit_logs` / `audit_outbox`), and auto-populate `M05`/`M17`/`M18` workflows.
+- Editing or soft-deactivating/reactivating a customer leaves finalized `invoices.billing_snapshot` and `shipments.shipping_address` intact, blocks new orders/draft confirmations/standalone sales/standalone invoices while inactive, and allows existing confirmed orders and open financial/shipping lifecycles to complete normally.
 
 #### M. Implementation Status
 - **Planned** *(No `customers` ORM table or endpoint exists on `main`).*
@@ -425,6 +433,7 @@ Tracks completed commercial sales records and unifies historical UCI transaction
 - **Zero Double-Deduction Guard:** Inventory deduction occurs **once per actually fulfilled quantity** at fulfillment (`Order Management` + `Inventory Control`); creating a linked sale record must never deduct inventory a second time (`DDR-05`).
 - **Historical vs. Operational Boundary:** Historical UCI transactions (`source_origin = 'uci_historical'`) are read-only reference data and cannot be modified via operational sales forms. Historical transactions preserve originally applied currency (`INR` operational default per `DDR-04`), tax rate, and tax amounts regardless of subsequent tax changes.
 - All monetary totals use strict `DECIMAL` arithmetic (`line_total = quantity × unit_price`).
+- **Active Customer Rule on New Standalone Sales:** Direct operational sales (`POST /api/v1/sales`, where `source_origin = 'operational'`) must validate an active customer (`customers.is_active == True`, rejecting deactivated customers with HTTP `409 Conflict`), while existing completed/historical sales remain permanently readable regardless of subsequent customer deactivation (`source_origin = 'uci_historical'` preserves nullable `customer_id`).
 
 #### I. Module Dependencies
 - **Upstream:** `Order Management`, `Product Management`, `Customer Management`.
@@ -465,7 +474,7 @@ Manages the end-to-end customer order lifecycle from initial order intake throug
 - **Inventory Staff:** View confirmed/processing orders requiring physical pick/fulfillment readiness.
 
 #### D. Inputs and Outputs
-- **Inputs:** `customer_id`, line items (`product_id`, `quantity`), optional notes/shipping address override, state transition actions (`confirm`, `fulfill`, `cancel`).
+- **Inputs:** `customer_id`, line items (`product_id`, `quantity`), optional `requested_delivery_date`, `order_demand_type`, optional `notes`, state transition actions (`confirm`, `fulfill`, `cancel`). *(Note: `orders` stores no `shipping_address` column; delivery destination resolution occurs at shipment creation in `M18`.)*
 - **Outputs:** Persistent `orders` & `order_items` records, fulfillment triggers to `Inventory Control`, `Stock Movement Tracking`, `Sales Management`, `Billing & Finance`, and `Shipping & Delivery`.
 
 #### E. Database Requirements
@@ -496,6 +505,7 @@ Manages the end-to-end customer order lifecycle from initial order intake throug
 - **Duplicate-Deduction Idempotency Guard (`DDR-05`):** Fulfillment endpoints acquire `SELECT ... FOR UPDATE` row locks on `orders`, `order_items`, and `inventory`, enforce unique fulfillment `idempotency_key` checks inside `order_fulfillments`, verify `order_item.fulfilled_quantity + delta <= order_item.quantity`, and reject duplicate/over-fulfillment attempts (`409 Conflict`) so no batch or order ever deducts inventory twice.
 - **Threshold Alert Hook (`DDR-05` & `EXCL-03`):** When fulfillment decreases `Available Stock` to or below the reorder threshold (or `minimum_stock`), dispatch a replenishment alert to `SYS-03 Smart Alerts`; alerts recommend human review and **never** automatically create or submit Purchase Orders.
 - **Tier 1 Fail-Closed Audit (`DDR-10`):** Confirmation, fulfillment, and cancellation commit their mandatory `audit_logs` records in the same atomic transaction (rolling back on audit insert failure).
+- **Active Customer Enforcement:** New `draft`/`pending` order creation (`POST /orders`) and draft-to-confirmed transitions (`POST /orders/{id}/confirm`) block deactivated customers (`customers.is_active == False` → HTTP `409 Conflict`), whereas already `confirmed` or `partially_fulfilled` orders may continue fulfilling, invoicing, and shipping normally after later customer deactivation.
 - Orders cannot include inactive SKUs (`products.is_active == False`) or quantities `<= 0`.
 - Orders in `fulfilled` or `cancelled` status are immutable for line-item edits.
 
@@ -1238,7 +1248,7 @@ Handles customer invoicing, tax and grand-total calculations, payment recording,
 
 #### E. Database Requirements
 - **Entities:** `invoices`, `invoice_items`, `payments`, `credit_notes`.
-- **Important Fields (`invoices`):** `id` (PK), `invoice_number` (VARCHAR(64), UNIQUE, indexed), `order_id` (FK, nullable), `customer_id` (FK → `customers.id`), `billing_snapshot` (JSON/TEXT freezing customer billing details at invoice time), `currency_code` (`CHAR(3)` DEFAULT `'INR'` per `DDR-04`), `invoice_date`, `subtotal` (`DECIMAL(12, 2)`), `tax_rate` (`DECIMAL(5, 2)` — historical applied rate preserved permanently per `DDR-04`), `tax_amount` (`DECIMAL(12, 2)`), `grand_total` (`DECIMAL(12, 2)`), `amount_paid` (`DECIMAL(12, 2)` DEFAULT `0.00`), `payment_status` (`ENUM('unpaid', 'partially_paid', 'paid', 'partially_credited', 'refunded')`), `selected_workspace`, `created_at`.
+- **Important Fields (`invoices`):** `id` (PK), `invoice_number` (VARCHAR(64), UNIQUE, indexed), `order_id` (FK, nullable), `customer_id` (FK → `customers.id`), `billing_snapshot` (`JSON NOT NULL` freezing customer billing details at invoice issuance with canonical keys `customer_name`, `billing_address`, `city`, `state`, `postal_code`, `country`, `phone`, `email`, and `uci_customer_ref` when applicable; missing optional fields represented consistently as `null`), `currency_code` (`CHAR(3)` DEFAULT `'INR'` per `DDR-04`), `invoice_date`, `subtotal` (`DECIMAL(12, 2)`), `tax_rate` (`DECIMAL(5, 2)` — historical applied rate preserved permanently per `DDR-04`), `tax_amount` (`DECIMAL(12, 2)`), `grand_total` (`DECIMAL(12, 2)`), `amount_paid` (`DECIMAL(12, 2)` DEFAULT `0.00`), `payment_status` (`ENUM('unpaid', 'partially_paid', 'paid', 'partially_credited', 'refunded')`), `selected_workspace`, `created_at`.
 - **Important Fields (`invoice_items`):** `id` (PK), `invoice_id` (FK), `product_id` (FK), `description`, `quantity`, `unit_price` (`DECIMAL(10, 2)`), `line_total` (`DECIMAL(12, 2)`).
 - **Important Fields (`payments`):** `id` (PK), `invoice_id` (FK), `payment_reference`, `amount` (`DECIMAL(12, 2)`), `payment_method` (`ENUM('cash', 'card_manual', 'bank_transfer', 'cheque', 'other')`), `payment_date`, `notes`, `selected_workspace`, `created_at`.
 - **Important Fields (`credit_notes`):** `id` (PK), `credit_note_number` (UNIQUE), `invoice_id` (FK), `return_id` (FK, nullable), `amount` (`DECIMAL(12, 2)`), `reason` (TEXT), `selected_workspace`, `created_at`.
@@ -1263,6 +1273,7 @@ Handles customer invoicing, tax and grand-total calculations, payment recording,
   3. **Historical Immutability & Forward-Only Changes:** Completed `invoices` preserve the exact `currency_code`, `tax_rate`, and `tax_amount` originally applied at creation. Updating central tax settings affects **future** invoices/transactions only and never retroactively alters existing records.
 - **Strict DECIMAL & Demand Timing Boundaries (`DDR-04`, `DDR-06`):** Every monetary calculation uses Python `decimal.Decimal` (`ROUND_HALF_UP`) and MySQL `DECIMAL(10, 2)` / `DECIMAL(12, 2)` (never `FLOAT`/`DOUBLE`). Per `DDR-06`, invoice issuance and payment settlement dates **never** determine ML demand timing (which tracks order `requested_delivery_date` / order date).
 - **Credit Cap, Overpayment & Tier 1 Audit (`DDR-10`):** Sum of credit notes cannot exceed `grand_total`; payments cannot exceed remaining collectible balance; every financial write (`invoice`, `payment`, `credit_note`) executes as a **DDR-10 Tier 1 fail-closed atomic transaction**.
+- **Billing Snapshot & Inactive-Customer Boundary:** New standalone operational invoices reject deactivated customers (`customers.is_active == False` → HTTP `409 Conflict`), while existing confirmed/fulfilled orders and existing invoices settle payments, credit notes, and refunds normally. Every invoice captures `billing_snapshot` (`customer_name`, `billing_address`, `city`, `state`, `postal_code`, `country`, `phone`, `email`, and `uci_customer_ref` when applicable) at issuance; historical invoice rendering reads `billing_snapshot` immutably regardless of later M03 edits.
 - **Boundary Rules (`EXCL-01`):** Does **not** integrate external payment gateways or government statutory e-way/GST portal APIs.
 
 #### I. Module Dependencies
@@ -1305,7 +1316,7 @@ Manages internal warehouse fulfillment preparation and dispatch tracking for con
 - **Finance Staff:** Read-only shipment status check when verifying delivery completion against invoiced orders.
 
 #### D. Inputs and Outputs
-- **Inputs:** `order_id` / `invoice_id`, destination `shipping_address` (from customer/order), `delivery_method` (`Standard Delivery`, `Express Internal`, `Customer Pickup`), `shipment_items`, status transition updates with optional operator notes.
+- **Inputs:** `order_id` / `invoice_id`, destination `shipping_address` (resolved by `M18` from `customers.shipping_address` when supplied, otherwise deterministic billing-address composition `[billing_address, city, optional state, postal_code, country]`, or explicit destination entered at shipment creation — `orders` stores no `shipping_address` column), `delivery_method` (`Standard Delivery`, `Express Internal`, `Customer Pickup`), `shipment_items`, status transition updates with optional operator notes.
 - **Outputs:** Persistent `shipments`, `shipment_items`, `packing_slips`, and `shipment_events` records; printable pick-list, packing-slip, and internal routing-label payloads.
 
 #### E. Database Requirements
@@ -1328,7 +1339,7 @@ Manages internal warehouse fulfillment preparation and dispatch tracking for con
 
 #### H. Business Rules and Validation
 - **Internal Fulfillment Boundary (`EXCL-02`):** Tracking references and labels are **internal warehouse references only**, never live carrier API labels (FedEx/UPS/DHL).
-- **Status Progression Validation:** Invalid jumps (e.g., `delivered` back to `pending`, or shipping without destination address) must be rejected with HTTP `409`/`422`.
+- **Status Progression Validation & Immutable Destination Snapshot:** Invalid jumps (e.g., `delivered` back to `pending`, or shipping without destination address) must be rejected with HTTP `409`/`422`. At shipment creation, `M18` resolves the effective delivery destination (`customers.shipping_address` if populated, else deterministic full-address fallback from `billing_address`, `city`, optional `state`, `postal_code`, `country`) and freezes it immutably in `shipments.shipping_address`; later `M03` profile edits never mutate existing shipment snapshots.
 - **Partial Fulfillment & Split-Shipment Model (`DDR-05` Resolved):** A single customer order (`orders`) supports **multiple fulfillments and multiple split shipments (`1:N`)**. Each `shipments` row tracks its own independent `shipment_items` quantities and independent delivery status (`pending` → `packed` → `dispatched` → `delivered`, or pre-dispatch `cancelled`).
 - **Cumulative Quantity Consistency:** Cumulative non-cancelled `shipment_items.quantity` for any `order_item_id` must never exceed `order_item.fulfilled_quantity` (nor `order_items.quantity`). Remaining unfulfilled order quantities stay pending in `M05` without blocking dispatch of already-fulfilled split shipments.
 
@@ -1425,7 +1436,7 @@ flowchart LR
 
 ## Workflow B — Customer Order to Delivery *(Updated for `DDR-03`, `DDR-04`, `DDR-05`, `DDR-06`, `DDR-10`)*
 1. **Trigger:** Store Manager creates, confirms, and executes full or partial fulfillment on a customer order (with Finance/Inventory visibility downstream).
-2. **Preconditions:** Active `customer_id`, active `products`, valid `Available Stock` (`Physical Stock - Reserved Stock`) for confirmed/fulfilled quantities.
+2. **Preconditions:** Active `customer_id` (`customers.is_active == True` at draft creation and confirmation time; existing confirmed/partially fulfilled orders continue fulfilling cleanly if customer is deactivated afterward), active `products`, valid `Available Stock` (`Physical Stock - Reserved Stock`) for confirmed/fulfilled quantities.
 3. **Ordered Processing Steps:**
    1. Create `orders` (`status='draft'`/`'pending'`, `order_demand_type`, `requested_delivery_date`, `inventory_deducted=False`) and `order_items` (no stock reservation or deduction yet).
    2. Transition to `confirmed` (`DDR-03` & `DDR-06`): validate `Available Stock >= quantity`, atomically increment `inventory.reserved_quantity` (`Reserved Stock`), establish confirmed B2B demand (flagging `is_censored_demand = True` if constrained), and log Tier 1 audit.
@@ -1550,7 +1561,8 @@ All operational modules must implement **real, database-persisted CRUD operation
 
 | Domain | Create | Read | Update | Delete / Reversal Strategy |
 | :--- | :---: | :---: | :---: | :--- |
-| **Products, Suppliers, Customers** | Yes | Yes | Yes | **Soft-Deactivate** (`is_active=False`) when referenced by historical records |
+| **Products, Suppliers** | Yes | Yes | Yes | **Soft-Deactivate** (`is_active=False`) when referenced by historical records |
+| **Customers** | Yes | Yes | Yes | **Soft-Deactivate (`is_active=False`) / Reactivate (`is_active=True`) only**; hard deletion prohibited universally through application even when unreferenced (no `DELETE` endpoint/UI; FKs add `ON DELETE RESTRICT` safeguard) |
 | **Orders** | Yes (`draft`/`pending`) | Yes | Yes (pre-confirmation; post-confirm via controlled amend) | **Cancel** (`cancelled` releases remaining `reserved_quantity` + `demand_adjustments`; supports `partially_fulfilled` before `fulfilled`) |
 | **Sales (`transactions`)** | Via Order Fulfillment | Yes | Forbidden once completed | **Traceable Reversal / Cancellation** (immutable original row) |
 | **Inventory** | Auto on Product Onboarding | Yes | Settings (`min`, `safety`) only; Qty via Adjustments | **No Deletion** (quantity resets via audited `adjustment` movement) |
@@ -1569,7 +1581,7 @@ All operational modules must implement **real, database-persisted CRUD operation
 NEXORA maintains a unified **Centralized History & Audit** ledger in MySQL InnoDB that **persists across backend restarts**. It provides operational traceability across all 18 modules, diagnostic visibility into failed requests, and before/after mutation accountability.
 
 ## 9.2 Auditable Event Catalog
-- **Catalog & Partners:** Product/category/supplier/customer creations, edits (price, lead time, address), and soft-deactivations.
+- **Catalog & Partners:** Product/category/supplier/customer creations, edits (price, lead time, address), soft-deactivations, and reactivations (`M03` emits `CUSTOMER_CREATED`, `CUSTOMER_UPDATED`, `CUSTOMER_DEACTIVATED`, `CUSTOMER_REACTIVATED`).
 - **Orders & Sales:** Order creation, item modifications, confirmations, fulfillments, cancellations, and sales reversals.
 - **Inventory & Movements:** Manual cycle-count adjustments, damaged stock write-offs, safety factor / minimum stock updates, and blocked negative-stock attempts.
 - **Procurement (`DDR-09`):** Draft PO creation, submissions, Tier 1 & Tier 2 approvals, non-blocking Tier 1 oversight digests, PO split/anomaly escalations, post-approval invalidations, rejections (with notes), partial/full deliveries received, cancellations, and Tier 1 limit / window config changes.
@@ -1609,7 +1621,7 @@ To avoid confusing redundancy across tables:
 - **No Fabricated User Identity:** Because NEXORA enforces zero login/JWT authentication, `audit_logs` captures `selected_workspace`, `action_source`, and optional explicitly provided `operator_ref` cleanly rather than simulating authenticated RBAC identities.
 - **Tiered Audit Failure Architecture (`DDR-10` Resolved):**
   - **Tier 1 Critical Operations — Strict Fail-Closed:** Covers **PO approvals** (and rejections/escalations/invalidations), **manual inventory adjustments**, **returns and cancellations**, **sales fulfillment**, **threshold/configuration changes** (`DDR-04`/`08`/`09`), and **financial transactions** (invoices, payments, credit notes). Both the business mutation and the mandatory `audit_logs` `INSERT` MUST execute inside the **same atomic ACID InnoDB database transaction**. If the `audit_logs` insert fails for any reason, **the entire database transaction rolls back** so zero unaudited Tier 1 mutations can persist, and **independent failure telemetry** emits outside the rolled-back DB transaction (structured critical error telemetry log/sink).
-  - **Tier 2 Non-Critical Events — Graceful Degradation & Durable Async Reconciliation:** Covers routine `draft` edits, `SYS-03` notification acknowledgements, UI view/filter events, and non-mutating telemetry. If direct `audit_logs` persistence encounters transient failure, the event routes through a **durable persistent `audit_outbox` queue** with background **retry** attempts, **dead-letter (`DEAD_LETTER`) quarantine** for exhausted retries, independent failure telemetry, and deterministic **`idempotency_key` + `correlation_id`** protection guaranteeing zero duplicate `audit_logs` rows during retries.
+  - **Tier 2 Non-Critical Events — Graceful Degradation & Durable Async Reconciliation:** Covers M03 customer operations (`CUSTOMER_CREATED`, `CUSTOMER_UPDATED`, `CUSTOMER_DEACTIVATED`, `CUSTOMER_REACTIVATED`), routine `draft` edits, `SYS-03` notification acknowledgements, UI view/filter events, and non-mutating telemetry. If direct `audit_logs` persistence encounters transient failure, the event routes through a **durable persistent `audit_outbox` queue** with background **retry** attempts, **dead-letter (`DEAD_LETTER`) quarantine** for exhausted retries and manual replay, independent failure telemetry, and deterministic **`idempotency_key` + `correlation_id`** protection guaranteeing zero duplicate `audit_logs` rows during retries.
 
 ---
 
@@ -1750,7 +1762,7 @@ erDiagram
 | **Retail Foundation** | `uom_conversions` | `id` (PK), `product_id`, `uom_code`, `conversion_to_base` (`DECIMAL(12,6) > 0`), `effective_from`, `effective_to`, `is_active`, `created_at` | `product_id -> products.id` | Product-specific, historically traceable (`DDR-06`) |
 | **Retail Foundation** | `suppliers` | `id` (PK), `supplier_name` (idx), `contact_person`, `email`, `phone`, `address`, `lead_time_days` (`INT >= 1`, nullable fallback), `is_active`, `created_at`, `updated_at` | Referenced by `supplier_products`, `purchase_orders` | Update & Soft-Deactivate; retain if referenced |
 | **Retail Foundation** | `supplier_products` | `id` (PK), `supplier_id`, `product_id`, `supplier_product_code`, `purchase_price` (`DECIMAL(10,2)`), `lead_time_days` (`INT >= 1`, nullable), `minimum_order_quantity` (`INT >= 1`), `is_preferred`, `is_active`, `created_at`, `updated_at` | `supplier_id -> suppliers.id`, `product_id -> products.id` (`DDR-07`) | **Retain inactive rows for historical traceability** |
-| **Retail Foundation** | `customers` | `id` (PK), `uci_customer_ref` (nullable idx), `customer_name`, `phone`, `email`, `billing_address`, `shipping_address`, `city`, `state`, `postal_code`, `country`, `is_active`, `created_at` | Referenced by `orders`, `transactions`, `invoices` | Update & Soft-Deactivate; retain if referenced |
+| **Retail Foundation** | `customers` | `id` (PK), `uci_customer_ref` (nullable idx), `customer_name`, `phone`, `email`, `billing_address`, `shipping_address`, `city`, `state`, `postal_code`, `country`, `is_active`, `created_at` | Referenced by `orders`, `transactions`, `invoices` (`ON DELETE RESTRICT` safeguard) | Update, Soft-Deactivate (`is_active=False`) & Reactivate (`is_active=True`); retain permanently (hard deletion prohibited across application regardless of references) |
 | **Retail Foundation** | `orders` | `id` (PK), `order_number` (UNIQUE), `customer_id`, `order_status` (`draft`..`partially_fulfilled`..`fulfilled`/`cancelled`), `order_demand_type`, `requested_delivery_date`, `is_censored_demand`, `inventory_deducted` (`BOOL DEFAULT FALSE`), `subtotal` (`DECIMAL(12,2)`), `notes`, `selected_workspace`, `created_at`, `updated_at` | `customer_id -> customers.id` | Confirmed B2B orders establish demand (`DDR-05`/`06`) |
 | **Retail Foundation** | `order_items` | `id` (PK), `order_id`, `product_id`, `quantity` (`INT > 0`), `fulfilled_quantity` (`0..quantity`), `uom_code`, `base_uom_conversion_factor` (`DECIMAL(12,6)`), `unit_price` (`DECIMAL(10,2)`), `line_total` (`DECIMAL(12,2)`) | `order_id -> orders.id`, `product_id -> products.id` | Tracks partial fulfillment cleanly (`DDR-05`) |
 | **Retail Foundation** | `order_fulfillments` | `id` (PK), `order_id` (idx), `idempotency_key` (UNIQUE), `fulfillment_status`, `selected_workspace`, `fulfilled_at` | `order_id -> orders.id` | Prevents duplicate stock deduction per fulfillment batch (`DDR-05`) |
@@ -2076,7 +2088,7 @@ Every team member must understand end-to-end interactions across the ML engine, 
 1. **Workspace Selection (`Page 1`):** Open `/` showing `"Welcome to NEXORA — Select Your Workspace"` with 4 workspace cards and zero login forms.
 2. **Enter Store Manager Workspace (`Page 2`):** Click **Store Manager (Admin)** to load the unified dashboard showing all 18 module controls.
 3. **Product Onboarding & Supplier Mapping (`M01 + M02 + M09`):** Create a catalog SKU (e.g., `NEX-DEMO-01`, unit price `₹250.00` INR, opening stock `25`) with a `supplier_products` mapping (`lead_time_days = 10`, purchase cost `₹160.00`), verifying automatic 1:1 `inventory` initialization (`Physical = 25, Reserved = 0, Available = 25`).
-4. **Customer Intake (`M03`):** Add or inspect customer billing and shipping details entered manually (`Jane Doe`, complete UK street address).
+4. **Customer Intake (`M03`):** Add or inspect customer billing and shipping details entered manually (`Jane Doe`, complete operational billing and optional shipping address).
 5. **Order Confirmation, Partial/Full Fulfillment & Stock Breakdown (`M05 + M04 + M09`):** Confirm an order for `15` units (`Physical = 25, Reserved = 15, Available = 10`), then fulfill (`15` units or partial `10` + `5` split shipments), proving idempotent deduction only for fulfilled quantities (`Physical = 10, Reserved = 0, Available = 10`) and linked sale recording.
 6. **Verify Stock Movement Ledger (`M10`):** Inspect the immutable inventory movement entry (`sale_fulfillment`, `-15` delta, `25 → 10`) linked to the fulfilled order.
 7. **Generate Demand Forecast (`M12` — *Backend API Currently Implemented*):** Request 7, 15, 30, and 90-day forecasts for a catalog SKU (`85123A` or unseen SKU), verifying non-negative predictions and evaluation WAPE benchmarks.
