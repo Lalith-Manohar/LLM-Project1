@@ -96,20 +96,22 @@ class _MySqlTestFractionalChecker:
 def mysql_session_factory():
     safe_url = settings.get_test_database_url(TEST_DB_URL)
     engine = create_engine(safe_url, future=True)
-    with engine.connect() as conn:
-        ensure_mysql_min_version(conn)
-
-    cfg = Config(str(BACKEND_DIR / "alembic.ini"))
-    cfg.set_main_option("script_location", str(BACKEND_DIR / "alembic"))
-    cfg.set_main_option("sqlalchemy.url", safe_url)
-
-    command.downgrade(cfg, "base")
-    command.upgrade(cfg, "head")
-    factory = sessionmaker(bind=engine, autoflush=False, autocommit=False, expire_on_commit=False)
     try:
-        yield factory, engine
-    finally:
+        with engine.connect() as conn:
+            ensure_mysql_min_version(conn)
+
+        cfg = Config(str(BACKEND_DIR / "alembic.ini"))
+        cfg.set_main_option("script_location", str(BACKEND_DIR / "alembic"))
+        cfg.set_main_option("sqlalchemy.url", safe_url)
+
         command.downgrade(cfg, "base")
+        command.upgrade(cfg, "head")
+        factory = sessionmaker(bind=engine, autoflush=False, autocommit=False, expire_on_commit=False)
+        try:
+            yield factory, engine
+        finally:
+            command.downgrade(cfg, "base")
+    finally:
         engine.dispose()
 
 

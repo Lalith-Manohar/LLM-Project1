@@ -2,6 +2,7 @@
 
 import os
 from pathlib import Path
+import re
 from typing import Optional, Union
 from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -78,8 +79,13 @@ class Settings(BaseSettings):
         if not test_db:
             raise ValueError("TEST_DATABASE_URL must specify a dedicated test database name.")
 
-        unsafe_tokens = ("prod", "production", "staging", "live")
-        if any(tok in test_db for tok in unsafe_tokens) and "test" not in test_db:
+        tokens = {tok for tok in re.split(r"[^a-z0-9]+", test_db) if tok}
+        unsafe_tokens = ("prod", "production", "staging", "stage", "live")
+        if any(
+            tok in unsafe_tokens
+            or re.match(r"^(prod|production|staging|stage|live)\d+$", tok)
+            for tok in tokens
+        ):
             raise RuntimeError(
                 f"Unsafe TEST_DATABASE_URL: production-like database name '{parsed.database}' rejected."
             )

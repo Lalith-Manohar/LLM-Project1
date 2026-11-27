@@ -71,13 +71,27 @@ def test_settings_database_url_and_test_url_isolation():
         cfg.get_test_database_url("mysql+pymysql://u:p@localhost:3306")
     with pytest.raises(ValueError, match="MySQL driver required"):
         cfg.get_test_database_url("sqlite:///:memory:")
-    with pytest.raises(RuntimeError, match="production-like database name"):
-        cfg.get_test_database_url("mysql+pymysql://u:p@localhost:3306/nexora_prod")
-    with pytest.raises(RuntimeError, match="production-like database name"):
-        cfg.get_test_database_url("mysql+pymysql://u:p@localhost:3306/staging_db")
+    for unsafe_name in (
+        "nexora_prod",
+        "staging_db",
+        "nexora_production_test",
+        "nexora_staging_test",
+        "nexora_prod_test",
+        "nexora_live_test",
+        "nexora_stage_test",
+        "nexora_prod1_test",
+    ):
+        with pytest.raises(RuntimeError, match="production-like database name"):
+            cfg.get_test_database_url(f"mysql+pymysql://u:p@localhost:3306/{unsafe_name}")
 
-    safe_url = "mysql+pymysql://u:p@localhost:3306/nexora_test_db?charset=utf8mb4"
-    assert cfg.get_test_database_url(safe_url) == safe_url
+    for safe_name in (
+        "nexora_test_db",
+        "m01_integration_test",
+        "product_test_db",
+        "delivery_test_db",
+    ):
+        safe_url = f"mysql+pymysql://u:p@localhost:3306/{safe_name}?charset=utf8mb4"
+        assert cfg.get_test_database_url(safe_url) == safe_url
 
     # ORM created_at server_default alignment with migration CURRENT_TIMESTAMP
     assert str(Category.__table__.c.created_at.server_default.arg) == "CURRENT_TIMESTAMP"
