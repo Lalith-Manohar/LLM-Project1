@@ -1,10 +1,13 @@
 import React from 'react'
 import ReactDOM from 'react-dom/client'
-import App from './App'
-import './index.css'
+import { AppProviders } from '@/app/providers/AppProviders'
+import { AppRouter } from '@/app/router/AppRouter'
+import '@/styles/globals.css'
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
-    <App />
+    <AppProviders>
+      <AppRouter />
+    </AppProviders>
   </React.StrictMode>
 )
