@@ -64,19 +64,29 @@ class AuditServiceProtocol(Protocol):
 class FractionalPolicyCheckerProtocol(Protocol):
     """Contract owned by M09/M05 to check fractional stock or open commitments before disabling.
 
-    Concurrency & Transaction Contract:
-    - Implementations MUST execute strictly within the caller's active SQLAlchemy `session`
-      and database transaction (never opening an independent session or connection).
-    - The caller (M01 `update_product`) acquires `SELECT ... FOR UPDATE` on the `products`
-      row BEFORE calling `has_fractional_inventory_or_commitments`.
-    - Concrete M09/M05 implementations MUST inspect both fractional physical inventory
-      (`inventory`) and fractional outstanding commitments (`order_items`,
-      `purchase_order_items`) using row-level `SELECT ... FOR UPDATE` locking (or
-      equivalent serialization) in canonical parent-before-child lock order
-      (`products` -> `inventory` / `orders` -> `order_items`).
-    - All M05/M09 writers creating or mutating fractional balances/commitments must
-      follow the same locking protocol; a `products` row lock in M01 alone cannot
-      guarantee race freedom until concrete M05/M09 services share this contract.
+    Shared Lock Order (parent-before-child — No Lock-Order Inversions):
+    - `products -> orders -> order_items -> purchase_orders -> purchase_order_items -> inventory`
+    - Acquire locks only on rows relevant to the operation; all M01, M05, and M09
+      writers must follow this same order. A `products` row lock in M01 alone cannot
+      prevent races unless concrete M05/M09 writers participate in this protocol.
+
+    Transaction & Commitment Rules (`DATABASE_SCHEMA.md` v2.9):
+    - Implementations MUST execute strictly inside the caller's active SQLAlchemy `session`
+      and database transaction (after M01 acquires `SELECT ... FOR UPDATE` on `products`).
+    - Customer orders (`orders` / `order_items`):
+      - `draft` and `pending`: do NOT count as confirmed commitments.
+      - `confirmed` and `partially_fulfilled`: count only the unfulfilled remainder
+        (`base_uom_quantity - base_uom_fulfilled_quantity > 0.0000`), never mixing
+        commercial UoM quantities with base-UoM quantities.
+      - `fulfilled` and `cancelled`: do NOT count.
+    - Purchase orders (`purchase_orders` / `purchase_order_items`, DDR-02):
+      - `draft` and `submitted`: do NOT count as approved incoming commitments.
+      - `approved` and `partially_received`: count only the outstanding unreceived remainder
+        (`base_uom_ordered_quantity - base_uom_received_quantity > 0.0000`).
+      - `received`, `cancelled`, and `rejected`: do NOT count.
+    - Inventory (`inventory`, DDR-02 / DDR-03):
+      - Check physical `current_quantity` and `reserved_quantity` in the same transaction;
+        never treat incoming PO stock as physical stock.
     """
 
     def has_fractional_inventory_or_commitments(

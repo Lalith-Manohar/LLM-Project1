@@ -69,6 +69,12 @@ def test_settings_database_url_and_test_url_isolation():
         cfg.get_test_database_url("mysql+pymysql://u:p@127.0.0.1:3307/NEXORA_DB")
     with pytest.raises(ValueError, match="dedicated test database name"):
         cfg.get_test_database_url("mysql+pymysql://u:p@localhost:3306")
+    with pytest.raises(ValueError, match="MySQL driver required"):
+        cfg.get_test_database_url("sqlite:///:memory:")
+    with pytest.raises(RuntimeError, match="production-like database name"):
+        cfg.get_test_database_url("mysql+pymysql://u:p@localhost:3306/nexora_prod")
+    with pytest.raises(RuntimeError, match="production-like database name"):
+        cfg.get_test_database_url("mysql+pymysql://u:p@localhost:3306/staging_db")
 
     safe_url = "mysql+pymysql://u:p@localhost:3306/nexora_test_db?charset=utf8mb4"
     assert cfg.get_test_database_url(safe_url) == safe_url

@@ -68,10 +68,21 @@ class Settings(BaseSettings):
             )
 
         parsed = make_url(raw_url)
+        if parsed.get_backend_name() != "mysql":
+            raise ValueError(
+                f"Unsafe TEST_DATABASE_URL: MySQL driver required, got '{parsed.drivername}'."
+            )
+
         test_db = (parsed.database or "").strip().lower()
         dev_db = self.DB_NAME.strip().lower()
         if not test_db:
             raise ValueError("TEST_DATABASE_URL must specify a dedicated test database name.")
+
+        unsafe_tokens = ("prod", "production", "staging", "live")
+        if any(tok in test_db for tok in unsafe_tokens) and "test" not in test_db:
+            raise RuntimeError(
+                f"Unsafe TEST_DATABASE_URL: production-like database name '{parsed.database}' rejected."
+            )
 
         local_aliases = {"localhost", "127.0.0.1", "::1"}
         test_host = (parsed.host or "").strip().lower()
