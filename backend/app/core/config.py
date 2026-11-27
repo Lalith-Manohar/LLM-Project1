@@ -103,6 +103,12 @@ class Settings(BaseSettings):
                 f"Unsafe TEST_DATABASE_URL: target database '{parsed.database}' matches "
                 f"development DB_NAME '{self.DB_NAME}'."
             )
+
+        if "test" not in tokens:
+            raise RuntimeError(
+                f"Unsafe TEST_DATABASE_URL: database name '{parsed.database}' must contain "
+                "'test' as a distinct token."
+            )
         return raw_url
 
     # ML Artifacts path relative to backend root directory (backend/ml/models)
@@ -119,3 +125,27 @@ class Settings(BaseSettings):
 
 
 settings = Settings()
+
+DESTRUCTIVE_MYSQL_TESTS_ENV_VAR = "NEXORA_ALLOW_DESTRUCTIVE_MYSQL_TESTS"
+
+
+def require_destructive_mysql_test_url(
+    explicit_url: Optional[str] = None,
+    *,
+    allow_destructive: Optional[str] = None,
+    settings_obj: Optional[Settings] = None,
+) -> str:
+    """Validate explicit destructive-test opt-in and test DB URL before migrations."""
+    opt_in = (
+        os.getenv(DESTRUCTIVE_MYSQL_TESTS_ENV_VAR)
+        if allow_destructive is None
+        else allow_destructive
+    )
+    if opt_in != "1":
+        raise RuntimeError(
+            f"Destructive MySQL integration tests are disabled by default. "
+            f"Set {DESTRUCTIVE_MYSQL_TESTS_ENV_VAR}=1 to explicitly allow "
+            f"Alembic downgrade/upgrade against TEST_DATABASE_URL."
+        )
+    cfg = settings_obj or settings
+    return cfg.get_test_database_url(explicit_url)

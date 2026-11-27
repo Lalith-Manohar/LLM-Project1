@@ -12,7 +12,11 @@ from alembic.script import ScriptDirectory
 from sqlalchemy.dialects import mysql
 from sqlalchemy.schema import CreateTable
 
-from app.core.config import Settings
+from app.core.config import (
+    DESTRUCTIVE_MYSQL_TESTS_ENV_VAR,
+    Settings,
+    require_destructive_mysql_test_url,
+)
 from app.db.mysql_compat import ensure_mysql_min_version, parse_mysql_version
 from app.db.session import get_db, get_engine, get_session_factory, reset_engine, session_scope
 from app.models import (
@@ -84,6 +88,14 @@ def test_settings_database_url_and_test_url_isolation():
         with pytest.raises(RuntimeError, match="production-like database name"):
             cfg.get_test_database_url(f"mysql+pymysql://u:p@localhost:3306/{unsafe_name}")
 
+    for missing_test_token in ("other_db", "nexora_sandbox", "mytestdb", "testing_db"):
+        with pytest.raises(RuntimeError, match="must contain 'test' as a distinct token"):
+            cfg.get_test_database_url(f"mysql+pymysql://u:p@localhost:3306/{missing_test_token}")
+
+    other_cfg = Settings(DB_NAME="different_db", TEST_DATABASE_URL=None)
+    with pytest.raises(RuntimeError, match="must contain 'test' as a distinct token"):
+        other_cfg.get_test_database_url("mysql+pymysql://u:p@localhost:3306/nexora_db")
+
     for safe_name in (
         "nexora_test_db",
         "m01_integration_test",
@@ -96,6 +108,80 @@ def test_settings_database_url_and_test_url_isolation():
     # ORM created_at server_default alignment with migration CURRENT_TIMESTAMP
     assert str(Category.__table__.c.created_at.server_default.arg) == "CURRENT_TIMESTAMP"
     assert str(Product.__table__.c.created_at.server_default.arg) == "CURRENT_TIMESTAMP"
+
+
+def test_destructive_mysql_test_guard_opt_in_and_no_side_effects(monkeypatch):
+    import tests.test_stage1_mysql_integration as stage1_mysql
+    import tests.test_stage2e_mysql_m01_integration as stage2e_mysql
+
+    safe_url = "mysql+pymysql://u:secret_pw@localhost:3306/nexora_test_db?charset=utf8mb4"
+    cfg = Settings(DB_NAME="nexora_db", TEST_DATABASE_URL=safe_url)
+
+    # 1. Missing opt-in must fail closed with clear guidance
+    monkeypatch.delenv(DESTRUCTIVE_MYSQL_TESTS_ENV_VAR, raising=False)
+    with pytest.raises(RuntimeError, match=f"{DESTRUCTIVE_MYSQL_TESTS_ENV_VAR}=1"):
+        require_destructive_mysql_test_url(safe_url, settings_obj=cfg)
+
+    # 2. Non-'1' opt-in values must fail closed
+    for invalid_opt_in in ("", "0", "true", "yes", " 1 ", "2"):
+        monkeypatch.setenv(DESTRUCTIVE_MYSQL_TESTS_ENV_VAR, invalid_opt_in)
+        with pytest.raises(RuntimeError, match=f"{DESTRUCTIVE_MYSQL_TESTS_ENV_VAR}=1"):
+            require_destructive_mysql_test_url(safe_url, settings_obj=cfg)
+
+    # 3. Exact '1' allows opt-in to pass for clearly identified test databases
+    monkeypatch.setenv(DESTRUCTIVE_MYSQL_TESTS_ENV_VAR, "1")
+    for ok_db in ("nexora_test_db", "m01_integration_test"):
+        ok_url = f"mysql+pymysql://u:secret_pw@localhost:3306/{ok_db}?charset=utf8mb4"
+        assert require_destructive_mysql_test_url(ok_url, settings_obj=cfg) == ok_url
+
+    # 4. Even with opt-in='1', unsafe/non-test/production-like DB names are rejected without leaking creds
+    for bad_db in (
+        "nexora_db",
+        "other_db",
+        "nexora_production_test",
+        "nexora_staging_test",
+        "nexora_prod_test",
+        "nexora_live_test",
+    ):
+        bad_url = f"mysql+pymysql://u:secret_pw@localhost:3306/{bad_db}?charset=utf8mb4"
+        with pytest.raises(RuntimeError, match="Unsafe TEST_DATABASE_URL") as exc_info:
+            require_destructive_mysql_test_url(bad_url, settings_obj=cfg)
+        assert "secret_pw" not in str(exc_info.value)
+
+    # 5. Neither MySQL fixture creates an engine or runs Alembic when opt-in or DB name is invalid
+    create_engine_mock = MagicMock(side_effect=AssertionError("create_engine should not be called"))
+    downgrade_mock = MagicMock(side_effect=AssertionError("alembic downgrade should not be called"))
+    upgrade_mock = MagicMock(side_effect=AssertionError("alembic upgrade should not be called"))
+
+    for mod in (stage1_mysql, stage2e_mysql):
+        monkeypatch.setattr(mod, "create_engine", create_engine_mock)
+        monkeypatch.setattr(mod.command, "downgrade", downgrade_mock)
+        monkeypatch.setattr(mod.command, "upgrade", upgrade_mock)
+        monkeypatch.setattr(mod, "TEST_DB_URL", safe_url)
+
+    monkeypatch.delenv(DESTRUCTIVE_MYSQL_TESTS_ENV_VAR, raising=False)
+    with pytest.raises(RuntimeError, match=f"{DESTRUCTIVE_MYSQL_TESTS_ENV_VAR}=1"):
+        stage1_mysql.test_mysql_alembic_upgrade_downgrade_and_schema_invariants()
+    with pytest.raises(RuntimeError, match=f"{DESTRUCTIVE_MYSQL_TESTS_ENV_VAR}=1"):
+        gen = stage2e_mysql.mysql_session_factory.__wrapped__()
+        next(gen)
+
+    monkeypatch.setenv(DESTRUCTIVE_MYSQL_TESTS_ENV_VAR, "1")
+    for mod in (stage1_mysql, stage2e_mysql):
+        monkeypatch.setattr(
+            mod,
+            "TEST_DB_URL",
+            "mysql+pymysql://u:secret_pw@localhost:3306/nexora_production_test",
+        )
+    with pytest.raises(RuntimeError, match="production-like database name"):
+        stage1_mysql.test_mysql_alembic_upgrade_downgrade_and_schema_invariants()
+    with pytest.raises(RuntimeError, match="production-like database name"):
+        gen = stage2e_mysql.mysql_session_factory.__wrapped__()
+        next(gen)
+
+    create_engine_mock.assert_not_called()
+    downgrade_mock.assert_not_called()
+    upgrade_mock.assert_not_called()
 
 
 def test_lazy_engine_and_session_lifecycle(monkeypatch):

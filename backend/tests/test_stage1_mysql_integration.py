@@ -11,7 +11,7 @@ from sqlalchemy import create_engine, inspect, text
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import sessionmaker
 
-from app.core.config import settings
+from app.core.config import require_destructive_mysql_test_url, settings
 from app.db.mysql_compat import ensure_mysql_min_version
 from app.models import AuditOutbox, Category, Inventory, Product, UomConversion
 
@@ -32,7 +32,7 @@ def _alembic_config(db_url: str) -> Config:
 
 
 def test_mysql_alembic_upgrade_downgrade_and_schema_invariants():
-    safe_test_url = settings.get_test_database_url(TEST_DB_URL)
+    safe_test_url = require_destructive_mysql_test_url(TEST_DB_URL)
     engine = create_engine(safe_test_url, future=True)
     with engine.connect() as conn:
         ensure_mysql_min_version(conn)

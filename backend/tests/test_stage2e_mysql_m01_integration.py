@@ -12,7 +12,7 @@ from sqlalchemy import create_engine, text
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, sessionmaker
 
-from app.core.config import settings
+from app.core.config import require_destructive_mysql_test_url, settings
 from app.db.mysql_compat import ensure_mysql_min_version
 from app.models import AuditLog, AuditOutbox, Inventory, Product, UomConversion
 from app.schemas.category import CategoryCreate
@@ -94,7 +94,7 @@ class _MySqlTestFractionalChecker:
 
 @pytest.fixture()
 def mysql_session_factory():
-    safe_url = settings.get_test_database_url(TEST_DB_URL)
+    safe_url = require_destructive_mysql_test_url(TEST_DB_URL)
     engine = create_engine(safe_url, future=True)
     try:
         with engine.connect() as conn:
