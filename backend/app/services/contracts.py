@@ -62,7 +62,22 @@ class AuditServiceProtocol(Protocol):
 
 
 class FractionalPolicyCheckerProtocol(Protocol):
-    """Contract owned by M09/M05 to check fractional stock or open commitments before disabling."""
+    """Contract owned by M09/M05 to check fractional stock or open commitments before disabling.
+
+    Concurrency & Transaction Contract:
+    - Implementations MUST execute strictly within the caller's active SQLAlchemy `session`
+      and database transaction (never opening an independent session or connection).
+    - The caller (M01 `update_product`) acquires `SELECT ... FOR UPDATE` on the `products`
+      row BEFORE calling `has_fractional_inventory_or_commitments`.
+    - Concrete M09/M05 implementations MUST inspect both fractional physical inventory
+      (`inventory`) and fractional outstanding commitments (`order_items`,
+      `purchase_order_items`) using row-level `SELECT ... FOR UPDATE` locking (or
+      equivalent serialization) in canonical parent-before-child lock order
+      (`products` -> `inventory` / `orders` -> `order_items`).
+    - All M05/M09 writers creating or mutating fractional balances/commitments must
+      follow the same locking protocol; a `products` row lock in M01 alone cannot
+      guarantee race freedom until concrete M05/M09 services share this contract.
+    """
 
     def has_fractional_inventory_or_commitments(
         self,

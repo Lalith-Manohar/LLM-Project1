@@ -105,6 +105,43 @@ def _escape_like(term: str) -> str:
     return term.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
 
 
+_MYSQL_ER_DUP_ENTRY = 1062
+_SQLITE_CONSTRAINT_UNIQUE = 2067
+
+
+def _is_duplicate_key_integrity_error(
+    exc: IntegrityError,
+    *,
+    expected_constraints: tuple[str, ...],
+) -> bool:
+    """Return True only for duplicate-key / unique-constraint violations; never mask NOT NULL/CHECK/FK."""
+    orig = getattr(exc, "orig", None)
+    if orig is None:
+        return False
+
+    args = getattr(orig, "args", ())
+    if args and isinstance(args[0], int):
+        # PyMySQL / MySQLdb structured errno: only 1062 (ER_DUP_ENTRY) is a duplicate-key conflict.
+        if args[0] != _MYSQL_ER_DUP_ENTRY:
+            return False
+        msg = str(args[1]) if len(args) > 1 else str(orig)
+        if any(name in msg for name in expected_constraints):
+            return True
+        # MySQL may omit or truncate constraint names in some configurations; 1062 is still duplicate-key.
+        return "duplicate entry" in msg.lower()
+
+    sqlite_code = getattr(orig, "sqlite_errorcode", None)
+    if isinstance(sqlite_code, int):
+        return sqlite_code == _SQLITE_CONSTRAINT_UNIQUE
+
+    msg_lower = str(orig).lower()
+    if any(token in msg_lower for token in ("not null", "check constraint", "foreign key")):
+        return False
+    return "unique constraint failed" in msg_lower or any(
+        name.lower() in msg_lower for name in expected_constraints
+    )
+
+
 def _validate_category_reference(session: Session, category_id: Optional[int]) -> None:
     if category_id is None:
         return
@@ -320,7 +357,16 @@ class ProductService:
         explicit_ws = payload.selected_workspace or workspace_header
 
         with _transaction(session, commit=commit):
-            product = session.get(Product, product_id)
+            if payload.allow_fractional_qty is False:
+                # Acquire row-level lock on Product BEFORE checking fractional inventory/commitments.
+                product = session.execute(
+                    select(Product)
+                    .where(Product.id == product_id)
+                    .with_for_update()
+                    .execution_options(populate_existing=True)
+                ).scalar_one_or_none()
+            else:
+                product = session.get(Product, product_id)
             if product is None:
                 raise ProductNotFoundError(f"Product {product_id} was not found.")
 
@@ -550,9 +596,14 @@ class ProductService:
             try:
                 session.flush()
             except IntegrityError as exc:
-                raise ProductConflictError(
-                    f"Concurrent UoM conversion conflict for product {product_id} and uom_code '{payload.uom_code}'."
-                ) from exc
+                if _is_duplicate_key_integrity_error(
+                    exc,
+                    expected_constraints=("uq_uom_one_active", "uq_uom_product_code_eff"),
+                ):
+                    raise ProductConflictError(
+                        f"Concurrent UoM conversion conflict for product {product_id} and uom_code '{payload.uom_code}'."
+                    ) from exc
+                raise
 
             event_key = idempotency_key or f"uom-rollover-{new_conv.id}-{corr_id}-{uuid.uuid4().hex[:12]}"
             try:
@@ -580,9 +631,14 @@ class ProductService:
                     ),
                 )
             except IntegrityError as exc:
-                raise ProductConflictError(
-                    f"Duplicate UoM rollover audit idempotency key '{event_key}'."
-                ) from exc
+                if _is_duplicate_key_integrity_error(
+                    exc,
+                    expected_constraints=("uq_audit_idempotency",),
+                ):
+                    raise ProductConflictError(
+                        f"Duplicate UoM rollover audit idempotency key '{event_key}'."
+                    ) from exc
+                raise
 
         session.refresh(new_conv)
         return new_conv
