@@ -59,7 +59,7 @@ Distinguish two separate questions before resolving any documentation or impleme
 2. **Authoritative Target Architecture & Detailed Specifications (`docs/`):**
    - [`docs/NEXORA — Technical Blueprint v1.0.md`](docs/NEXORA%20%E2%80%94%20Technical%20Blueprint%20v1.0.md) *(Version 2.2)* — Approved system architecture, operational boundaries, `EXCL-01`–`EXCL-08`, and `DDR-01`–`DDR-10`.
    - [`docs/DATABASE_SCHEMA.md`](docs/DATABASE_SCHEMA.md) *(Version 2.9)* — Authoritative `41`-table InnoDB relational target design and transaction/locking/rollover invariants.
-   - [`docs/API_DOCUMENTATION.md`](docs/API_DOCUMENTATION.md) *(Version 2.0)* — Verified implemented/experimental/partial endpoints and planned `/api/v1` domain contracts.
+   - [`docs/API_DOCUMENTATION.md`](docs/API_DOCUMENTATION.md) *(Version 2.1)* — Verified implemented/experimental/partial endpoints and planned `/api/v1` domain contracts.
    - [`docs/DEVELOPMENT_ROADMAP.md`](docs/DEVELOPMENT_ROADMAP.md) *(Version 2.0)* — Approved six-phase execution sequence, dependencies, and testable acceptance criteria.
    - [`docs/FEATURES_STATUS.md`](docs/FEATURES_STATUS.md) *(Version 2.3)* — Authoritative 277-feature registry (`IMPLEMENTED` / `PARTIALLY IMPLEMENTED` / `PLANNED` / `EXCLUDED`).
    - [`docs/PROJECT_OVERVIEW.md`](docs/PROJECT_OVERVIEW.md) *(Version 2.0)* — High-level approved architecture and implementation snapshot.

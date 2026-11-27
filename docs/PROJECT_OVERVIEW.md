@@ -211,7 +211,7 @@ Development follows the six-phase Blueprint v2.2 sequence (see [`Technical Bluep
 - **Detailed Feature Status Registry:** [`docs/FEATURES_STATUS.md`](FEATURES_STATUS.md) *(Version 2.3)*
 - **User & System Workflow Reference:** [`docs/NEXORA — Application Functionality & System Workflow Guide.md`](NEXORA%20%E2%80%94%20Application%20Functionality%20%26%20System%20Workflow%20Guide.md) *(Version 1.0)*
 - **Target Relational Database Specification:** [`docs/DATABASE_SCHEMA.md`](DATABASE_SCHEMA.md) *(Version 2.9)*
-- **API Reference & Implementation Matrix:** [`docs/API_DOCUMENTATION.md`](API_DOCUMENTATION.md) *(Version 2.0)*
+- **API Reference & Implementation Matrix:** [`docs/API_DOCUMENTATION.md`](API_DOCUMENTATION.md) *(Version 2.1)*
 - **ML Pipeline Notes & Evaluation Archive:** [`docs/ML_DOCUMENTATION.md`](ML_DOCUMENTATION.md), [`docs/DEVELOPMENT_LOG.md`](DEVELOPMENT_LOG.md), [`docs/TECHNICAL_DECISIONS.md`](TECHNICAL_DECISIONS.md), [`docs/KNOWN_ISSUES.md`](KNOWN_ISSUES.md)
 
 ### Revision History
