@@ -29,7 +29,10 @@ from app.services.contracts import (
 )
 from app.services.quantity_validation import (
     FractionalPolicyConflictError,
+    QuantityValidationError,
+    compute_exact_base_quantity,
     validate_disable_fractional_qty,
+    validate_quantity_for_product,
 )
 
 ALLOWED_PRODUCT_SORT_FIELDS = {
@@ -480,7 +483,9 @@ class ProductService:
         selected_ws = payload.selected_workspace or workspace_header
 
         with _transaction(session, commit=commit):
-            product = session.get(Product, product_id)
+            product = session.execute(
+                select(Product).where(Product.id == product_id).with_for_update()
+            ).scalar_one_or_none()
             if product is None:
                 raise ProductNotFoundError(f"Product {product_id} was not found.")
 
@@ -497,10 +502,21 @@ class ProductService:
                         UomConversion.uom_code == payload.uom_code,
                     )
                     .order_by(UomConversion.id.asc())
+                    .with_for_update()
                 ).scalars()
             )
             prior_active = next((row for row in existing_rows if row.is_active), None)
             tx_now = _capture_server_timestamp(session, prior_active)
+
+            closed_ends = [
+                row.effective_to
+                for row in existing_rows
+                if not row.is_active and row.effective_to is not None
+            ]
+            if closed_ends and tx_now < max(closed_ends):
+                raise ProductConflictError(
+                    "UoM rollover timestamp overlaps an existing closed conversion window."
+                )
 
             if prior_active is not None:
                 if tx_now <= prior_active.effective_from:
@@ -531,35 +547,111 @@ class ProductService:
                 operator_ref=payload.operator_ref,
             )
             session.add(new_conv)
-            session.flush()
+            try:
+                session.flush()
+            except IntegrityError as exc:
+                raise ProductConflictError(
+                    f"Concurrent UoM conversion conflict for product {product_id} and uom_code '{payload.uom_code}'."
+                ) from exc
 
             event_key = idempotency_key or f"uom-rollover-{new_conv.id}-{corr_id}-{uuid.uuid4().hex[:12]}"
-            audit_service.record_tier1_event(
-                session,
-                AuditEventPayload(
-                    module="M01",
-                    action="UOM_CONVERSION_UPDATED",
-                    entity_type="uom_conversion",
-                    entity_id=str(new_conv.id),
-                    outcome="SUCCESS",
-                    action_source=payload.action_source,
-                    selected_workspace=selected_ws,
-                    operator_ref=payload.operator_ref,
-                    correlation_id=corr_id,
-                    idempotency_key=event_key,
-                    before_values=before_snapshot,
-                    after_values={
-                        "id": new_conv.id,
-                        "product_id": product_id,
-                        "uom_code": new_conv.uom_code,
-                        "conversion_to_base": str(new_conv.conversion_to_base),
-                        "is_active": True,
-                    },
-                ),
-            )
+            try:
+                audit_service.record_tier1_event(
+                    session,
+                    AuditEventPayload(
+                        module="M01",
+                        action="UOM_CONVERSION_UPDATED",
+                        entity_type="uom_conversion",
+                        entity_id=str(new_conv.id),
+                        outcome="SUCCESS",
+                        action_source=payload.action_source,
+                        selected_workspace=selected_ws,
+                        operator_ref=payload.operator_ref,
+                        correlation_id=corr_id,
+                        idempotency_key=event_key,
+                        before_values=before_snapshot,
+                        after_values={
+                            "id": new_conv.id,
+                            "product_id": product_id,
+                            "uom_code": new_conv.uom_code,
+                            "conversion_to_base": str(new_conv.conversion_to_base),
+                            "is_active": True,
+                        },
+                    ),
+                )
+            except IntegrityError as exc:
+                raise ProductConflictError(
+                    f"Duplicate UoM rollover audit idempotency key '{event_key}'."
+                ) from exc
 
         session.refresh(new_conv)
         return new_conv
+
+    def validate_product_quantity(
+        self,
+        session: Session,
+        product_id: int,
+        quantity: Any,
+    ) -> Decimal:
+        """Validate a commercial quantity against the product's allow_fractional_qty policy."""
+        product = self.get_product(session, product_id)
+        try:
+            return validate_quantity_for_product(
+                quantity,
+                allow_fractional_qty=product.allow_fractional_qty,
+            )
+        except QuantityValidationError as exc:
+            raise ProductValidationError(str(exc)) from exc
+
+    def convert_product_quantity_to_base(
+        self,
+        session: Session,
+        product_id: int,
+        quantity: Any,
+        *,
+        uom_code: Optional[str] = None,
+        at_timestamp: Optional[datetime] = None,
+    ) -> Decimal:
+        """Convert a product quantity to base_uom using active or point-in-time [from, to) rule."""
+        product = self.get_product(session, product_id)
+        if uom_code is None or uom_code.strip().lower() == product.base_uom.lower():
+            factor = Decimal("1.000000")
+        else:
+            code = uom_code.strip()
+            if at_timestamp is None:
+                conv = session.execute(
+                    select(UomConversion).where(
+                        UomConversion.product_id == product_id,
+                        UomConversion.uom_code == code,
+                        UomConversion.is_active.is_(True),
+                    )
+                ).scalar_one_or_none()
+            else:
+                conv = session.execute(
+                    select(UomConversion).where(
+                        UomConversion.product_id == product_id,
+                        UomConversion.uom_code == code,
+                        UomConversion.effective_from <= at_timestamp,
+                        or_(
+                            UomConversion.effective_to.is_(None),
+                            at_timestamp < UomConversion.effective_to,
+                        ),
+                    )
+                ).scalar_one_or_none()
+            if conv is None:
+                raise ProductNotFoundError(
+                    f"No UoM conversion found for product {product_id} and uom_code '{code}'."
+                )
+            factor = conv.conversion_to_base
+
+        try:
+            return compute_exact_base_quantity(
+                quantity,
+                factor,
+                allow_fractional_qty=product.allow_fractional_qty,
+            )
+        except QuantityValidationError as exc:
+            raise ProductValidationError(str(exc)) from exc
 
 
 product_service = ProductService()
