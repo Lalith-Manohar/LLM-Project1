@@ -13,6 +13,7 @@ with:
   - Deduplicated SYS-03 Smart Alert dispatch on confirmed negative transitions / dormancy
 """
 
+import logging
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal, ROUND_HALF_UP
@@ -27,6 +28,7 @@ from app.repositories.lifecycle_repository import (
     LifecycleSnapshotRecord,
     ProductLifecycleRecord,
     UCI_ANCHOR_DATE,
+    build_default_lifecycle_settings,
     lifecycle_repository,
     quantize_money,
     quantize_qty,
@@ -53,6 +55,7 @@ from app.schemas.lifecycle import (
     StageDistributionCounts,
 )
 
+logger = logging.getLogger(__name__)
 ZERO_MONEY = Decimal("0.00")
 ZERO_QTY = Decimal("0.0000")
 
@@ -98,24 +101,27 @@ class LifecycleService:
 
     @staticmethod
     def _extract_settings_values(settings: Dict[str, BoundedSettingRecord]) -> Dict[str, Any]:
+        # Fall back cleanly to approved defaults if operational_settings is only partially seeded
+        # (DATABASE_SCHEMA.md v2.9 explicitly seeds lifecycle_hysteresis_windows & lifecycle_inactivity_days).
+        defaults = build_default_lifecycle_settings()
+
+        def _val(key: str) -> Any:
+            rec = settings.get(key) or defaults[key]
+            return rec.setting_value
+
         return {
-            "lifecycle_hysteresis_windows": int(settings["lifecycle_hysteresis_windows"].setting_value),
-            "lifecycle_inactivity_days": int(settings["lifecycle_inactivity_days"].setting_value),
-            "lifecycle_intro_max_age_days": int(settings["lifecycle_intro_max_age_days"].setting_value),
-            "lifecycle_velocity_window_days": int(settings["lifecycle_velocity_window_days"].setting_value),
-            "lifecycle_growth_velocity_pct": Decimal(str(settings["lifecycle_growth_velocity_pct"].setting_value)),
-            "lifecycle_decline_velocity_pct": Decimal(str(settings["lifecycle_decline_velocity_pct"].setting_value)),
-            "lifecycle_min_order_frequency": Decimal(str(settings["lifecycle_min_order_frequency"].setting_value)),
+            "lifecycle_hysteresis_windows": int(_val("lifecycle_hysteresis_windows")),
+            "lifecycle_inactivity_days": int(_val("lifecycle_inactivity_days")),
+            "lifecycle_intro_max_age_days": int(_val("lifecycle_intro_max_age_days")),
+            "lifecycle_velocity_window_days": int(_val("lifecycle_velocity_window_days")),
+            "lifecycle_growth_velocity_pct": Decimal(str(_val("lifecycle_growth_velocity_pct"))),
+            "lifecycle_decline_velocity_pct": Decimal(str(_val("lifecycle_decline_velocity_pct"))),
+            "lifecycle_min_order_frequency": Decimal(str(_val("lifecycle_min_order_frequency"))),
         }
 
     @staticmethod
-    def _serialize_settings_for_snapshot(
-        cfg: Dict[str, Any],
-        *,
-        raw_candidate: LifecycleStage,
-        pending_stage: Optional[LifecycleStage],
-        consecutive_count: int,
-    ) -> Dict[str, Any]:
+    def _serialize_settings_for_snapshot(cfg: Dict[str, Any]) -> Dict[str, Any]:
+        """Serializes strictly the applied operational_settings threshold snapshot (no undocumented state)."""
         return {
             "lifecycle_hysteresis_windows": cfg["lifecycle_hysteresis_windows"],
             "lifecycle_inactivity_days": cfg["lifecycle_inactivity_days"],
@@ -124,11 +130,6 @@ class LifecycleService:
             "lifecycle_growth_velocity_pct": str(cfg["lifecycle_growth_velocity_pct"]),
             "lifecycle_decline_velocity_pct": str(cfg["lifecycle_decline_velocity_pct"]),
             "lifecycle_min_order_frequency": str(cfg["lifecycle_min_order_frequency"]),
-            "hysteresis_tracker": {
-                "raw_candidate_stage": raw_candidate,
-                "pending_stage": pending_stage,
-                "consecutive_count": consecutive_count,
-            },
         }
 
     @staticmethod
@@ -265,19 +266,6 @@ class LifecycleService:
         )
 
     @staticmethod
-    def _extract_hysteresis_state(
-        latest_snapshot: Optional[LifecycleSnapshotRecord],
-    ) -> Tuple[Optional[LifecycleStage], int]:
-        if latest_snapshot is None or not latest_snapshot.applied_settings_snapshot:
-            return None, 0
-        tracker = latest_snapshot.applied_settings_snapshot.get("hysteresis_tracker")
-        if not isinstance(tracker, dict):
-            return None, 0
-        pending = tracker.get("pending_stage")
-        count = int(tracker.get("consecutive_count", 0))
-        return pending, count
-
-    @staticmethod
     def _to_snapshot_schema(record: LifecycleSnapshotRecord) -> LifecycleSnapshotSchema:
         return LifecycleSnapshotSchema(
             id=record.id,
@@ -314,7 +302,7 @@ class LifecycleService:
             if (latest is not None or product.lifecycle_stage == "Discontinued")
             else metrics.raw_candidate_stage
         )
-        pending_stage, consecutive_count = self._extract_hysteresis_state(latest)
+        pending_stage, consecutive_count = self._repository.get_pending_hysteresis(product.product_id)
         stock_value = quantize_money(product.current_quantity * product.current_unit_price)
 
         summary = LifecycleSkuSummary(
@@ -512,7 +500,7 @@ class LifecycleService:
                 consecutive_count = 0
             else:
                 # Apply consecutive-period hysteresis buffer (DDR-08)
-                prior_pending, prior_count = self._extract_hysteresis_state(latest)
+                prior_pending, prior_count = self._repository.get_pending_hysteresis(product.product_id)
                 new_count = (prior_count + 1) if prior_pending == raw_candidate else 1
                 if new_count >= hysteresis_required:
                     resulting_stage = raw_candidate
@@ -526,11 +514,11 @@ class LifecycleService:
                     pending_stage = raw_candidate
                     consecutive_count = new_count
 
-            settings_snapshot = self._serialize_settings_for_snapshot(
-                cfg,
-                raw_candidate=raw_candidate,
-                pending_stage=pending_stage,
-                consecutive_count=consecutive_count,
+            settings_snapshot = self._serialize_settings_for_snapshot(cfg)
+            self._repository.set_pending_hysteresis(
+                product.product_id,
+                pending_stage,
+                consecutive_count,
             )
 
             snap = self._repository.append_evaluation_snapshot(
@@ -551,54 +539,61 @@ class LifecycleService:
                 transitions_committed += 1
 
             # Dispatch deduplicated SYS-03 alerts on confirmed negative transitions or dormant stock.
-            # Uses a single per-SKU unresolved dedup signature so a SKU with an active decline/dormant
-            # alert never spams duplicate unresolved notifications across subsequent evaluations (DDR-08).
+            # Alert failures are isolated from committed lifecycle snapshots.
             alert_created = False
             alert_suppressed = False
             sku_lifecycle_dedup_key = f"lifecycle:decline_or_dormant:{product.product_id}"
-            if transitioned and resulting_stage == "Decline" and prev_stage in ("Growth", "Maturity"):
-                _, created = self._alerts.publish(
-                    product_id=product.product_id,
-                    source_module="lifecycle_intelligence",
-                    alert_type="lifecycle_decline_transition",
-                    severity="ELEVATED" if product.current_quantity > Decimal("0") else "WARNING",
-                    dedup_key=sku_lifecycle_dedup_key,
-                    title=f"Lifecycle Decline: {product.stock_code} ({prev_stage} -> Decline)",
-                    message=(
-                        f"SKU '{product.stock_code}' transitioned from {prev_stage} to Decline after "
-                        f"{hysteresis_required} consecutive evaluation window(s). "
-                        f"Current stock: {product.current_quantity} units."
-                    ),
-                    created_source="SYSTEM",
+            try:
+                if transitioned and resulting_stage == "Decline" and prev_stage in ("Growth", "Maturity"):
+                    _, created = self._alerts.publish(
+                        product_id=product.product_id,
+                        source_module="lifecycle_intelligence",
+                        alert_type="lifecycle_decline_transition",
+                        severity="ELEVATED" if product.current_quantity > Decimal("0") else "WARNING",
+                        dedup_key=sku_lifecycle_dedup_key,
+                        title=f"Lifecycle Decline: {product.stock_code} ({prev_stage} -> Decline)",
+                        message=(
+                            f"SKU '{product.stock_code}' transitioned from {prev_stage} to Decline after "
+                            f"{hysteresis_required} consecutive evaluation window(s). "
+                            f"Current stock: {product.current_quantity} units."
+                        ),
+                        created_source="SYSTEM",
+                    )
+                    if created:
+                        alert_created = True
+                        alerts_emitted += 1
+                    else:
+                        alert_suppressed = True
+                        alerts_suppressed += 1
+                elif metrics.is_dormant_stock:
+                    stock_val = quantize_money(product.current_quantity * product.current_unit_price)
+                    _, created = self._alerts.publish(
+                        product_id=product.product_id,
+                        source_module="lifecycle_intelligence",
+                        alert_type="dormant_dead_stock",
+                        severity="WARNING",
+                        dedup_key=sku_lifecycle_dedup_key,
+                        title=f"Dormant Stock Review: {product.stock_code}",
+                        message=(
+                            f"SKU '{product.stock_code}' holds {product.current_quantity} units "
+                            f"({product.currency_code} {stock_val}) with zero recent sales exceeding "
+                            f"{cfg['lifecycle_inactivity_days']} days. Review manually (no auto-discontinuation)."
+                        ),
+                        created_source="SYSTEM",
+                    )
+                    if created:
+                        alert_created = True
+                        alerts_emitted += 1
+                    else:
+                        alert_suppressed = True
+                        alerts_suppressed += 1
+            except Exception as alert_exc:
+                logger.warning(
+                    "SYS-03 alert dispatch failed for SKU '%s' (snapshot #%s preserved): %s",
+                    product.stock_code,
+                    snap.id,
+                    alert_exc,
                 )
-                if created:
-                    alert_created = True
-                    alerts_emitted += 1
-                else:
-                    alert_suppressed = True
-                    alerts_suppressed += 1
-            elif metrics.is_dormant_stock:
-                stock_val = quantize_money(product.current_quantity * product.current_unit_price)
-                _, created = self._alerts.publish(
-                    product_id=product.product_id,
-                    source_module="lifecycle_intelligence",
-                    alert_type="dormant_dead_stock",
-                    severity="WARNING",
-                    dedup_key=sku_lifecycle_dedup_key,
-                    title=f"Dormant Stock Review: {product.stock_code}",
-                    message=(
-                        f"SKU '{product.stock_code}' holds {product.current_quantity} units "
-                        f"({product.currency_code} {stock_val}) with zero recent sales exceeding "
-                        f"{cfg['lifecycle_inactivity_days']} days. Review manually (no auto-discontinuation)."
-                    ),
-                    created_source="SYSTEM",
-                )
-                if created:
-                    alert_created = True
-                    alerts_emitted += 1
-                else:
-                    alert_suppressed = True
-                    alerts_suppressed += 1
 
             results.append(
                 LifecycleTransitionSummary(
@@ -729,6 +724,32 @@ class LifecycleService:
         if product is None:
             raise LifecycleNotFoundError(f"Product '{product_identifier}' was not found in lifecycle catalog.")
 
+        idem_key = (
+            request.idempotency_key.strip()
+            if request.idempotency_key and request.idempotency_key.strip()
+            else None
+        )
+        if idem_key is not None:
+            existing = self._repository.get_discontinue_idempotency(idem_key)
+            if existing is not None:
+                if (existing.product_id, existing.reason, existing.operator_ref) != (
+                    product.product_id,
+                    request.reason,
+                    request.operator_ref,
+                ):
+                    raise LifecycleGovernanceError(
+                        f"Idempotency key '{idem_key}' was already used for a different discontinuation request."
+                    )
+                return DiscontinueProductResponse(
+                    product_id=product.product_id,
+                    stock_code=product.stock_code,
+                    previous_stage=existing.previous_stage,
+                    snapshot=self._to_snapshot_schema(existing.snapshot),
+                    audit_log_id=existing.audit_log_id,
+                    workspace_context=provenance.workspace_label,
+                    correlation_id=provenance.correlation_id,
+                )
+
         if product.lifecycle_stage == "Discontinued":
             raise LifecycleGovernanceError(
                 f"Product '{product.stock_code}' is already in 'Discontinued' lifecycle stage."
@@ -739,13 +760,7 @@ class LifecycleService:
         anchor = self._resolve_anchor_date(product)
         metrics = self._compute_metrics(product, cfg, anchor)
 
-        settings_snapshot = self._serialize_settings_for_snapshot(
-            cfg,
-            raw_candidate="Discontinued",
-            pending_stage=None,
-            consecutive_count=0,
-        )
-        settings_snapshot["manual_discontinue_reason"] = request.reason
+        settings_snapshot = self._serialize_settings_for_snapshot(cfg)
 
         snap, audit_id = self._repository.discontinue_product_atomic(
             product_id=product.product_id,
@@ -758,6 +773,7 @@ class LifecycleService:
             reason=request.reason,
             provenance=provenance,
             operator_ref=request.operator_ref,
+            idempotency_key=idem_key,
         )
 
         return DiscontinueProductResponse(

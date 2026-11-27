@@ -1,6 +1,6 @@
 /**
  * TypeScript interfaces for M06 — Business Intelligence.
- * Strictly aligned 1:1 with backend `app.schemas.analytics` (Decimal fields serialized as exact strings).
+ * Strictly aligned 1:1 with backend `app.schemas.analytics` (Decimal fields serialized as strings).
  */
 
 export type SourceOriginFilter = 'uci_historical' | 'operational' | 'all'
@@ -209,6 +209,7 @@ export interface AnalyticsFilterParams {
   start_date?: string
   end_date?: string
   country?: string
+  category_id?: number
   stock_code?: string
   granularity?: GranularityType
   order?: SkuRankingOrder

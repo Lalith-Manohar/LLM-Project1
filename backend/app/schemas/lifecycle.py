@@ -247,6 +247,11 @@ class DiscontinueProductRequest(BaseModel):
         max_length=64,
         description="Optional non-authenticated attribution reference (never implies login)",
     )
+    idempotency_key: Optional[str] = Field(
+        default=None,
+        max_length=128,
+        description="Optional idempotency key forwarded to Tier 1 audit_logs to guard retries",
+    )
 
     @field_validator("reason")
     @classmethod

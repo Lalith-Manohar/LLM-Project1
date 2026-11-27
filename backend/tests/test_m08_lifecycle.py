@@ -35,7 +35,7 @@ from app.schemas.lifecycle import (
     LifecycleSettingsResetRequest,
     LifecycleSettingsUpdateRequest,
 )
-from app.services.lifecycle_service import LifecycleService, lifecycle_service
+from app.services.lifecycle_service import LifecycleGovernanceError, LifecycleService, lifecycle_service
 
 
 def _prov(workspace: str | None = "store_manager", operator_ref: str | None = None) -> RequestProvenance:
@@ -353,6 +353,8 @@ class TestM08BusinessLogic:
 
         # Prior historical snapshot MUST remain completely untouched (forward-only rule DDR-08)
         assert repo.get_snapshots(1)[0].applied_settings_snapshot["lifecycle_inactivity_days"] == 90  # type: ignore[index]
+        # Verify applied_settings_snapshot contains strictly approved threshold keys (no undocumented state)
+        assert "hysteresis_tracker" not in orig_snapshot.applied_settings_snapshot  # type: ignore[operator]
 
         # Tier 1 audit failure rolls back settings update atomically
         audit.set_simulate_failure(True)
@@ -373,6 +375,144 @@ class TestM08BusinessLogic:
         assert reset_map["lifecycle_inactivity_days"] == 90
         assert reset_map["lifecycle_hysteresis_windows"] == 2
         assert audit.list_entries("M08_LIFECYCLE")[-1].action == "LIFECYCLE_CONFIG_RESET"
+
+    def test_partial_settings_fallback_and_alert_failure_isolation(self, monkeypatch):
+        repo, audit, alerts, svc, today = _build_test_fixture()
+
+        # Simulate partially seeded operational_settings (only Schema v2.9 explicitly seeded keys)
+        partial = {
+            k: v
+            for k, v in repo.get_settings().items()
+            if k in ("lifecycle_hysteresis_windows", "lifecycle_inactivity_days")
+        }
+        monkeypatch.setattr(repo, "get_settings", lambda: partial)
+
+        # Simulate alert publisher failure -> must not abort snapshot commitment
+        def _boom(**kwargs):
+            raise RuntimeError("Alert hub unavailable")
+
+        monkeypatch.setattr(alerts, "publish", _boom)
+
+        eval_res = svc.evaluate_lifecycle(
+            request=LifecycleEvaluationRequest(stock_codes=["SKU-DORMANT-04"], as_of_date=today.isoformat()),
+            provenance=_prov(),
+        )
+        assert eval_res.evaluated_count == 1
+        assert eval_res.results[0].resulting_stage == "Decline"
+        assert eval_res.results[0].alert_emitted is False
+        assert len(repo.get_snapshots(4)) == 1
+
+        # Verify idempotency_key forwards to Tier 1 audit log on manual discontinuation
+        disc = svc.discontinue_product(
+            product_identifier=4,
+            request=DiscontinueProductRequest(
+                confirm_discontinue=True,
+                reason="Idempotent manual discontinuation",
+                idempotency_key="disc-idem-001",
+            ),
+            provenance=_prov("store_manager"),
+        )
+        assert disc.lifecycle_stage == "Discontinued"
+        assert audit.list_entries("M08_LIFECYCLE")[-1].idempotency_key == "disc-idem-001"
+        assert "manual_discontinue_reason" not in (disc.snapshot.applied_settings_snapshot or {})
+
+    def test_discontinue_idempotency_replay_conflict_and_rollback_safety(self):
+        repo, audit, _, svc, _ = _build_test_fixture()
+
+        # 1. Audit failure must roll back AND must not poison idempotency_key
+        audit.set_simulate_failure(True)
+        with pytest.raises(Exception):
+            svc.discontinue_product(
+                product_identifier=4,
+                request=DiscontinueProductRequest(
+                    confirm_discontinue=True,
+                    reason="End of line",
+                    operator_ref="MGR-01",
+                    idempotency_key="idem-key-1",
+                ),
+                provenance=_prov("store_manager"),
+            )
+        audit.set_simulate_failure(False)
+        assert repo.get_product(4).lifecycle_stage == "Maturity"  # type: ignore[union-attr]
+        assert len(repo.get_snapshots(4)) == 0
+
+        # 2. First successful discontinuation with idempotency_key
+        first = svc.discontinue_product(
+            product_identifier=4,
+            request=DiscontinueProductRequest(
+                confirm_discontinue=True,
+                reason="End of line",
+                operator_ref="MGR-01",
+                idempotency_key="idem-key-1",
+            ),
+            provenance=_prov("store_manager"),
+        )
+        assert first.lifecycle_stage == "Discontinued"
+        assert first.previous_stage == "Maturity"
+        assert len(repo.get_snapshots(4)) == 1
+        assert len(audit.list_entries("M08_LIFECYCLE")) == 1
+
+        # 3. Retry with same key and equivalent request replays original snapshot & audit without duplication
+        replay = svc.discontinue_product(
+            product_identifier=4,
+            request=DiscontinueProductRequest(
+                confirm_discontinue=True,
+                reason="  End of line  ",
+                operator_ref="MGR-01",
+                idempotency_key="idem-key-1",
+            ),
+            provenance=_prov("store_manager"),
+        )
+        assert replay.snapshot.id == first.snapshot.id
+        assert replay.audit_log_id == first.audit_log_id
+        assert replay.previous_stage == first.previous_stage
+        assert len(repo.get_snapshots(4)) == 1
+        assert len(audit.list_entries("M08_LIFECYCLE")) == 1
+
+        # 4. Different key or missing key for already-discontinued product raises LifecycleGovernanceError (409)
+        with pytest.raises(LifecycleGovernanceError, match="already in 'Discontinued'"):
+            svc.discontinue_product(
+                product_identifier=4,
+                request=DiscontinueProductRequest(
+                    confirm_discontinue=True,
+                    reason="End of line",
+                    idempotency_key="idem-key-2",
+                ),
+                provenance=_prov("store_manager"),
+            )
+        with pytest.raises(LifecycleGovernanceError, match="already in 'Discontinued'"):
+            svc.discontinue_product(
+                product_identifier=4,
+                request=DiscontinueProductRequest(
+                    confirm_discontinue=True,
+                    reason="End of line",
+                ),
+                provenance=_prov("store_manager"),
+            )
+
+        # 5. Conflicting reuse of same idempotency_key (different reason or different product) raises 409
+        with pytest.raises(LifecycleGovernanceError, match="different discontinuation request"):
+            svc.discontinue_product(
+                product_identifier=4,
+                request=DiscontinueProductRequest(
+                    confirm_discontinue=True,
+                    reason="Different reason",
+                    operator_ref="MGR-01",
+                    idempotency_key="idem-key-1",
+                ),
+                provenance=_prov("store_manager"),
+            )
+        with pytest.raises(LifecycleGovernanceError, match="different discontinuation request"):
+            svc.discontinue_product(
+                product_identifier=3,
+                request=DiscontinueProductRequest(
+                    confirm_discontinue=True,
+                    reason="End of line",
+                    operator_ref="MGR-01",
+                    idempotency_key="idem-key-1",
+                ),
+                provenance=_prov("store_manager"),
+            )
 
 
 class TestM08LifecycleEndpoints:
@@ -491,3 +631,53 @@ class TestM08LifecycleEndpoints:
             json={},
         )
         assert reset.status_code == 200
+
+    def test_discontinue_endpoint_idempotency_replay_and_conflict(self, client_with_isolated_m08):
+        client, _, _, _, _ = client_with_isolated_m08
+        headers = {"X-NEXORA-Workspace": "store_manager"}
+
+        first = client.patch(
+            "/api/v1/intelligence/lifecycle/4/discontinue",
+            headers=headers,
+            json={
+                "confirm_discontinue": True,
+                "reason": "Retire seasonal SKU",
+                "idempotency_key": "http-idem-4",
+            },
+        )
+        assert first.status_code == 200
+
+        replay = client.patch(
+            "/api/v1/intelligence/lifecycle/4/discontinue",
+            headers=headers,
+            json={
+                "confirm_discontinue": True,
+                "reason": "Retire seasonal SKU",
+                "idempotency_key": "http-idem-4",
+            },
+        )
+        assert replay.status_code == 200
+        assert replay.json()["snapshot"]["id"] == first.json()["snapshot"]["id"]
+        assert replay.json()["audit_log_id"] == first.json()["audit_log_id"]
+
+        conflict = client.patch(
+            "/api/v1/intelligence/lifecycle/4/discontinue",
+            headers=headers,
+            json={
+                "confirm_discontinue": True,
+                "reason": "Changed reason",
+                "idempotency_key": "http-idem-4",
+            },
+        )
+        assert conflict.status_code == 409
+
+        other_key = client.patch(
+            "/api/v1/intelligence/lifecycle/4/discontinue",
+            headers=headers,
+            json={
+                "confirm_discontinue": True,
+                "reason": "Retire seasonal SKU",
+                "idempotency_key": "http-idem-other",
+            },
+        )
+        assert other_key.status_code == 409

@@ -156,6 +156,7 @@ export interface DiscontinueProductRequest {
   confirm_discontinue: boolean
   reason: string
   operator_ref?: string
+  idempotency_key?: string
 }
 
 export interface DiscontinueProductResponse {

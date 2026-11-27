@@ -2,8 +2,8 @@
 
 Provides clean, replaceable Protocol contracts matching DATABASE_SCHEMA.md v2.9 for
 unfinished sibling modules so M06 and M08 can operate independently and integrate
-seamlessly once Phase 2 (MySQL + SYS-02 Audit), Phase 4 (SYS-03 Smart Alerts), and
-Phase 5 (SYS-04 Reports & Export) are connected by the integration developer.
+seamlessly once Phase 2 (MySQL + SYS-02 Audit, building on `app.services.contracts`),
+Phase 4 (SYS-03 Smart Alerts), and Phase 5 (SYS-04 Reports & Export) are connected.
 """
 
 import copy
@@ -15,6 +15,7 @@ from datetime import datetime, timezone
 from typing import Any, Dict, Iterable, List, Literal, Optional, Protocol
 
 from app.core.provenance import ActionSource, WorkspaceCode
+from app.services.contracts import AuditEventPayload
 
 AuditOutcome = Literal["SUCCESS", "FAILURE", "REJECTED"]
 AuditTier = Literal["TIER_1_FAIL_CLOSED", "TIER_2_OUTBOX_RESILIENT"]
@@ -58,6 +59,25 @@ class AuditLogEntry:
     before_values: Optional[Dict[str, Any]]
     after_values: Optional[Dict[str, Any]]
     error_summary: Optional[str]
+
+
+    def to_stage1_audit_payload(self) -> AuditEventPayload:
+        """Converts this record into Stage 1's `app.services.contracts.AuditEventPayload`."""
+        return AuditEventPayload(
+            module=self.module,
+            action=self.action,
+            entity_type=self.entity_type,
+            entity_id=self.entity_id,
+            outcome=self.outcome,
+            action_source=self.action_source,
+            correlation_id=self.correlation_id,
+            selected_workspace=self.selected_workspace,
+            operator_ref=self.operator_ref,
+            idempotency_key=self.idempotency_key,
+            before_values=self.before_values,
+            after_values=self.after_values,
+            error_summary=self.error_summary,
+        )
 
 
 class AuditLoggerProtocol(Protocol):

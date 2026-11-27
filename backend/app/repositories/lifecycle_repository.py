@@ -76,6 +76,20 @@ class LifecycleSnapshotRecord:
     evaluated_at: str
 
 
+@dataclass(frozen=True)
+class DiscontinueIdempotencyRecord:
+    """In-memory idempotency record for manual discontinuation retries."""
+
+    idempotency_key: str
+    product_id: int
+    confirm_discontinue: bool
+    reason: str
+    operator_ref: Optional[str]
+    previous_stage: LifecycleStage
+    snapshot: LifecycleSnapshotRecord
+    audit_log_id: int
+
+
 @dataclass
 class BoundedSettingRecord:
     """Mutable config entry matching `operational_settings` (`domain = 'lifecycle'`)."""
@@ -189,6 +203,17 @@ class LifecycleRepositoryProtocol(Protocol):
     def get_latest_snapshot(self, product_id: int) -> Optional[LifecycleSnapshotRecord]:
         ...
 
+    def get_pending_hysteresis(self, product_id: int) -> Tuple[Optional[LifecycleStage], int]:
+        ...
+
+    def set_pending_hysteresis(
+        self,
+        product_id: int,
+        pending_stage: Optional[LifecycleStage],
+        consecutive_count: int,
+    ) -> None:
+        ...
+
     def append_evaluation_snapshot(
         self,
         *,
@@ -219,7 +244,13 @@ class LifecycleRepositoryProtocol(Protocol):
         reason: str,
         provenance: RequestProvenance,
         operator_ref: Optional[str],
+        idempotency_key: Optional[str] = None,
     ) -> Tuple[LifecycleSnapshotRecord, int]:
+        ...
+
+    def get_discontinue_idempotency(
+        self, idempotency_key: str
+    ) -> Optional[DiscontinueIdempotencyRecord]:
         ...
 
     def get_settings(self) -> Dict[str, BoundedSettingRecord]:
@@ -261,6 +292,10 @@ class HybridLifecycleRepository:
         self._products_by_id: Dict[int, ProductLifecycleRecord] = {}
         self._id_by_stock_code: Dict[str, int] = {}
         self._snapshots_by_product: Dict[int, List[LifecycleSnapshotRecord]] = {}
+        # Transient consecutive-period hysteresis buffer kept outside applied_settings_snapshot JSON
+        # so product_lifecycle_snapshots.applied_settings_snapshot holds strictly threshold settings.
+        self._pending_hysteresis: Dict[int, Tuple[Optional[LifecycleStage], int]] = {}
+        self._discontinue_idempotency: Dict[str, DiscontinueIdempotencyRecord] = {}
         self._settings: Dict[str, BoundedSettingRecord] = build_default_lifecycle_settings()
         self._next_product_id: int = 1
         self._next_snapshot_id: int = 1
@@ -398,6 +433,28 @@ class HybridLifecycleRepository:
             snaps = self._snapshots_by_product.get(product_id)
             return snaps[-1] if snaps else None
 
+    def get_pending_hysteresis(self, product_id: int) -> Tuple[Optional[LifecycleStage], int]:
+        with self._lock:
+            return self._pending_hysteresis.get(product_id, (None, 0))
+
+    def get_discontinue_idempotency(
+        self, idempotency_key: str
+    ) -> Optional[DiscontinueIdempotencyRecord]:
+        with self._lock:
+            return self._discontinue_idempotency.get(idempotency_key)
+
+    def set_pending_hysteresis(
+        self,
+        product_id: int,
+        pending_stage: Optional[LifecycleStage],
+        consecutive_count: int,
+    ) -> None:
+        with self._lock:
+            if pending_stage is None or consecutive_count <= 0:
+                self._pending_hysteresis.pop(product_id, None)
+            else:
+                self._pending_hysteresis[product_id] = (pending_stage, consecutive_count)
+
     def append_evaluation_snapshot(
         self,
         *,
@@ -461,15 +518,34 @@ class HybridLifecycleRepository:
         reason: str,
         provenance: RequestProvenance,
         operator_ref: Optional[str],
+        idempotency_key: Optional[str] = None,
     ) -> Tuple[LifecycleSnapshotRecord, int]:
         """Atomically discontinues a SKU with Tier 1 fail-closed audit rollback (`DDR-08`, `DDR-10`)."""
         with self._lock:
+            if idempotency_key:
+                existing = self._discontinue_idempotency.get(idempotency_key)
+                if existing is not None:
+                    if (existing.product_id, existing.reason, existing.operator_ref) != (
+                        product_id,
+                        reason,
+                        operator_ref,
+                    ):
+                        raise ValueError(
+                            f"Idempotency key '{idempotency_key}' conflicts with an earlier discontinuation request."
+                        )
+                    return existing.snapshot, existing.audit_log_id
+
             product = self._products_by_id.get(product_id)
             if product is None:
                 raise KeyError(f"Product {product_id} not found.")
+            if product.lifecycle_stage == "Discontinued":
+                raise ValueError(
+                    f"Product '{product.stock_code}' is already in 'Discontinued' lifecycle stage."
+                )
 
             prev_stage = product.lifecycle_stage
             prev_next_snap_id = self._next_snapshot_id
+            prev_hysteresis = self._pending_hysteresis.get(product_id)
             effective_operator = operator_ref or provenance.operator_ref
 
             snap = LifecycleSnapshotRecord(
@@ -494,6 +570,7 @@ class HybridLifecycleRepository:
             # Mutate in-memory state, then execute mandatory Tier 1 audit; roll back on any failure
             self._next_snapshot_id += 1
             self._snapshots_by_product.setdefault(product_id, []).append(snap)
+            self._pending_hysteresis.pop(product_id, None)
             product.lifecycle_stage = "Discontinued"
 
             try:
@@ -508,6 +585,7 @@ class HybridLifecycleRepository:
                     selected_workspace=provenance.selected_workspace,
                     operator_ref=effective_operator,
                     correlation_id=provenance.correlation_id,
+                    idempotency_key=idempotency_key,
                     before_values={"lifecycle_stage": prev_stage, "stock_code": product.stock_code},
                     after_values={
                         "lifecycle_stage": "Discontinued",
@@ -521,7 +599,21 @@ class HybridLifecycleRepository:
                 product.lifecycle_stage = prev_stage
                 self._snapshots_by_product[product_id].pop()
                 self._next_snapshot_id = prev_next_snap_id
+                if prev_hysteresis is not None:
+                    self._pending_hysteresis[product_id] = prev_hysteresis
                 raise AuditWriteError(f"Tier 1 audit failed; manual discontinuation rolled back: {exc}") from exc
+
+            if idempotency_key:
+                self._discontinue_idempotency[idempotency_key] = DiscontinueIdempotencyRecord(
+                    idempotency_key=idempotency_key,
+                    product_id=product_id,
+                    confirm_discontinue=True,
+                    reason=reason,
+                    operator_ref=operator_ref,
+                    previous_stage=prev_stage,
+                    snapshot=snap,
+                    audit_log_id=audit_entry.id,
+                )
 
             return snap, audit_entry.id
 
