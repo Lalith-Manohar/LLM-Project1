@@ -1,15 +1,15 @@
 # NEXORA — API Documentation
 
 - **Project:** NEXORA – AI-Powered Retail Management & Intelligence System
-- **Document Version:** 2.0 — Blueprint v2.2 & Database Schema v2.8 Consolidated API Reference
-- **Last Updated:** 26 November 2026
-- **Repository Baseline:** `Lalith-Manohar/LLM-Project1` (Branch `main`, aligned against commit `e74ae8970195a3609c8701799137154aa3f35d30`)
+- **Document Version:** 2.1 — Blueprint v2.2 & Database Schema v2.9 Consolidated API Reference
+- **Last Updated:** 27 November 2026
+- **Repository Baseline:** `Lalith-Manohar/LLM-Project1` (Branch `main`, aligned against commit `acdcb163bbd768c7b6ccc6c2b7a80345d5b26ddb` source/docs baseline; backend/ML test baseline verified at `e74ae8970195a3609c8701799137154aa3f35d30`)
 - **Authoritative Sources:**
   - Live Source Code & Tests: [`backend/app/main.py`](../backend/app/main.py), [`backend/app/api/routes/`](../backend/app/api/routes/__init__.py), [`backend/app/schemas/`](../backend/app/schemas/forecast.py), [`backend/tests/`](../backend/tests/test_forecast_api.py)
   - Master Architecture: [`docs/NEXORA — Technical Blueprint v1.0.md`](NEXORA%20%E2%80%94%20Technical%20Blueprint%20v1.0.md) *(Version 2.2)*
   - Feature Status Registry: [`docs/FEATURES_STATUS.md`](FEATURES_STATUS.md) *(Version 2.3)*
   - Operational Workflows: [`docs/NEXORA — Application Functionality & System Workflow Guide.md`](NEXORA%20%E2%80%94%20Application%20Functionality%20%26%20System%20Workflow%20Guide.md) *(Version 1.0)*
-  - Target Relational Schema: [`docs/DATABASE_SCHEMA.md`](DATABASE_SCHEMA.md) *(Version 2.8)*
+  - Target Relational Schema: [`docs/DATABASE_SCHEMA.md`](DATABASE_SCHEMA.md) *(Version 2.9)*
 
 > [!IMPORTANT]
 > **Reality vs. Planned Architecture:** Only **health/readiness probes**, **production demand forecasting routes**, **Task 12 experimental/comparative forecasting routes**, and a **stateless Phase 1 inventory recommendation prototype** are implemented on `main` today (`20` route handlers total, `17` visible in `/openapi.json`). **Zero live MySQL tables, zero SQLAlchemy ORM models, zero Alembic migrations, and zero operational CRUD endpoints exist yet on `main`.** All Section 7 operational modules (`M01`–`M18`, `SYS-01`–`SYS-04`) are **PLANNED** only.
@@ -30,6 +30,8 @@
    - [7.3 Finance APIs](#73-finance-apis)
    - [7.4 Audit and Alerts APIs](#74-audit-and-alerts-apis)
    - [7.5 UoM API Planning](#75-uom-api-planning)
+   - [7.6 Customer Management APIs (M03)](#76-customer-management-apis-m03)
+   - [7.7 Explicitly Excluded Scope (`EXCL-01`–`EXCL-08` — `EXCLUDED`)](#77-explicitly-excluded-scope-excl-01excl-08--excluded)
 8. [Section 8 — Request and Response Conventions](#section-8--request-and-response-conventions)
 9. [Section 9 — HTTP Status Codes and Error Handling](#section-9--http-status-codes-and-error-handling)
 10. [Section 10 — API Testing and Demonstration](#section-10--api-testing-and-demonstration)
@@ -80,7 +82,7 @@ At application startup (`lifespan` context manager in [`backend/app/main.py`](..
 > - **Zero SQLAlchemy ORM model classes** exist under `backend/app/`.
 > - **Zero Alembic migration scripts** exist under `backend/`.
 > - `DB_HOST`, `DB_PORT`, `DB_USER`, `DB_PASSWORD`, and `DB_NAME` in [`backend/app/core/config.py`](../backend/app/core/config.py) are unconsumed configuration placeholders only.
-> - All currently implemented APIs are **stateless** or **CSV / JSON / Joblib-backed**. Never treat the planned **41-table MySQL schema** in [`DATABASE_SCHEMA.md`](DATABASE_SCHEMA.md) v2.8 as operational on `main`.
+> - All currently implemented APIs are **stateless** or **CSV / JSON / Joblib-backed**. Never treat the planned **41-table MySQL schema** in [`DATABASE_SCHEMA.md`](DATABASE_SCHEMA.md) v2.9 as operational on `main`.
 
 ### 1.4 Approved Two-Page Architecture, Four Workspaces & Non-Authentication Boundary
 
@@ -106,7 +108,7 @@ Under Blueprint v2.2 (`Sections 3, 13, 14, 15`), NEXORA's target system design i
 | **`IMPLEMENTED`** | Route exists in current FastAPI source code, executes live on `main`, and has automated `pytest` verification. |
 | **`PARTIALLY IMPLEMENTED`** | A working prototype or narrow subset exists on `main`, but the complete Blueprint module and MySQL persistence are not yet built. |
 | **`EXPERIMENTAL`** | Working experimental or comparative research endpoint on `main`, isolated from the production baseline contract. |
-| **`PLANNED`** | Approved target API capability defined by Technical Blueprint v2.2, `FEATURES_STATUS.md` v2.3, and `DATABASE_SCHEMA.md` v2.8; **does not exist on `main`**. |
+| **`PLANNED`** | Approved target API capability defined by Technical Blueprint v2.2, `FEATURES_STATUS.md` v2.3, and `DATABASE_SCHEMA.md` v2.9; **does not exist on `main`**. |
 | **`EXCLUDED`** | Functionality explicitly outside approved project scope (`EXCL-01`–`EXCL-08`); must not be built or documented as planned endpoints. |
 
 > [!NOTE]
@@ -683,13 +685,13 @@ All planned operational routes preserve strict separation between distinct bound
 
 #### Group 1 — Retail Foundation (`M01`–`M05`)
 
-| Module | Blueprint Domain Prefix | Primary Planned REST Endpoints (`PLANNED`) | Backing MySQL Tables ([`DATABASE_SCHEMA.md`](DATABASE_SCHEMA.md) v2.8) | Audit Tier & Notes |
+| Module | Blueprint Domain Prefix | Primary Planned REST Endpoints (`PLANNED`) | Backing MySQL Tables ([`DATABASE_SCHEMA.md`](DATABASE_SCHEMA.md) v2.9) | Audit Tier & Notes |
 | :--- | :--- | :--- | :--- | :--- |
 | **M01 Product Management** | `/api/v1/products` | `GET /api/v1/products` (filter/search/paginate)<br>`GET /api/v1/products/{product_id}`<br>`POST /api/v1/products` *(atomic SKU + initial `inventory` row)*<br>`PUT /api/v1/products/{product_id}`<br>`PATCH /api/v1/products/{product_id}/status` *(soft-deactivate/reactivate; `Discontinued` guard)*<br>`GET`/`POST`/`PUT` `/api/v1/categories` ***[Illustrative]***<br>UoM conversions $\rightarrow$ see [Section 7.5](#75-uom-api-planning) | `products`, `categories`, `uom_conversions`, `inventory` | **Tier 1** for lifecycle/price/status mutations (`is_uci_baseline` protected from deletion) |
 | **M02 Supplier Management** | `/api/v1/suppliers` | `GET /api/v1/suppliers`<br>`GET /api/v1/suppliers/{supplier_id}`<br>`POST /api/v1/suppliers`<br>`PUT /api/v1/suppliers/{supplier_id}`<br>`PATCH /api/v1/suppliers/{supplier_id}/status`<br>`GET /api/v1/suppliers/{supplier_id}/products` *(`DDR-07`)*<br>`POST` / `PUT` / `PATCH /{id}/status` `/api/v1/suppliers/{supplier_id}/products` ***[Illustrative]*** | `suppliers`, `supplier_products` | Inactive `supplier_products` rows retained forever for historical traceability (`DDR-07`) |
-| **M03 Customer Management** | `/api/v1/customers` | `GET /api/v1/customers` *(search/filter/paginate)*<br>`GET /api/v1/customers/{customer_id}`<br>`POST /api/v1/customers`<br>`PUT /api/v1/customers/{customer_id}`<br>`PATCH /api/v1/customers/{customer_id}/status` | `customers` | Deactivate-only if referenced by orders, transactions, or invoices |
-| **M04 Sales Management** | `/api/v1/sales` | `GET /api/v1/sales` *(filter `source_origin`: `uci_historical` \| `operational`, `transaction_type`)*<br>`GET /api/v1/sales/{sale_id}`<br>`POST /api/v1/sales` *(direct completed sale capture)*<br>`POST /api/v1/sales/{sale_id}/reverse` ***[Illustrative]*** *(compensating reversal + `cancelled`/`reversed` state)* | `transactions`, `transaction_items` | Strictly distinct from Orders; completed rows retained permanently; **Tier 1** audit on reversals |
-| **M05 Order Management** | `/api/v1/orders` | `GET /api/v1/orders`, `GET /api/v1/orders/{order_id}`<br>`POST /api/v1/orders` *(draft creation; `requested_delivery_date`, B2B demand type)*<br>`PUT /api/v1/orders/{order_id}` *(draft items edit)*<br>`POST /api/v1/orders/{order_id}/confirm` *(reserves stock)*<br>`POST /api/v1/orders/{order_id}/fulfill` *(partial/full batch)*<br>`POST /api/v1/orders/{order_id}/fulfillments/{fulfillment_id}/reverse` ***[Illustrative]***<br>`POST /api/v1/orders/{order_id}/cancel` | `orders`, `order_items`, `order_fulfillments`, `order_fulfillment_items` | See [Section 7.2](#72-order-fulfilment-and-shipping-apis); **Tier 1** atomic audit + `FOR UPDATE` locking |
+| **M03 Customer Management** | `/api/v1/customers` | See detailed breakdown in [Section 7.6](#76-customer-management-apis-m03) (`GET /api/v1/customers`, `GET /api/v1/customers/{customer_id}`, `POST /api/v1/customers`, `PUT /api/v1/customers/{customer_id}`, `PATCH /api/v1/customers/{customer_id}/status`) | `customers`, `audit_outbox`, `audit_logs` | **Tier 2 (`DDR-10`)** via `audit_outbox` (`CUSTOMER_CREATED`, `UPDATED`, `DEACTIVATED`, `REACTIVATED`); no `DELETE` or hard-delete route (`PATCH /status` sole lifecycle op; universal app hard-delete prohibition + `ON DELETE RESTRICT` DB safeguard); `country DEFAULT 'India'`; `state` optional |
+| **M04 Sales Management** | `/api/v1/sales` | `GET /api/v1/sales` *(filter `customer_id`, `source_origin`: `uci_historical` \| `operational`, `transaction_type`, date bounds)*<br>`GET /api/v1/sales/{sale_id}`<br>`POST /api/v1/sales` *(direct completed sale capture; rejects inactive customers w/ `409`)*<br>`POST /api/v1/sales/{sale_id}/reverse` ***[Illustrative]*** *(compensating reversal + `cancelled`/`reversed` state)* | `transactions`, `transaction_items`, `customers` | Strictly distinct from `M03` & `M05`; completed rows retained permanently (`uci_historical` preserves nullable `customer_id`); **Tier 1** audit on reversals |
+| **M05 Order Management** | `/api/v1/orders` | `GET /api/v1/orders` *(filter `customer_id`, status, date range)*, `GET /api/v1/orders/{order_id}`<br>`POST /api/v1/orders` *(draft creation; blocks inactive customers; `requested_delivery_date`, B2B demand type)*<br>`PUT /api/v1/orders/{order_id}` *(draft items/notes edit; no `shipping_address` on `orders`)*<br>`POST /api/v1/orders/{order_id}/confirm` *(blocks inactive customer at confirm time; reserves stock)*<br>`POST /api/v1/orders/{order_id}/fulfill` *(partial/full batch)*<br>`POST /api/v1/orders/{order_id}/fulfillments/{fulfillment_id}/reverse` ***[Illustrative]***<br>`POST /api/v1/orders/{order_id}/cancel` | `orders`, `order_items`, `order_fulfillments`, `order_fulfillment_items`, `customers` | See [Section 7.2](#72-order-fulfilment-and-shipping-apis); **Tier 1** atomic audit + `FOR UPDATE` locking |
 
 #### Group 2 — Business Intelligence (`M06`–`M08`)
 
@@ -760,12 +762,13 @@ Designed around **`DDR-01`**, **`DDR-02`**, **`DDR-07`**, and **`DDR-09`** (`pur
 
 ### 7.2 Order, Fulfilment and Shipping APIs
 
-Designed around **`DDR-03`**, **`DDR-05`**, and **`DATABASE_SCHEMA.md` v2.6–v2.8** (`orders`, `order_items`, `order_fulfillments`, `order_fulfillment_items`, `shipments`, `shipment_items`, `packing_slips`, `shipment_events`):
+Designed around **`DDR-03`**, **`DDR-05`**, and **`DATABASE_SCHEMA.md` v2.9** (`orders`, `order_items`, `order_fulfillments`, `order_fulfillment_items`, `shipments`, `shipment_items`, `packing_slips`, `shipment_events`):
 
 1. **Order Creation & Confirmation (`M05`):**
-   - `POST /api/v1/orders` — Creates a `draft` order with line items (freezing `uom_code`, `base_uom_conversion_factor`, `unit_price`), customer reference, and `requested_delivery_date`. Zero stock deducted or reserved yet.
+   - `GET /api/v1/orders` — Paginated order list supporting `customer_id`, `order_status`, and date range filtering (including historical/inactive customer orders; exact query/filter schema finalized with `M05` implementation).
+   - `POST /api/v1/orders` — Creates a `draft` order with line items (freezing `uom_code`, `base_uom_conversion_factor`, `unit_price`), active `customer_id` (`409 Conflict` if deactivated), and `requested_delivery_date`. Zero stock deducted or reserved yet. (`orders` contains no `shipping_address` column.)
    - `PUT /api/v1/orders/{order_id}` — Edits items/notes while `draft`.
-   - `POST /api/v1/orders/{order_id}/confirm` — Locks catalog `inventory` rows (`FOR UPDATE`), verifies `Available Stock = Physical - Reserved >= quantity`, allocates `Reserved Stock` (`inventory.reserved_quantity += qty`), marks order `confirmed` (recording confirmed demand in `daily_demand_observations` after UoM conversion to `base_uom`). Rejects insufficient stock with `409 Conflict`.
+   - `POST /api/v1/orders/{order_id}/confirm` — Verifies `customers.is_active == TRUE` at confirmation time (`409 Conflict` if deactivated while `draft`), locks catalog `inventory` rows (`FOR UPDATE`), verifies `Available Stock = Physical - Reserved >= quantity`, allocates `Reserved Stock` (`inventory.reserved_quantity += qty`), marks order `confirmed` (recording confirmed demand in `daily_demand_observations` after UoM conversion to `base_uom`). Rejects insufficient stock with `409 Conflict`. Existing confirmed orders continue fulfilling cleanly if the customer is later deactivated.
 2. **Partial & Multi-Batch Fulfilment:**
    - `POST /api/v1/orders/{order_id}/fulfill` — Executes one fulfilment batch (`idempotency_key` mandatory; duplicate retries return `409` or prior idempotent batch without double-deducting):
      - Creates `order_fulfillments` (`fulfillment_status='fulfilled'`) and `order_fulfillment_items`.
@@ -778,7 +781,7 @@ Designed around **`DDR-03`**, **`DDR-05`**, and **`DATABASE_SCHEMA.md` v2.6–v2
    - `POST /api/v1/orders/{order_id}/cancel` — Transitions `draft`/`confirmed` order to `cancelled` (blocked if unreversed `fulfilled` batches or active shipments exist): releases all remaining `reserved_quantity` back to `Available Stock` and logs compensating `demand_adjustments` (`adjustment_reason='cancellation'`) for confirmed demand.
 4. **Split Shipments & Delivery Tracking (`M18` — Strictly Distinct from Fulfilment):**
    - `GET /api/v1/shipping/orders`, `GET /api/v1/shipping/pick-lists` — Lists fulfilled/ready parcels and warehouse pick quantities.
-   - `POST /api/v1/shipping` — Creates a shipment linked to an `order_id` (and optionally `order_fulfillment_id`/`invoice_id`) for specific `shipment_items`; supports **`1:N` split shipments** across parcels up to total fulfilled item quantities without mutating inventory again.
+   - `POST /api/v1/shipping` — Creates a shipment linked to an `order_id` (and optionally `order_fulfillment_id`/`invoice_id`) for specific `shipment_items`; supports **`1:N` split shipments** across parcels up to total fulfilled item quantities without mutating inventory again. At shipment creation, `M18` resolves the effective destination (`customers.shipping_address` when supplied, otherwise deterministic full-address fallback composed from `billing_address`, `city`, optional `state`, `postal_code`, `country` — never reading a nonexistent `orders.shipping_address` column) and freezes it immutably into `shipments.shipping_address`. Later `M03` edits never mutate existing shipment snapshots, and existing confirmed/fulfilled orders may continue shipping after customer deactivation.
    - `POST /api/v1/shipping/{shipment_id}/packing-slip` & `GET /api/v1/shipping/{shipment_id}/label` — Generates printable `packing_slips` and internal dispatch routing labels (no external carrier APIs, **`EXCL-02`**).
    - `PATCH /api/v1/shipping/{shipment_id}/status` — Appends immutable `shipment_events` along valid transitions (`pending` $\rightarrow$ `picking` $\rightarrow$ `packed` $\rightarrow$ `dispatched` $\rightarrow$ `delivered`), distinguishing physical logistics delivery from inventory fulfilment.
 
@@ -786,21 +789,40 @@ Designed around **`DDR-03`**, **`DDR-05`**, and **`DATABASE_SCHEMA.md` v2.6–v2
 
 ### 7.3 Finance APIs
 
-Designed around **`DDR-04`** and **`DATABASE_SCHEMA.md` v2.4–v2.8** (`invoices`, `invoice_items`, `payments`, `credit_notes`, `refunds`):
+Designed around **`DDR-04`** and **`DATABASE_SCHEMA.md` v2.9** (`invoices`, `invoice_items`, `payments`, `credit_notes`, `refunds`):
 
-| Endpoint (`PLANNED`) | Purpose & Database Schema v2.8 Invariants |
+| Endpoint (`PLANNED`) | Purpose & Database Schema v2.9 Invariants |
 | :--- | :--- |
-| `POST /api/v1/invoices`<br>`GET /api/v1/invoices`<br>`GET /api/v1/invoices/{invoice_id}` | Issues an **immutable** accounting invoice (`INR` default `currency_code`, frozen `billing_snapshot` JSON, historical `tax_rate` & `tax_amount` computed via `DECIMAL`, nullable `order_fulfillment_id` guarded by `uq_inv_fulfillment`). Printable view only; E-Way bills **excluded (`EXCL-01`)**. |
+| `POST /api/v1/invoices`<br>`GET /api/v1/invoices` *(filter `customer_id`, `payment_status`, date range)*<br>`GET /api/v1/invoices/{invoice_id}` | Issues an **immutable** accounting invoice (`INR` default `currency_code`, frozen `billing_snapshot` JSON, historical `tax_rate` & `tax_amount` computed via `DECIMAL`, nullable `order_fulfillment_id` guarded by `uq_inv_fulfillment`). New standalone invoices block inactive customers (`HTTP 409 Conflict`), while existing confirmed/fulfilled orders and existing invoices settle normally (`payments`, `credit_notes`, `refunds`). Historical rendering reads `billing_snapshot` without mutation on later `M03` edits. Printable view only; E-Way bills **excluded (`EXCL-01`)**. |
 | `POST /api/v1/invoices/{invoice_id}/payments` | Appends an immutable `payments` entry (`amount > 0`, `payment_reference`, `payment_method`), updates `invoices.amount_paid`, and recomputes `payment_status` (`unpaid` $\rightarrow$ `partially_paid` $\rightarrow$ `paid`). |
 | `POST /api/v1/credit-notes`<br>`GET /api/v1/credit-notes`<br>`GET /api/v1/credit-notes/{credit_note_id}` | Issues an immutable **credit note** adjusting net receivable value (optionally referencing `return_id`), strictly capped `<= remaining_uncredited_invoice_balance`. Reduces net collectible total; if an unpaid invoice is credited to zero, `payment_status` transitions cleanly to **`fully_credited`** (never mislabeled **`refunded`**!). |
 | `POST /api/v1/refunds`<br>`GET /api/v1/refunds`<br>`PATCH /api/v1/refunds/{refund_id}/settle` ***[Illustrative]***<br>`POST /api/v1/refunds/{refund_id}/cancel` ***[Illustrative]*** | Records actual cash/bank/UPI **refund payout** in `refunds` (default `refund_status = 'pending'`). Strictly distinct from `credit_notes` and **never mutates original `payments` rows**. Capped simultaneously by **(a)** remaining refundable balance on its linked `credit_note_id` AND **(b)** total settled `payments` net of pending/completed refunds (`pending` refunds actively reserve entitlement to prevent duplicate payout initiation). Only `pending`/`failed` refunds may be cancelled before settlement. |
 | `GET /api/v1/finance/reconciliation` | Summarizes `gross_invoiced`, `total_paid`, `total_credited`, `total_refunded_completed`, `pending_refund_reserved`, `net_collectible_balance`, and `payment_status` per invoice. |
 
+#### Canonical `invoices.billing_snapshot` JSON Contract (`M17`, `PLANNED`)
+`invoices.billing_snapshot` (`JSON NOT NULL`, no extra invoice columns) captures customer billing state **at invoice issuance** and never mutates on subsequent `M03` profile updates. Historical invoice views render from this frozen snapshot:
+
+```json
+{
+  "customer_name": "Orion Traders",
+  "billing_address": "42 Industrial Estate, Phase II",
+  "city": "Bengaluru",
+  "state": "Karnataka",
+  "postal_code": "560058",
+  "country": "India",
+  "phone": "+91-9876543210",
+  "email": "accounts@oriontraders.example",
+  "uci_customer_ref": null
+}
+```
+
+- Missing optional fields (`state`, `phone`, `email`, `uci_customer_ref`) are represented consistently (`null` in canonical JSON payload, or omitted consistently per finalized serializer contract; `uci_customer_ref` included when applicable). Existing financial snapshot columns (`currency_code`, `tax_rate`, `tax_amount`, `subtotal`, `grand_total`) remain preserved independently on `invoices`.
+
 ---
 
 ### 7.4 Audit and Alerts APIs
 
-Designed around **`DDR-08`**, **`DDR-10`**, and **`DATABASE_SCHEMA.md` v2.8**:
+Designed around **`DDR-08`**, **`DDR-10`**, and **`DATABASE_SCHEMA.md` v2.9**:
 
 1. **Anomaly Events (`M15` — `anomaly_events`):**
    - `GET /api/v1/intelligence/anomalies` & `POST /api/v1/intelligence/anomalies/scan` ***[Illustrative]*** evaluate demand spikes/dips and return surges (preserving zero-variance `std == 0` guards) into append-only evidence rows.
@@ -809,7 +831,7 @@ Designed around **`DDR-08`**, **`DDR-10`**, and **`DATABASE_SCHEMA.md` v2.8**:
 3. **Centralized Audit Logs (`SYS-02` — `audit_logs` & `audit_outbox`, `DDR-10`):**
    - `GET /api/v1/history` queries immutable `audit_logs` by `module`, `action`, `selected_workspace`, `outcome`, `correlation_id`, and UTC timestamp range (application DB account lacks `UPDATE`/`DELETE` privileges).
    - **Tier 1 Fail-Closed Atomic Audit:** Order confirmation/fulfilment/reversal/cancellation, stock adjustments, `operational_settings` edits, PO submissions/approvals/rejections/receipts, invoices, payments, credit notes, refunds, returns, lifecycle `Discontinued` transitions, and UoM rollovers write `audit_logs` inside the **same MySQL transaction** — if the audit insert fails, the business transaction rolls back completely and alerts administrators.
-   - **Tier 2 Resilient Non-Blocking Audit:** Read telemetry, report exports, forecast requests, and non-critical informational events write to `audit_outbox` on transient failure (retried idempotently via unique `idempotency_key` up to `dead_letter` status without blocking business continuity). `GET /api/v1/history/outbox` & `POST /api/v1/history/outbox/{id}/retry` ***[Illustrative]*** support operational drain/inspection.
+   - **Tier 2 Resilient Non-Blocking Audit:** `M03` customer operations (`CUSTOMER_CREATED`, `CUSTOMER_UPDATED`, `CUSTOMER_DEACTIVATED`, `CUSTOMER_REACTIVATED`), read telemetry, report exports, forecast requests, and non-critical informational events log cleanly and route to `audit_outbox` on transient failure (retried idempotently via unique `idempotency_key` up to `dead_letter` status with manual replay support, without blocking business continuity). `GET /api/v1/history/outbox` & `POST /api/v1/history/outbox/{id}/retry` ***[Illustrative]*** support operational drain/inspection.
 4. **Bounded Configuration (`operational_settings`):**
    - Bounded configuration endpoints (`PUT /api/v1/settings/procurement`, `/settings/lifecycle`, `/settings/anomalies`, plus `POST .../reset` ***[Illustrative]***) validate `min_bound <= value <= max_bound` and require **Tier 1** atomic audit logging.
 
@@ -817,12 +839,12 @@ Designed around **`DDR-08`**, **`DDR-10`**, and **`DATABASE_SCHEMA.md` v2.8**:
 
 ### 7.5 UoM API Planning
 
-Designed around **`DDR-06`** and **`DATABASE_SCHEMA.md` v2.8** (`uom_conversions`, Section 6.6 Immediate Rollover Integrity):
+Designed around **`DDR-06`** and **`DATABASE_SCHEMA.md` v2.9** (`uom_conversions`, Section 6.6 Immediate Rollover Integrity):
 
 > [!WARNING]
 > **Zero UoM Management Endpoints Exist Today (`PLANNED` Only).** No `/uom-conversions` route exists in `backend/app/`.
 
-When implemented under `M01 Product Management` (proposed path `GET / POST /api/v1/products/{product_id}/uom-conversions` ***[Illustrative]***), the API **must** enforce every v2.8 immediate-rollover invariant:
+When implemented under `M01 Product Management` (proposed path `GET / POST /api/v1/products/{product_id}/uom-conversions` ***[Illustrative]***), the API **must** enforce every v2.9 immediate-rollover invariant:
 
 1. **Strictly Immediate Operational Rollover:** Operational UoM changes take effect immediately at transaction execution time (`tx_now = NOW(6)` captured once on the MySQL database server inside `with session.begin():`).
 2. **Future-Dated and Backdated Rollovers Prohibited:** Omitting caller-controlled effective timestamp fields entirely from the planned request schema is preferred; if a caller supplies an unsupported effective timestamp (such as `effective_from` or `effective_to`), the API **must reject the request with `HTTP 422 Unprocessable Content`** (caller timestamps must never override `tx_now`).
@@ -834,7 +856,37 @@ When implemented under `M01 Product Management` (proposed path `GET / POST /api/
 
 ---
 
-### 7.6 Explicitly Excluded Scope (`EXCL-01`–`EXCL-08` — `EXCLUDED`)
+---
+
+### 7.6 Customer Management APIs (M03)
+
+Designed around **`DATABASE_SCHEMA.md` v2.9** (`customers`), **`DDR-04`**, **`DDR-10`**, **`EXCL-08`**, and **`FEAT-V2-M03-01`–`12`** *(All routes below are **`PLANNED`** — zero customer routes or ORM models exist on `main` today)*:
+
+- **Workspace Governance (`SYS-01`):** Page 2 Customer Management UI is available strictly inside **`Store Manager (Admin)`** and **`Finance Staff`** workspaces (`Inventory Staff` and `Purchase Manager` do not receive an M03 tab). Incoming `X-NEXORA-Workspace` and optional `X-Correlation-ID` headers record operational provenance (`selected_workspace`, `action_source`, optional `operator_ref`) only and never establish authentication, JWT sessions, or server-side security RBAC.
+- **Audit Governance (`DDR-10` Tier 2):** Customer creates, edits, deactivations, and reactivations (`CUSTOMER_CREATED`, `CUSTOMER_UPDATED`, `CUSTOMER_DEACTIVATED`, `CUSTOMER_REACTIVATED`) run under **Tier 2** audit handling (`audit_outbox` retry, dead-letter quarantine, manual replay, `correlation_id`, `idempotency_key`, non-sensitive before/after snapshots, append-only `audit_logs`). Business writes are not aborted by transient audit delays.
+- **Lifecycle Policy (Universal Hard-Delete Prohibition; No `DELETE` Route):** Hard deletion of customer records through the NEXORA application is strictly prohibited for **all** customers — including customers with zero existing business references. No `DELETE /api/v1/customers/{customer_id}` route, alternative hard-delete endpoint, or hard-delete UI action exists; `PATCH /api/v1/customers/{customer_id}/status` (`is_active = FALSE` deactivation / `is_active = TRUE` reactivation) is the sole supported customer lifecycle operation. Downstream FKs (`orders.customer_id`, `transactions.customer_id`, `invoices.customer_id`) enforce `ON DELETE RESTRICT` as an additional DB integrity safeguard (not the sole basis prohibiting deletion); customer records and historical relationships are retained permanently, existing confirmed orders, invoices, payments, returns, refunds, and shipments are never retroactively cancelled on deactivation, and the designated shared operational guest customer cannot be deactivated or deleted through normal M03 operations.
+
+| Planned Endpoint (`PLANNED`) | Purpose & Query / Request Contract | Planned Response, Validation & Error Contract | Feature IDs & Tables |
+| :--- | :--- | :--- | :--- |
+| **`GET /api/v1/customers`** | List, search, and paginate customer directory. Supports planned query filters for text search (`customer_name`, `email`, `phone`, `uci_customer_ref`), `country`, `is_active`, and pagination (`page`, `page_size` using Section 8 planned envelope; exact filter parameter names finalized at Phase 2 router implementation). | **Response (`200 OK`):** Planned pagination envelope (`{"items": [...], "total": int, "page": int, "page_size": int, "total_pages": int}`) returning customer profiles (`id`, `uci_customer_ref`, `customer_name`, `phone`, `email`, `billing_address`, `shipping_address`, `city`, `state`, `postal_code`, `country`, `is_active`, provenance timestamps). `email`/`phone` lack dedicated DB indexes under Schema v2.9.<br>**Errors:** `422` invalid query bounds. | `FEAT-V2-M03-02`, `M03-08`, `M03-12`<br>Tables: `customers` |
+| **`GET /api/v1/customers/{customer_id}`** | Retrieve full customer master profile for directory drawer or inline `M05`/`M17` form selection (retains readability when `is_active = false`). | **Response (`200 OK`):** Customer profile object (and optional currency-grouped order/sales/invoice summary links via peer endpoints below; exact aggregate sub-fields are planned contract details).<br>**Errors:** `404 Not Found` (unknown `customer_id`). | `FEAT-V2-M03-02`, `M03-09`, `M03-10`<br>Tables: `customers` |
+| **`POST /api/v1/customers`** | Manual intake of a new customer record from M03 directory or inline `M05`/`M17` modal (`EXCL-08` manual entry only).<br>**Request Body (`PLANNED`):** Required: `customer_name`, `billing_address`, `city`, `postal_code`. Defaults/Optional: `country` (optional in payload; defaults to `'India'` per Schema v2.9 when omitted), `state` (optional/nullable), `phone` (optional/nullable), `email` (optional/nullable), `shipping_address` (optional/nullable), `uci_customer_ref` (optional/nullable). *(No `customer_type`, `is_guest`, or `customer_code` fields.)* | **Response (`201 Created`):** Persisted customer object; emits `CUSTOMER_CREATED` (Tier 2).<br>**Validation (`422`):** Missing/blank required fields (`customer_name`, `billing_address`, `city`, `postal_code`), invalid `email` syntax if provided, or exceeding column length bounds. **Never rejects because `state` is omitted/null.**<br>**Duplicate Policy:** Zero DB `UNIQUE` constraints exist on `email`, `phone`, or `customer_name` in Schema v2.9; any app-level duplicate warning/check requires a clearly stated matching rule without claiming DB uniqueness or unconditionally rejecting shared contacts. | `FEAT-V2-M03-01`, `M03-05`, `M03-06`, `M03-07`, `M03-12`<br>Tables: `customers`, `audit_outbox`, `audit_logs` |
+| **`PUT /api/v1/customers/{customer_id}`** | Update existing customer profile fields (`customer_name`, `phone`, `email`, `billing_address`, `shipping_address`, `city`, `state`, `postal_code`, `country`, optional `uci_customer_ref`). | **Response (`200 OK`):** Updated customer profile; emits `CUSTOMER_UPDATED` (Tier 2 before/after non-sensitive snapshot). Does **not** rewrite frozen `invoices.billing_snapshot` or existing `shipments.shipping_address`. Protects designated shared operational guest reference against destructive/ordinary profile tampering.<br>**Errors:** `404` unknown customer, `409 Conflict` if attempting restricted edit on protected guest customer, `422` validation failure (`state` remains optional). | `FEAT-V2-M03-03`, `M03-05`, `M03-06`, `M03-07`<br>Tables: `customers`, `audit_outbox`, `audit_logs` |
+| **`PATCH /api/v1/customers/{customer_id}/status`** | Sole supported customer lifecycle operation: toggle customer `is_active` status (`false` soft-deactivate, `true` reactivate; no `DELETE` or hard-delete endpoint exists). | **Response (`200 OK`):** Updated status record; emits `CUSTOMER_DEACTIVATED` or `CUSTOMER_REACTIVATED` (`DDR-10` Tier 2 via `audit_outbox`). Always retains customer record and historical relationships even when unreferenced.<br>**Deactivation Effects:** `is_active = false` blocks new `M05` order creation, blocks confirmation of existing `draft`/`pending` orders, blocks new standalone `M04` operational sales, and blocks new standalone `M17` invoices (`HTTP 409 Conflict` under Section 9.2 planned error envelope), while allowing already-confirmed/partially fulfilled orders, existing invoices, payments, returns, refunds, and shipments to finish without retroactive cancellation and keeping all historical records readable.<br>**Errors:** `404` unknown customer, `409 Conflict` if attempting to deactivate protected shared operational guest record, `422` invalid status payload. | `FEAT-V2-M03-04`, `M03-11`<br>Tables: `customers`, `audit_outbox`, `audit_logs` |
+
+#### Cross-Module Customer History Filters & Currency-Safe Aggregation (`PLANNED`)
+- **History Queries (`FEAT-V2-M03-09`, `M03-10`):** Customer detail/history panels query owning module endpoints using `customer_id`:
+  - `GET /api/v1/orders?customer_id={id}` *(planned filter on `M05`; returns historical & in-flight orders including inactive customers)*.
+  - `GET /api/v1/sales?customer_id={id}` *(planned filter on `M04`; distinguishes `source_origin`: `'operational'` vs `'uci_historical'`; exact pagination/sort params finalized at `M04` implementation)*.
+  - `GET /api/v1/invoices?customer_id={id}` *(planned filter on `M17`; returns `DECIMAL` totals & frozen `billing_snapshot` references)*.
+- **Currency-Safe Customer Spend Aggregation:** Historical `uci_historical` transactions are **`GBP`**, whereas operational `transactions` and `invoices` default to **`INR`** (`DDR-04`). Customer spend endpoints/summaries **must group aggregates strictly by `currency_code`** using fixed-point `DECIMAL` arithmetic and **must never sum `GBP` and `INR` into one combined total or apply unapproved FX conversion**.
+- **Guest & Historical Unidentified Customers (`FEAT-V2-M03-11`):**
+  - Historical UCI records with missing Customer ID keep `transactions.customer_id = NULL` (`uci_customer_ref NULL`, ~25% of rows) and are **never** forced into the operational guest record or enriched via UCI scraping (`EXCL-08`).
+  - Because `orders.customer_id` and `invoices.customer_id` are `NOT NULL` in Schema v2.9, quick walk-in operational orders/invoices may reference a designated seeded shared operational guest customer convention (configured during Phase 2 setup without adding `customer_type`/`is_guest`/`customer_code` columns or hardcoding an arbitrary ID; protected from ordinary M03 edits/deactivation).
+
+---
+
+### 7.7 Explicitly Excluded Scope (`EXCL-01`–`EXCL-08` — `EXCLUDED`)
 
 The following capabilities **must never** be implemented or documented as planned endpoints:
 
@@ -853,7 +905,7 @@ The following capabilities **must never** be implemented or documented as planne
 
 ## Section 8 — Request and Response Conventions
 
-| Convention Area | Verified Current Implementation (`main`) | Planned Standard (`PLANNED` Blueprint v2.2 / Schema v2.8) |
+| Convention Area | Verified Current Implementation (`main`) | Planned Standard (`PLANNED` Blueprint v2.2 / Schema v2.9) |
 | :--- | :--- | :--- |
 | **Content Type** | `application/json; charset=utf-8` | `application/json; charset=utf-8` (plus `text/csv` download for `SYS-04` exports) |
 | **Schema Validation** | Pydantic v2 (`2.14.3`): `min_length=1` after stripping whitespace, numeric range bounds (`ge`, `le`), finite float validation (`math.isfinite`), horizon whitelist validation | Same Pydantic v2 strict validation + `Decimal` range/scale enforcement |
@@ -944,7 +996,7 @@ This document intentionally avoids maintaining a duplicate feature matrix; the s
 
 - **Implemented (`22` features in `FEATURES_STATUS.md` v2.3):** Health/readiness probes, historical UCI 4-stream dataset engineering, leakage-free feature matrix, multi-horizon ML forecasting (`D_7`/`D_15`/`D_30`/`D_90`), comparative macro evaluation, Task 12 experimental endpoints, and 168 passing automated `pytest` assertions.
 - **Partially Implemented (`8` features):** `POST /api/v1/inventory/recommend` stateless Phase 1 replenishment prototype (lacks MySQL stock/PO integration and `DDR-01` supplier lead-time rules) and initial frontend Phase 1 demo shell (`frontend/src/App.tsx`).
-- **Planned (`247` features):** Phase 2 MySQL + Foundation + Inventory + Audit (`DDR-10`), Phase 3 Two-Page React UI + 4 Workspaces (`/` & `/dashboard`), Phase 4 Predictive Planner (`DDR-01`–`03`) + BI + Lifecycle/Anomalies (`DDR-08`), Phase 5 Procurement (`DDR-09`) + Returns (`DDR-06`) + Billing (`DDR-04`, `refunds` v2.8) + Shipping (`DDR-05`) + Reports, and Phase 6 E2E QA (`Sections 17.2` of Technical Blueprint v2.2).
+- **Planned (`247` features):** Phase 2 MySQL + Foundation + Inventory + Audit (`DDR-10`), Phase 3 Two-Page React UI + 4 Workspaces (`/` & `/dashboard`), Phase 4 Predictive Planner (`DDR-01`–`03`) + BI + Lifecycle/Anomalies (`DDR-08`), Phase 5 Procurement (`DDR-09`) + Returns (`DDR-06`) + Billing (`DDR-04`, `refunds` v2.9) + Shipping (`DDR-05`) + Reports, and Phase 6 E2E QA (`Sections 17.2` of Technical Blueprint v2.2).
 - **Excluded (`EXCL-01`–`EXCL-08`):** E-Way bills, external carriers, auto PO dispatch, autonomous price discounts, chatbots, market basket analysis, multi-supplier solvers, address scraping.
 
 ---
@@ -955,3 +1007,4 @@ This document intentionally avoids maintaining a duplicate feature matrix; the s
 | :--- | :--- | :--- | :--- |
 | **1.0** | November 2026 | Early Phase 1 Draft | Initial FastAPI outline featuring legacy 6-role RBAC, planned `/api/v1/auth/login`, `/logout`, `/me` endpoints, `JWT` + `Passlib` dependencies, and early draft CRUD route lists without experimental/Task 12 routes or prototype inventory documentation. |
 | **2.0** | 26 November 2026 | Technical Blueprint v2.2, `FEATURES_STATUS.md` v2.3, Workflow Guide v1.0, `DATABASE_SCHEMA.md` v2.8 | Full consolidation and architectural realignment: *(1)* documented all `20` live route handlers (general probes, production baseline forecasting, Task 12 experimental routes, comparative/store-wide routes, partial stateless `POST /api/v1/inventory/recommend`) with verbatim live JSON payloads and test coverage; *(2)* explicitly removed obsolete `/api/v1/auth/*`, JWT, Passlib, server-side RBAC, and 6 legacy employee roles; *(3)* documented Two-Page / 4-Workspace provenance (`X-NEXORA-Workspace`), `DDR-01`–`DDR-10`, immediate-only UoM rollover (`tx_now = NOW(6)`), `refunds` vs. `credit_notes` (`'fully_credited'`), fulfilment batch reversal, and all `18` modules (`M01`–`M18`) + `4` supporting capabilities (`SYS-01`–`SYS-04`) cleanly as **`PLANNED`**; *(4)* enumerated `EXCL-01`–`EXCL-08` and reconciled Postman collections & `168` `pytest` tests. |
+| **2.1** | 27 November 2026 | Technical Blueprint v2.2, `FEATURES_STATUS.md` v2.3, `DATABASE_SCHEMA.md` v2.9 *(Task 10.3D / 10.3D.1 M03 Alignment)* | Synchronized authoritative schema references (`v2.8` $\rightarrow$ `v2.9`); added Section `7.6` specifying `M03` Customer Management endpoints (`GET`/`POST`/`PUT`/`PATCH /status`, universal hard-delete prohibition with zero `DELETE` route even when unreferenced, Tier 2 `audit_outbox`, `CUSTOMER_REACTIVATED`, optional `state`, `'India'` default `country`, duplicate non-DB-unique policy, inactive-customer `409` guards across `M04`/`M05`/`M17`, protected operational guest convention, cross-module `customer_id` history filters, and currency-grouped `INR`/`GBP` spend aggregation); documented canonical `invoices.billing_snapshot` JSON keys under Section `7.3` and deterministic `M18` `shipments.shipping_address` resolution under Section `7.2`. |
