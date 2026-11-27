@@ -15,7 +15,6 @@ from sqlalchemy import (
     Numeric,
     String,
     UniqueConstraint,
-    func,
     text,
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -98,7 +97,7 @@ class Product(ProvenanceMixin, Base):
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=False),
         nullable=False,
-        server_default=func.now(),
+        server_default=text("CURRENT_TIMESTAMP"),
     )
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=False),

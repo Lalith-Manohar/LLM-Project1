@@ -5,7 +5,7 @@ from pathlib import Path
 from typing import Optional, Union
 from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
-from sqlalchemy.engine import URL
+from sqlalchemy.engine import URL, make_url
 
 
 class Settings(BaseSettings):
@@ -57,6 +57,36 @@ class Settings(BaseSettings):
     def sqlalchemy_database_uri(self) -> str:
         """Render the full SQLAlchemy URI for engine creation or Alembic configuration."""
         return self.get_database_url().render_as_string(hide_password=False)
+
+    def get_test_database_url(self, explicit_url: Optional[str] = None) -> str:
+        """Return an explicitly configured test DB URL after verifying it cannot target DB_NAME."""
+        raw_url = (explicit_url if explicit_url is not None else self.TEST_DATABASE_URL) or ""
+        raw_url = raw_url.strip()
+        if not raw_url:
+            raise RuntimeError(
+                "TEST_DATABASE_URL is not configured; refusing to run MySQL integration tests."
+            )
+
+        parsed = make_url(raw_url)
+        test_db = (parsed.database or "").strip().lower()
+        dev_db = self.DB_NAME.strip().lower()
+        if not test_db:
+            raise ValueError("TEST_DATABASE_URL must specify a dedicated test database name.")
+
+        local_aliases = {"localhost", "127.0.0.1", "::1"}
+        test_host = (parsed.host or "").strip().lower()
+        dev_host = self.DB_HOST.strip().lower()
+        same_host = (
+            test_host in local_aliases and dev_host in local_aliases
+        ) or (test_host == dev_host)
+        test_port = parsed.port or 3306
+
+        if test_db == dev_db or (same_host and test_port == self.DB_PORT and test_db == dev_db):
+            raise RuntimeError(
+                f"Unsafe TEST_DATABASE_URL: target database '{parsed.database}' matches "
+                f"development DB_NAME '{self.DB_NAME}'."
+            )
+        return raw_url
 
     # ML Artifacts path relative to backend root directory (backend/ml/models)
     MODELS_DIR: str = str(Path(__file__).resolve().parent.parent.parent / "ml" / "models")

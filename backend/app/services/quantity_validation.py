@@ -6,6 +6,8 @@ from typing import Union
 MAX_FRACTIONAL_SCALE = 4
 MIN_POSITIVE_FRACTIONAL_QTY = Decimal("0.0001")
 MIN_POSITIVE_INTEGER_QTY = Decimal("1")
+MAX_DECIMAL_14_4 = Decimal("9999999999.9999")
+BASE_QUANTIZE_EXP = Decimal("0.0001")
 
 QuantityInput = Union[Decimal, int, str]
 
@@ -51,6 +53,10 @@ def validate_quantity_for_product(
     qty = parse_exact_decimal(quantity)
     if qty <= Decimal("0"):
         raise QuantityValidationError("Quantity must be strictly greater than zero.")
+    if qty > MAX_DECIMAL_14_4:
+        raise QuantityValidationError(
+            f"Quantity exceeds maximum DECIMAL(14, 4) limit of {MAX_DECIMAL_14_4}."
+        )
 
     scale = _fraction_scale(qty)
     if not allow_fractional_qty:
@@ -95,7 +101,11 @@ def compute_exact_base_quantity(
         raise QuantityValidationError(
             "Converted base quantity cannot be represented cleanly within 4 decimal places (no silent rounding)."
         )
-    return base_qty
+    if base_qty > MAX_DECIMAL_14_4:
+        raise QuantityValidationError(
+            f"Converted base quantity exceeds maximum DECIMAL(14, 4) limit of {MAX_DECIMAL_14_4}."
+        )
+    return base_qty.quantize(BASE_QUANTIZE_EXP)
 
 
 def validate_disable_fractional_qty(

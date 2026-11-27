@@ -60,6 +60,23 @@ def test_settings_database_url_and_test_url_isolation():
     assert "secret_pw" in cfg.sqlalchemy_database_uri
     assert cfg.TEST_DATABASE_URL is None
 
+    # Safeguard: refuse missing, DB-less, or matching development DB_NAME URLs
+    with pytest.raises(RuntimeError, match="not configured"):
+        cfg.get_test_database_url()
+    with pytest.raises(RuntimeError, match="Unsafe TEST_DATABASE_URL"):
+        cfg.get_test_database_url("mysql+pymysql://u:p@localhost:3306/nexora_db?charset=utf8mb4")
+    with pytest.raises(RuntimeError, match="Unsafe TEST_DATABASE_URL"):
+        cfg.get_test_database_url("mysql+pymysql://u:p@127.0.0.1:3307/NEXORA_DB")
+    with pytest.raises(ValueError, match="dedicated test database name"):
+        cfg.get_test_database_url("mysql+pymysql://u:p@localhost:3306")
+
+    safe_url = "mysql+pymysql://u:p@localhost:3306/nexora_test_db?charset=utf8mb4"
+    assert cfg.get_test_database_url(safe_url) == safe_url
+
+    # ORM created_at server_default alignment with migration CURRENT_TIMESTAMP
+    assert str(Category.__table__.c.created_at.server_default.arg) == "CURRENT_TIMESTAMP"
+    assert str(Product.__table__.c.created_at.server_default.arg) == "CURRENT_TIMESTAMP"
+
 
 def test_lazy_engine_and_session_lifecycle(monkeypatch):
     reset_engine()
@@ -201,12 +218,30 @@ def test_fractional_quantity_validation_rules():
     with pytest.raises(QuantityValidationError):
         validate_quantity_for_product("1.12345", allow_fractional_qty=True)
 
-    # Exact base conversion validation without silent rounding
-    assert compute_exact_base_quantity("2", "12.500000", allow_fractional_qty=False) == Decimal("25.000000")
-    assert compute_exact_base_quantity("0.2500", "2.500000", allow_fractional_qty=True) == Decimal("0.6250000000")
+    # DECIMAL(14, 4) maximum boundary enforcement
+    assert validate_quantity_for_product("9999999999.9999", allow_fractional_qty=True) == Decimal(
+        "9999999999.9999"
+    )
+    assert validate_quantity_for_product("9999999999", allow_fractional_qty=False) == Decimal("9999999999")
+    with pytest.raises(QuantityValidationError, match="DECIMAL\\(14, 4\\)"):
+        validate_quantity_for_product("10000000000", allow_fractional_qty=False)
+    with pytest.raises(QuantityValidationError, match="DECIMAL\\(14, 4\\)"):
+        validate_quantity_for_product("9999999999.99999", allow_fractional_qty=True)
+
+    # Exact base conversion validation quantized to 4 decimals without silent rounding
+    exact_int_conv = compute_exact_base_quantity("2", "12.500000", allow_fractional_qty=False)
+    assert exact_int_conv == Decimal("25.0000")
+    assert exact_int_conv.as_tuple().exponent == -4
+
+    exact_frac_conv = compute_exact_base_quantity("0.2500", "2.500000", allow_fractional_qty=True)
+    assert exact_frac_conv == Decimal("0.6250")
+    assert exact_frac_conv.as_tuple().exponent == -4
+
     with pytest.raises(QuantityValidationError):
         # 0.0001 * 0.5 = 0.00005 (5 decimal places -> cannot fit DECIMAL(14,4) cleanly)
         compute_exact_base_quantity("0.0001", "0.500000", allow_fractional_qty=True)
+    with pytest.raises(QuantityValidationError, match="DECIMAL\\(14, 4\\)"):
+        compute_exact_base_quantity("9999999999", "2.000000", allow_fractional_qty=False)
 
     # Disabling allow_fractional_qty with fractional inventory or open commitments -> conflict (409)
     validate_disable_fractional_qty(

@@ -32,12 +32,12 @@ def _alembic_config(db_url: str) -> Config:
 
 
 def test_mysql_alembic_upgrade_downgrade_and_schema_invariants():
-    assert TEST_DB_URL is not None
-    engine = create_engine(TEST_DB_URL, future=True)
+    safe_test_url = settings.get_test_database_url(TEST_DB_URL)
+    engine = create_engine(safe_test_url, future=True)
     with engine.connect() as conn:
         ensure_mysql_min_version(conn)
 
-    cfg = _alembic_config(TEST_DB_URL)
+    cfg = _alembic_config(safe_test_url)
     command.downgrade(cfg, "base")
     command.upgrade(cfg, "head")
 

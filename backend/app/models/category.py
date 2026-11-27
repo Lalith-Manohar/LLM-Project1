@@ -3,7 +3,7 @@
 from datetime import datetime
 from typing import TYPE_CHECKING, List
 
-from sqlalchemy import Boolean, DateTime, Index, String, UniqueConstraint, func, text
+from sqlalchemy import Boolean, DateTime, Index, String, UniqueConstraint, text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import UNSIGNED_BIGINT, Base, ProvenanceMixin
@@ -38,7 +38,7 @@ class Category(ProvenanceMixin, Base):
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=False),
         nullable=False,
-        server_default=func.now(),
+        server_default=text("CURRENT_TIMESTAMP"),
     )
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=False),
