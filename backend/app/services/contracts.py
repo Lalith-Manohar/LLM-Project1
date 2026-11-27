@@ -59,3 +59,16 @@ class AuditServiceProtocol(Protocol):
     ) -> AuditOutbox:
         """Persist a Tier 2 durable outbox row inside the business transaction."""
         ...
+
+
+class FractionalPolicyCheckerProtocol(Protocol):
+    """Contract owned by M09/M05 to check fractional stock or open commitments before disabling."""
+
+    def has_fractional_inventory_or_commitments(
+        self,
+        session: Session,
+        *,
+        product_id: int,
+    ) -> tuple[bool, bool]:
+        """Return (has_fractional_inventory, has_fractional_open_commitments) for product_id."""
+        ...
